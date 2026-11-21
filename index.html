@@ -1547,7 +1547,8 @@ function next7Card() {
   g += cone('q90', 'q10', 'cone1') + cone('q75', 'q25', 'cone2') + '<polyline points="' + [[sx(6), sy(base)]].concat(P.map(p => [sx(6 + p.k), sy(base * (1 + p.q50))])).map(x => x[0].toFixed(1) + ',' + x[1].toFixed(1)).join(' ') + '" class="med" fill="none"/>';
   g += '<line x1="' + (sx(6) + step / 2).toFixed(1) + '" x2="' + (sx(6) + step / 2).toFixed(1) + '" y1="' + pt + '" y2="' + (Hh - pb) + '" class="nowl"/><text x="' + sx(3).toFixed(1) + '" y="' + (Hh - 4) + '" class="ax" text-anchor="middle">直近7日</text><text x="' + sx(10).toFixed(1) + '" y="' + (Hh - 4) + '" class="ax" text-anchor="middle">この先7日</text>';
   [lo * 1.01, base, hi / 1.01].forEach(v => { g += '<text x="' + (Wd - pr + 4) + '" y="' + (sy(v) + 3).toFixed(1) + '" class="ax">' + kfmt(v) + '</text>'; });
-  return '<section class="card" id="c-next7"><h2>この先7日の見込み</h2><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="直近7日のローソク足と、この先7日の見込みの幅">' + g + '</svg>' +
+  const soon = soonCard().replace(/^<section class="card" id="c-soon"><h2>この先数日で起きやすいこと<\/h2>/, '').replace(/<p class="sub">毎朝9時の確定データで書き直します。[^<]*<\/p><\/section>$/, '');
+  return '<section class="card" id="c-next7"><h2>この先7日の見込み</h2>' + soon + '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="直近7日のローソク足と、この先7日の見込みの幅">' + g + '</svg>' +
     '<div class="xscroll"><table class="tbl sm n7"><thead><tr><th>日</th><th>半分のケース</th><th>10回に8回</th><th>今より上</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<p class="sub">今と似た状況だった過去の日の、その後1〜7日の値動きを、今の荒れ方に合わせて伸び縮みさせて出した幅です（日の区切りは日本時間の朝9時）。真ん中の線が平らなのは、向きの当たりが5割強しかなく、どちらとも言えないためです。見るべきは幅で、過去2年では「10回に8回」の幅に実際に入ったのが80%と、設計どおりでした。「今より上」は、その日の終わりに今朝の終値（' + kfmt(base) + '）より上だった割合。毎朝の幅が実際に当たっていたかは、チャートタブの「直近7日」で確かめられます。</p></section>';
 }
@@ -1721,6 +1722,9 @@ function councilCard() { // 大事な判断は、いつも5人（奇数）で意
 function miniGrid() { // 1か所で全部見えるように：大事な数字を小さな札で並べる（緑＝買いの材料、赤＝注意、灰＝参考）
   const R = []; const add = (go, name, val, tone, note) => R.push('<button class="mini m-' + tone + '" data-go="' + go + '"><span class="mn">' + name + '</span><b class="num">' + val + '</b><span class="mt">' + note + '</span></button>');
   const f1 = S.d && S.d.c.length > 30 ? (fcPath(S.d.c.length - 1) || [])[0] : null, c0 = S.d ? S.d.c[S.d.c.length - 1] : NaN;
+  { const fw = fcAt(S.d.c.length - 1, 's'); if (fw) add('dir', '1週間の向き', fw.up >= 0.56 ? '上がりやすい' : fw.up <= 0.44 ? '下がりやすい' : '五分五分', fw.up >= 0.56 ? 'g' : fw.up <= 0.44 ? 'r' : 'n', '似た状況で上がった割合 ' + Math.round(fw.up * 100) + '%'); }
+  if (S.bg) add('where', '底らしさ', Math.round(S.bg.g * 100) + '%', S.bg.g >= 0.5 ? 'g' : 'n', S.bg.g >= 0.5 ? '底値圏の水準' : 'まだ高い');
+  if (S.cyc) add('where', 'サイクル', S.cyc.name, 'n', '半減期から' + S.cyc.day + '日目');
   if (f1) add('soon', '明日の幅', kfmt(c0 * (1 + f1.q10)) + '〜' + kfmt(c0 * (1 + f1.q90)), 'n', '10回に8回はこの中');
   const wr = S.bg && S.bg.parts.find(x => /週足RSI/.test(x.nm)); if (wr) add('bottom', '売られすぎ（週足RSI）', wr.now, +wr.now <= 35 ? 'g' : 'n', +wr.now <= 35 ? '過去の底と同じ水準' : '底の水準ではない');
   const fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null; if (fg != null) add('bottom', '恐怖指数', fg, 'n', (fg <= 25 ? '極度の恐怖' : fg >= 75 ? '極度の強欲' : '中間') + '・参考（効き目なし）');
@@ -2417,17 +2421,10 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + tilesCard() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + soonCard() + next7Card() +
+  return todoCard() + miniGrid() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + next7Card() +
     '<a class="to-chart" href="#chart">チャートと振り返り（4時間足・直近7日の答え合わせ・底の見込み・長期チャート・次の天井）→</a>' +
-    '<details class="more"><summary>もっと詳しく（サイクルと出口・銘柄の選び方・スコア・価格チャート・データ）</summary>' + cycleCard() +
-    (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + fl(info) +
-    '<h2 class="sec">時間軸ごとの判定（買い方の土台になるスコア）</h2>' + '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
-    '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
-    '<section class="card"><div class="row"><h2>価格と予測レンジ</h2><div class="seg" role="group" aria-label="表示期間">' + [[90, '3か月'], [365, '1年'], [1460, '4年']].map(r => '<button data-range="' + r[0] + '" aria-pressed="' + (S.range === r[0]) + '">' + r[1] + '</button>').join('') + '</div></div>' + priceChart() +
-    '<p class="keys"><span><i class="k-tr"></i>トレンドの通り道（直近60日）</span><span><i class="k-iv"></i>オプション市場が見込む揺れ幅（細い線は3回に2回、薄い線は20回に19回この中）</span><span><i class="k-px"></i>終値（3か月表示はローソク足）</span><span><i class="k-50"></i>50日線</span><span><i class="k-200"></i>200日線</span><span><i class="k-cone"></i>予測の幅（濃い帯は50%、薄い帯は80%）</span></p><p class="sub">チャート下の帯は、その日に出ていた' + H.name + '判定です。</p></section>' +
-
-    '<section class="card"><h2>データの取得状況</h2><ul class="stat">' + stat + '</ul><p class="sub">判定に使う日足は ' + ymd(S.d.t[S.d.c.length - 1]) + '（UTC）の確定分まで。開いている間は5分ごとに更新します。</p></section>' +
-    '</details>' + glossary() + '<p class="disc">過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
+    (info.length ? '<details class="more"><summary>参考の注意（' + info.length + '件）</summary>' + fl(info) + '</details>' : '') +
+    glossary() + '<p class="disc">過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
 }
 
 function ladderCard() {
@@ -2436,16 +2433,6 @@ function ladderCard() {
     '<p class="sub">「今までの方式」は、11月に変える前の買い方（試し買い＋確認買い4回）です。半分ずつにすると、完了した5つのケースすべてで今までの方式を上回りました（+2〜+22%）。一方、今回のサイクルでは今のところ下回っています（6月の安値から買い下がって、いまは含み損になる計算のため）。</p>' +
     '<p class="sub">買い下がりに損切り（最後の買い足しからさらに-15%）を付けると、BTCの2015年は底の直前で損切りになり、最終額が半分以下（6164→2722）になりました。損切りの位置を少し変えるだけで結果が大きく変わったため、買い下がりには損切りを置かず、1回目の買値の半分を割ったらアラームを出す形にしています。</p>' +
     '<p class="sub">128通りの設定を試し、過去のサイクルだけで選んだ設定が次のサイクルでも上位に入ることを確かめています。株の買いを「合図の翌営業日」で計算すると、MSTRでの差はほぼなく、差が大きいのはCOINとBTCです。</p></section>';
-}
-function designCouncilCard() { // アプリの作りそのものも、立場の違う5人の多数決で決めた記録
-  const Q = [
-    ['判定タブの量', 'チャートや振り返りは別のタブへ（判定タブは決めるための物だけ）', '3対2', '使う本人・画面の人・相場の人が賛成。検証の人・守りの人は「根拠がすぐ近くにある方が安全」と反対'],
-    ['検証できていない情報（清算の偏りなど）', '判断の画面から外し、需給タブに残す', '3対2', '検証の人・守りの人・画面の人が賛成。本人・相場の人は「見たい」と反対'],
-    ['節目を抜けたときの通知', '続ける', '3対2', '本人・相場の人・守りの人が賛成。検証の人・画面の人は「効き目を確かめていない線で鳴る」と反対'],
-    ['明日の幅・この先7日の見込み', '出し続ける', '4対1', '幅の当たり方が設計どおり（80%）になったので、守りの人以外は賛成'],
-    ['1倍か2倍かの決め方', '5人の会議で決める（会議の中に検証の人が入る）', '3対2', '本人・相場の人・画面の人が賛成。検証の人・守りの人は「確かめたルール（中期75）だけで決めるべき」と反対'],
-    ['言葉', 'やさしい言葉にして、専門用語はかっこ書きに', '3対2', '本人・画面の人・守りの人が賛成']];
-  return '<section class="card"><h2>このアプリの作りを決めた会議</h2><p class="sub" style="margin-top:0">使う本人・検証の人・画面の人・守りの人・相場の人の5人で、意見が割れた作りを多数決で決めました（2026年11月22日）。</p><ul class="cv">' + Q.map(x => '<li class="win"><b>' + esc(x[0]) + '：' + esc(x[1]) + '</b><span>' + x[2] + '</span><small>' + esc(x[3]) + '</small></li>').join('') + '</ul></section>';
 }
 function reviewCard() {
   const r = S.review; if (!r) return '<section class="card"><h2>定期点検</h2><p class="muted">まだ点検の結果がありません。毎月1日に自動で点検します。</p></section>';
@@ -2513,7 +2500,8 @@ function viewVerify() {
   const lg = evalLog(), lz = lg.hz[S.sel];
   const live = lg.n ? '<p>' + ymd(lg.first) + ' から ' + lg.n + ' 日分を記録。' + h.name + 'では、買い系の判定 ' + lz.buyN + ' 件中 ' + lz.buyHit + ' 件が的中、見送り判定 ' + lz.avN + ' 件中 ' + lz.avHit + ' 件が的中、' + lz.pend + ' 件が判定待ちです。</p>' + (lg.risk ? '<p>ロング清算リスクが「警戒」だった日の7日後は平均 ' + pc(lg.risk.hi) + '（' + lg.risk.hiN + '件）、それ以外の日は平均 ' + pc(lg.risk.lo) + '（' + lg.risk.loN + '件）。</p>' : '<p class="sub">清算・オプションの警戒フラグは過去データがないため、ここに記録が5件以上たまった時点で当たり外れを表示します。</p>') : '<p class="muted">まだ記録がありません。</p>';
   return '<section class="lead"><h1>当たっていたか</h1><p>今の買い方を過去のサイクルに当てはめた結果と、毎日の判定の答え合わせです。開くたびに計算し直します。</p></section>' +
-    reviewCard() + designCouncilCard() + ruleCard() + ladderCard() + e2eCard() + protectCard() + wfCard() + fixedCard() + slogCard() + provRecord() +
+    reviewCard() + ruleCard() + e2eCard() + ladderCard() + protectCard() +
+    '<details class="more"><summary>細かい答え合わせ（確認買いの数字・毎日の判定の記録・スコアの成績など）</summary>' + wfCard() + fixedCard() + slogCard() + provRecord() +
     '<h2 class="sec" style="margin-top:22px">スコア（短期・中期・長期）の答え合わせ</h2>' +
     '<div class="seg wide" role="group" aria-label="時間軸">' + E.HORIZONS.map(x => '<button data-h="' + x.k + '" aria-pressed="' + (S.sel === x.k) + '">' + x.name + '<small>' + (x.d === 1 ? '1日' : x.d + '日') + '</small></button>').join('') + '</div>' +
     '<section class="card"><div class="row"><h2>' + h.name + 'シグナルの成績</h2><span class="badge b-' + ev.status + '">' + stTxt[0] + '</span></div><p>' + stTxt[1] + '</p>' +
@@ -2524,7 +2512,7 @@ function viewVerify() {
     '<p class="sub">スコア60以上で買い、40未満で売り、その間は維持。売買のたびに手数料0.1%を引いています。売買 ' + sim.trades + ' 回、' + sim.years.toFixed(1) + ' 年間。BTC現物での結果で、関連株の結果は「関連株」タブにあります。</p></section>' +
     '<section class="card"><div class="row"><h2>直近の答え合わせ</h2><span class="num muted">' + hits + '/' + judged.length + ' 的中</span></div><ul class="calls">' + pend + calls + '</ul><p class="sub">' + h.d + '日おきに1件ずつ。買い系は上昇で的中、見送りは下落で的中、様子見は対象外です。</p></section>' +
     '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
-    '<details class="card"><summary>計算のしかた</summary><p>テクニカル9種、出来高4種、オプション2種（Deribit DVOL、2021年以降）、資金調達率2種（Binance先物、2019年以降）、長期サイクル2種（長期成長線と200週線からの乖離。長期の判定だけに使用）の指標を毎日計算します。各指標が過去4年間で「' + h.d + '日後のリターン」とどれだけ連動していたかを相関で測り、それを重みにして合成したものがスコアです。スコアは過去4年の中での順位（0〜100）に直しています。</p><p>重みの計算にはその日より前に結果が確定していたデータしか使わないため、上の成績はすべて「当時知り得た情報だけで出した判定」の結果です。プット・コール比率、スキュー、建玉、清算の集中帯は長期の履歴が公開されていないのでスコアには入れず、警戒フラグとして判定を一段階下げる用途に限っています。</p></details>';
+    '<details class="card"><summary>計算のしかた</summary><p>テクニカル9種、出来高4種、オプション2種（Deribit DVOL、2021年以降）、資金調達率2種（Binance先物、2019年以降）、長期サイクル2種（長期成長線と200週線からの乖離。長期の判定だけに使用）の指標を毎日計算します。各指標が過去4年間で「' + h.d + '日後のリターン」とどれだけ連動していたかを相関で測り、それを重みにして合成したものがスコアです。スコアは過去4年の中での順位（0〜100）に直しています。</p><p>重みの計算にはその日より前に結果が確定していたデータしか使わないため、上の成績はすべて「当時知り得た情報だけで出した判定」の結果です。プット・コール比率、スキュー、建玉、清算の集中帯は長期の履歴が公開されていないのでスコアには入れず、警戒フラグとして判定を一段階下げる用途に限っています。</p></details>' + '</details>' + statusCard();
 }
 
 function meter(val, label, level) { if (!ok(val)) return '<div class="meter"><div class="row"><span>' + label + '</span><b class="muted">データなし</b></div></div>'; return '<div class="meter"><div class="row"><span>' + label + '</span><b class="lvl-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '">' + level + '<span class="num"> ' + val + '</span></b></div><div class="mtrack"><b style="width:' + val + '%" class="m-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '"></b></div></div>'; }
@@ -2580,9 +2568,22 @@ function toolsCard() { // 調べ役：このアプリで見られないものを
   ];
   return '<section class="card"><h2>外の使えるツール</h2><p>このアプリで自動では取れないものを、無料で見られる場所です。</p><ul class="tools">' + T.map(x => '<li><b>' + (x[1] ? '<a href="' + x[1] + '" target="_blank" rel="noopener">' + x[0] + '</a>' : x[0]) + '</b><span>' + x[2] + '</span><small>' + x[3] + '</small></li>').join('') + '</ul></section>';
 }
+function statusCard() {
+  const stat = Object.keys(S.status).map(k => { const s2 = S.status[k]; return '<li class="' + (s2.ok ? 'ok' : 'ng') + '"><b>' + s2.name + '</b><span>' + esc(s2.note || '') + '</span></li>'; }).join('');
+  return '<section class="card"><h2>データの取得状況</h2><ul class="stat">' + stat + '</ul><p class="sub">判定に使う日足は ' + ymd(S.d.t[S.d.c.length - 1]) + '（UTC）の確定分まで。開いている間は5分ごとに更新します。</p></section>';
+}
 function viewChart() { // 見て考えるための画面：チャートと振り返り、長い見込み
   if (!S.R) return '<section class="card"><p class="muted">データを読み込んでいます…</p></section>';
-  return '<section class="lead"><h1>チャートと見込み</h1><p>判定の根拠を、図と過去の答え合わせで確かめる画面です。</p></section>' + intradayChart() + weekCard() + bottomCard() + longChart() + topCard();
+  const hz = S.R.hz[S.sel], H = E.HORIZONS.find(h => h.k === S.sel);
+  const cats = Object.keys(E.CATS).map(k => { const p = hz.sc.catPct[k]; return '<div class="cat"><span>' + E.CATS[k] + '</span><span class="cat-bar">' + (ok(p) ? '<b style="width:' + p.toFixed(0) + '%" class="cb-' + E.verdictOf(p) + '"></b>' : '') + '</span><span class="num">' + (ok(p) ? Math.round(p) : '—') + '</span></div>'; }).join('');
+  const fs = hz.sc.factors.filter(f => f.contrib).sort((x, y) => Math.abs(y.contrib) - Math.abs(x.contrib)).slice(0, 6);
+  const facts = fs.length ? '<ul class="facts">' + fs.map(f => '<li><span class="' + (f.contrib > 0 ? 'up' : 'dn') + '">' + (f.contrib > 0 ? '押し上げ' : '押し下げ') + '</span><span>' + f.label + '</span><span class="num">' + f.text + '</span></li>').join('') + '</ul>' : '';
+  return '<section class="lead"><h1>チャートと見込み</h1><p>判定の根拠を、図と過去の答え合わせで確かめる画面です。</p></section>' + intradayChart() + weekCard() +
+    '<section class="card"><div class="row"><h2>価格と予測レンジ</h2><div class="seg" role="group" aria-label="表示期間">' + [[90, '3か月'], [365, '1年'], [1460, '4年']].map(r => '<button data-range="' + r[0] + '" aria-pressed="' + (S.range === r[0]) + '">' + r[1] + '</button>').join('') + '</div></div>' + priceChart() +
+    '<p class="keys"><span><i class="k-tr"></i>トレンドの通り道（直近60日）</span><span><i class="k-iv"></i>オプション市場が見込む揺れ幅（細い線は3回に2回、薄い線は20回に19回この中）</span><span><i class="k-px"></i>終値（3か月表示はローソク足）</span><span><i class="k-50"></i>50日線</span><span><i class="k-200"></i>200日線</span><span><i class="k-cone"></i>予測の幅（濃い帯は50%、薄い帯は80%）</span></p><p class="sub">チャート下の帯は、その日に出ていた' + H.name + '判定です。</p></section>' +
+    bottomCard() + longChart() + topCard() + cycleCard() +
+    '<details class="more"><summary>判定のもとになるスコア（時間軸ごと・内訳）</summary><section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
+    '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section></details>';
 }
 function viewEvents() {
   const now = Date.now(), ev = (S.events || allEvents()).filter(e => e.t < now + 120 * DAY);
@@ -2636,8 +2637,7 @@ function viewStocks() {
     const mv = sym === 'MSTR' && S.mnav && S.mnav.length ? S.mnav[S.mnav.length - 1] : null;
     h += '<section class="card"><div class="row"><h2>' + sym + '</h2><span class="num big">' + usd2(an.px) + ' <small>' + pc(an.chg) + '</small></span></div>' +
       '<dl class="kv">' + (mv ? '<dt>mNAV（株の価値÷保有BTCの価値）</dt><dd class="num">' + mv.mnav.toFixed(2) + '倍（' + esc(mv.d.slice(5).replace('-', '/')) + '、記録' + S.mnav.length + '日分）</dd>' : '') + '<dt>BTCへの感応度（ベータ、90営業日）</dt><dd class="num">' + an.beta.toFixed(2) + ' 倍</dd><dt>BTCとの相関</dt><dd class="num">' + an.corr.toFixed(2) + '</dd><dt>BTC比の割安・割高</dt><dd>' + rel + '</dd><dt>RSI(14)</dt><dd class="num">' + an.rsi.toFixed(0) + '</dd><dt>50日線 / 200日線</dt><dd class="num">' + usd2(an.s50) + ' / ' + usd2(an.s200) + '</dd></dl>' +
-      '<h3>BTCのシグナルで買った場合の成績</h3><table class="tbl"><thead><tr><th></th><th colspan="2">買い系の判定の日</th><th colspan="2">いつ買っても</th></tr><tr><th></th><th>勝率</th><th>平均</th><th>勝率</th><th>平均</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<p class="sub">前日のBTC判定を見て、当日の終値で買ったと仮定。件数は ' + an.bt.m.all.n + ' 営業日（' + an.date + ' まで）。</p>' +
+      '<p class="sub">ベータ（BTCが1%動いたとき何%動くか）と割安・割高は、指値の換算と銘柄の会議に使っています。</p>' +
       '</section>';
   });
   if (S.news && S.news.items) {
@@ -2646,7 +2646,7 @@ function viewStocks() {
       return '<section class="card"><h2>' + nm[k] + '</h2>' + (k !== 'REG' ? concernList(k, 6) : '') + '<ul class="news">' + it.map(x => '<li' + (x.concern ? ' class="nc"' : '') + '><a href="' + esc(x.link) + '" target="_blank" rel="noopener" title="' + esc(x.title) + '">' + esc(x.ja || x.title) + '</a><div>' + (x.concern ? '<span class="tg tw">懸念</span>' : '') + (x.tags || []).map(g => '<span class="tg">' + esc(g) + '</span>').join('') + '<small>' + esc(x.src || '') + '・' + md(x.t) + '</small></div></li>').join('') + '</ul></section>'; }).join('') +
       '<p class="sub">見出しはGoogleニュースから毎日取り込んでいます。日本語の記事はそのまま、英語の記事は機械翻訳で日本語にしたものだけを出しています（訳がおかしいときは、タップして元の記事を見てください）。種類と「懸念」は、見出しの言葉から自動で付けた目安です。</p>';
   }
-  h += planRecord();
+
   if (!have.length && !['MSTR', 'COIN'].some(s => S.stocks[s])) h += '<section class="card"><p class="muted">株価を読み込んでいます…</p></section>';
   if (S.stkSrc) h += '<p class="sub">株価：' + esc(S.stkSrc) + '。米国市場の終値を、取引終了後に毎日取り込んでいます。</p>';
   h += '<section class="card"><h2>設定</h2><div class="form"> <details><summary class="sub">予備の株価データ（通常は不要）</summary><label>Twelve Data のAPIキー<input id="td-key" type="text" autocomplete="off" value="' + esc(S.cfg.tdKey || '') + '" placeholder="キーを貼り付け"></label></details><label>BTCの価格データ<select id="src"><option value="auto"' + (S.cfg.src !== 'bitstamp' ? ' selected' : '') + '>Binance（2017年〜、出来高が大きい）</option><option value="bitstamp"' + (S.cfg.src === 'bitstamp' ? ' selected' : '') + '>Bitstamp（2014年〜、検証期間が長い）</option></select></label><button class="btn" id="cfg-save">設定を保存して更新する</button><button class="btn ghost" id="cfg-reset">保存データをすべて消す</button></div><p class="sub">設定・判定の記録・追加したイベントは、このブラウザの中だけに保存されます。</p></section>' +
@@ -2725,7 +2725,7 @@ document.addEventListener('click', e => {
     if (t.dataset.ord === 'fix') { const po = placedOrders(), f1 = ladderLots()[0]; if (po && f1) { po.rows = po.rows.map((r, k) => k === 0 ? Object.assign({}, r, { px: f1.cost }) : Object.assign({}, r, { px: Math.floor(f1.cost * (1 - LAD_STEP * k) * 100) / 100 })); LS.set('orders', po); } }
     render(); }
   else if (t.closest && t.closest('.todo li[data-done]') && !t.closest('.ord') && !t.closest('button')) { const k = +t.closest('.todo li[data-done]').dataset.done, key = 'done.' + dkey(Date.now()), a = new Set(LS.get(key, [])); a.has(k) ? a.delete(k) : a.add(k); LS.set(key, [...a]); render(); }
-  else if (t.closest && t.closest('.mini')) { const go = t.closest('.mini').dataset.go; if (go === 'events') { location.hash = 'events'; return; } if (['bottom', 'long', 'week'].includes(go) && S.tab !== 'chart') { location.hash = 'chart'; setTimeout(() => { const el2 = document.getElementById('c-' + go); if (el2) el2.scrollIntoView({ block: 'start' }); }, 80); return; } const el = go === 'today' ? document.querySelector('.today') : document.getElementById('c-' + go); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  else if (t.closest && t.closest('.mini')) { const go = t.closest('.mini').dataset.go; if (go === 'events') { location.hash = 'events'; return; } if (['bottom', 'long', 'week'].includes(go) && S.tab !== 'chart') { location.hash = 'chart'; setTimeout(() => { const el2 = document.getElementById('c-' + go); if (el2) el2.scrollIntoView({ block: 'start' }); }, 80); return; } const el = go === 'today' ? document.querySelector('.today') : document.getElementById('c-' + (go === 'soon' ? 'next7' : go)); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.closest && t.closest('.tile')) { const go = t.closest('.tile').dataset.go, el = go === 'today' ? document.querySelector('.today') : go === 'events' ? null : document.getElementById('c-' + go); if (go === 'events') { location.hash = 'events'; return; } if (['bottom', 'long'].includes(go) && S.tab !== 'chart') { location.hash = 'chart'; setTimeout(() => { const el2 = document.getElementById('c-' + go); if (el2) el2.scrollIntoView({ block: 'start' }); }, 80); return; } if (go === 'concern') { const d = document.querySelector('.today .more-in.mb'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } else if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.dataset.rec) { S.recKind = t.dataset.rec === 'trial' ? 'trial' : (S.plan && (S.plan.a === 'ladder' || ((S.plan.lad || []).length && S.plan.a !== 'buy'))) ? 'ladder' : 'buy'; location.hash = 'stocks'; setTimeout(() => { const el = document.getElementById('pos-form'); if (el) el.scrollIntoView(); }, 80); }
   else if (t.id === 'trial-add') { LS.set('trial', { t: Date.now(), btc: Math.round(S.price) }); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
