@@ -1,0 +1,45 @@
+===== https://api.kraken.com/0/public/AssetPairs?pair=MSTRxUSD
+HTTP/2 200 
+{"error":["EQuery:Unknown asset pair"]}
+===== https://api.kraken.com/0/public/Ticker?pair=MSTRxUSD,COINxUSD
+HTTP/2 200 
+access-control-allow-origin: https://yasuaki0106-debug.github.io
+{"error":["EQuery:Unknown asset pair"],"result":{}}
+===== https://api.kraken.com/0/public/AssetPairs?aclass_base=tokenized_asset
+HTTP/2 200 
+access-control-allow-origin: https://yasuaki0106-debug.github.io
+{"error":[],"result":{"AAOISPVUSD":{"altname":"AAOIxUSD","wsname":"AAOIx/USD","aclass_base":"tokenized_asset","base":"AAOIx","aclass_quote":"currency","quote":"ZUSD","lot":"unit","cost_decimals":5,"pair_decimals":2,"lot_decimals":8,"lot_multiplier":1,"leverage_buy":[],"leverage_sell":[],"fees":[],"fees_maker":[],"fee_volume_currency":"ZUSD","margin_call":80,"margin_stop":40,"ordermin":"0.04","cost
+===== https://api.bybit.com/v5/market/tickers?category=spot&symbol=MSTRXUSDT
+HTTP/2 403 
+{
+    error:The Amazon CloudFront distribution is configured to block access from your country
+}
+===== https://api.bitget.com/api/v2/spot/market/tickers?symbol=MSTRONUSDT
+HTTP/2 400 
+access-control-allow-origin: *
+{"code":"40034","msg":"Parameter MSTRONUSDT does not exist","requestTime":1795265158527,"data":null}
+===== https://api.gateio.ws/api/v4/spot/tickers?currency_pair=MSTRX_USDT
+HTTP/2 200 
+access-control-allow-origin: *
+[{"currency_pair":"MSTRX_USDT","last":"78.48","lowest_ask":"78.35","lowest_size":"0.201","highest_bid":"78.32","highest_size":"0.335","change_percentage":"-6.76","base_volume":"3637.938","quote_volume":"296277.16956","high_24h":"87.91","low_24h":"72.46"}]
+===== https://www.okx.com/api/v5/market/ticker?instId=MSTRX-USDT
+HTTP/2 200 
+access-control-allow-origin: https://yasuaki0106-debug.github.io
+{"code":"51001","data":[],"msg":"Instrument ID, Instrument ID code, or Spread ID doesn't exist."}
+===== https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d
+HTTP/2 200 
+{"chart":{"result":[{"meta":{"currency":"USD","symbol":"MSTR","exchangeName":"NMS","fullExchangeName":"NasdaqGS","instrumentType":"EQUITY","firstTradeDate":897571800,"regularMarketTime":1795208400,"hasPrePostMarketData":true,"gmtoffset":-18000,"timezone":"EST","exchangeTimezoneName":"America/New_York","regularMarketPrice":77.8,"regularMarketChangePercent":-9.671,"fulldayPrice":77.8,"fulldayChange"
+===== https://api.nasdaq.com/api/quote/MSTR/info?assetclass=stocks
+HTTP/2 200 
+{"data":{"symbol":"MSTR","companyName":"Strategy Inc Common Stock Class A","stockType":"Class A Common Stock","exchange":"NASDAQ-GS","isNasdaqListed":true,"isNasdaq100":true,"isHeld":false,"primaryData":{"lastSalePrice":"$86.13","netChange":"-4.19","percentageChange":"-4.64%","deltaIndicator":"down","lastTradeTimestamp":"Nov 20, 2026","isRealTime":false,"bidPrice":"N/A","askPrice":"N/A","bidSize":
+===== https://finnhub.io/api/v1/quote?symbol=MSTR&token=demo
+HTTP/2 401 
+access-control-allow-origin: *
+{"error":"Invalid API key."}
+===== https://api.twelvedata.com/price?symbol=MSTR&apikey=demo
+HTTP/2 401 
+access-control-allow-origin: *
+{"code":401,"message":"The 'demo' API key is only used for initial familiarity. To become a full user, you can request your own API key at https://twelvedata.com/pricing. It is absolutely free, and it’s yours for a lifetime. It only takes 10 seconds to obtain your own API key!","status":"error"}
+===== https://stooq.com/q/l/?s=mstr.us&f=sd2t2ohlcv&h&e=csv
+HTTP/1.1 404 Not Found
+<meta charset=utf-8><title>Stooq</title><center style=font-family:arial;margin-top:50px><p><a href=/><img src=//static.stooq.com/stooq.svg height=68></a><p style=font-size:x-large>The page you requested does not exist<br>or has been moved<p><small><a href=/>Main Page</a>
