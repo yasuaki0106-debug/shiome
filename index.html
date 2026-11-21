@@ -927,7 +927,7 @@ function compute() {
   S.zones = E.entryZones(d, S.R.ind, S.price, S.opt, S.liq);
   S.events = allEvents();
   S.prov = null;
-  decide(); computeStocks(); S.up = upside(); S.plan = buildPlan(); S.bo = bottomOutlook(); try { S.bg = bottomGauge(); } catch (e) { S.bg = null; } S.hold = holdAll(); S.pick = pickStock(); writeLog();
+  decide(); computeStocks(); S.up = upside(); try { S.bg = bottomGauge(); } catch (e) { S.bg = null; } S.plan = buildPlan(); S.bo = bottomOutlook(); S.hold = holdAll(); S.pick = pickStock(); writeLog();
 }
 
 function actsFrom(R) { // スコアの判定に、検証結果・イベント・清算リスクによる引き下げを反映する
@@ -965,6 +965,7 @@ function planDecision(acts) {
   chk.push({ ok: okM, text: '中期の判定が「' + (first ? '買い好機' : '打診買い') + '」以上（今は「' + E.VERDICT[acts.m.a] + '」' + (acts.m.why.length ? '、' + acts.m.why.join('・') + 'で引き下げ中' : '') + '）' });
   if (!first) chk.push({ ok: gap >= ADD_GAP, text: '前回の買いから14日以上（今は' + Math.floor(gap) + '日）' });
   chk.push({ ok: n < MAXBUY, text: '今のサイクルの買いが4回未満（今は' + n + '回）' });
+  const bg = S.bg; if (bg) chk.push({ ok: bg.g >= 0.55, text: '底らしさが55%以上（今は' + Math.round(bg.g * 100) + '%）。値段が底から離れすぎていないことの確認' });
   const evOk = !(S.ev48 && S.bigEv); chk.push({ ok: evOk, text: evOk ? '48時間以内に重要イベントなし' : S.bigEv.title + 'が48時間以内' });
   const lqOk = !(liq.ok && liq.longRisk >= 65); chk.push({ ok: lqOk, text: lqOk ? 'ロングの清算リスクは警戒水準ではない' : 'ロングの清算リスクが警戒水準' });
   const a = chk.every(x => x.ok) ? 'buy' : 'skip';
@@ -1698,10 +1699,10 @@ function fixedCard() {
 function ruleCard() {
   const r = ruleSignals();
   const rows = [['2015年', '1/26・2/13・2/27・3/13', '$261', '-21%', '74倍'], ['2019年', '4/2・4/16・5/3・5/17', '$5,641', '-14%', '12倍'], ['2023年', '1/12・1/26・2/15・3/13', '$22,358', '-7%', '5.6倍']];
-  const cur = r && r.out.length ? '<tr><th>今回</th><td>' + r.out.map(x => md(x.t)).join('・') + '</td><td class="num">' + usd(r.avg) + '</td><td class="num">' + pc(r.dd, 0) + '</td><td>進行中</td></tr>' : '<tr><th>今回</th><td colspan="4">まだ買い判定は出ていません</td></tr>';
-  return '<section class="card"><h2>買い判定のルールと、過去の結果</h2><p>買い判定は次のルールで出しています。</p><ul class="exit"><li>1回目：半減期から750日目以降（底値圏〜回復期）で、中期の判定が「買い好機」になった日</li><li>買い足し：前回から14日以上たち、中期の判定が「打診買い」以上の日。合計4回まで</li><li>重要イベントの48時間前と、ロングの清算リスクが警戒水準の日は見送る</li></ul>' +
-    '<table class="tbl"><thead><tr><th>底の年</th><th>買い判定の日</th><th>平均の買値</th><th>最大の含み損</th><th>次の天井まで</th></tr></thead><tbody>' + rows.map(x => '<tr><th>' + x[0] + '</th><td>' + x[1] + '</td><td class="num">' + x[2] + '</td><td class="num">' + x[3] + '</td><td class="num">' + x[4] + '</td></tr>').join('') + cur + '</tbody></table>' +
-    (r && r.out.length ? '<p class="sub">今回のサイクルでは、すでに買い判定が ' + r.out.length + ' 回出ていて、その平均の買値に対して今は ' + pc(r.now, 0) + ' です。判定が出た後に下げが続いた形で、過去3回より悪い展開になっています。</p>' : '') +
+  const cur0 = r && r.out.length ? '<tr><th>今回</th><td>' + r.out.map(x => md(x.t)).join('・') + '</td><td class="num">' + usd(r.avg) + '</td><td class="num">' + pc(r.dd, 0) + '</td><td>進行中</td></tr>' : '<tr><th>今回</th><td colspan="4">まだ買い判定は出ていません</td></tr>';
+  return '<section class="card"><h2>買い判定のルールと、過去の結果</h2><p>買い判定は次のルールで出しています。</p><ul class="exit"><li>1回目：半減期から750日目以降（底値圏〜回復期）で、中期の判定が「買い好機」になった日</li><li>買い足し：前回から14日以上たち、中期の判定が「打診買い」以上の日。合計4回まで</li><li>どの回も、底らしさが55%以上のときだけ（2026年11月に追加）</li><li>重要イベントの48時間前と、ロングの清算リスクが警戒水準の日は見送る</li></ul>' +
+    '<table class="tbl"><thead><tr><th>底の年</th><th>買い判定の日</th><th>平均の買値</th><th>最大の含み損</th><th>次の天井まで</th></tr></thead><tbody>' + rows.map(x => '<tr><th>' + x[0] + '</th><td>' + x[1] + '</td><td class="num">' + x[2] + '</td><td class="num">' + x[3] + '</td><td class="num">' + x[4] + '</td></tr>').join('') + '<tr><th>今回</th><td>8/19</td><td class="num">$69,298</td><td class="num">' + pc(S.price / 69298 - 1, 0) + '</td><td>進行中</td></tr></tbody></table>' +
+    '<p class="sub">底らしさの条件は、今回のサイクルの失敗から加えました。追加前のルールでは8/19・9/2・9/18・10/4の4回買う判定になり、平均の買値は$77,987でした。2回目以降は、6月の安値から値段が大きく戻り、底らしさが40%・32%・27%まで下がっていた日です。過去3回の成功したサイクルでは、すべての買いの日で底らしさが59%以上でした。条件を加えると、今回は8/19の1回だけになり、残り3回分を今の安値圏に残せていた計算です。ただし、後から1つのサイクルを見て決めた条件で、次も効くとは限りません。</p>' +
     '<p class="sub">BTCの値段での結果です。含み損は4回買い終えた後、その持ち高全体で見た最大の値。MSTR・COINはこの1.5倍前後、MSTU・CONLはさらに大きく動きます。</p>' +
     '<p class="sub">候補にしたルールは30通りほどで、「買った後の含み損が浅いこと」と「底から遅れすぎないこと」で選びました。時期を見ずに毎月買うと含み損は40〜55%、中期の判定が「打診買い」の段階で買い始めると28〜29%でした。ただし検証できるサイクルは4回しかなく、たまたま合っているだけの可能性は残ります。</p></section>';
 }
