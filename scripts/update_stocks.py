@@ -21,6 +21,13 @@ def yahoo(sym):
             off = r.get("meta", {}).get("gmtoffset", -18000)
             rows = [[dt.datetime.utcfromtimestamp(t + off).strftime("%Y-%m-%d"), round(c, 4)] for t, c in zip(ts, q) if c]
             m = r.get("meta", {})
+            # 当日の日足がまだ確定値として入っていない場合は、通常取引の最終値で補う
+            rmt, rmp = m.get("regularMarketTime"), m.get("regularMarketPrice")
+            if rmt and rmp and rows:
+                dday = dt.datetime.utcfromtimestamp(rmt + off).strftime("%Y-%m-%d")
+                closed = (time.time() - rmt) > 20 * 60  # 最終約定から20分以上たっていれば引け後とみなす
+                if dday > rows[-1][0] and closed:
+                    rows.append([dday, round(rmp, 4)])
             DEBUG[sym] = {"now": int(time.time()), "regularMarketTime": m.get("regularMarketTime"), "regularMarketPrice": m.get("regularMarketPrice"), "gmtoffset": off, "tail": [[t, c] for t, c in list(zip(ts, q))[-4:]], "n": len(ts)}
             if len(rows) > 100:
                 return rows

@@ -10,10 +10,14 @@ NOW=last[0]+86400000*2+3600000*5   # 2 days after last candle → add 1 complete
 kl.append([last[0]+86400000,last[4],str(spot*1.01),str(spot*0.97),str(spot*0.985),"1300",0])
 kl.append([last[0]+2*86400000,str(spot*0.985),str(spot*0.99),str(spot*0.97),str(spot*0.98),"400",0])
 spot=spot*0.98
+NOWV=[NOW]; KL=[kl]
 MODE=sys.argv[1] if len(sys.argv)>1 else 'full'
 def klines(url):
     from urllib.parse import urlparse,parse_qs
-    q=parse_qs(urlparse(url).query); st=int(q['startTime'][0]); out=[k for k in kl if k[0]>=st][:1000]; return out
+    q=parse_qs(urlparse(url).query)
+    if q.get('interval',[''])[0]=='1h':
+        t0=NOWV[0]-(NOWV[0]%3600000); return [[t0-(199-i)*3600000,"0","0","0",str(spot*(1+0.0005*((i*7)%11-5))),"1"] for i in range(200)]
+    st=int(q['startTime'][0]); out=[k for k in KL[0] if k[0]>=st][:1000]; return out
 def options():
     out=[]
     exps=[('27NOV26',5),('4DEC26',12),('25DEC26',33),('26MAR27',124)]
@@ -76,12 +80,12 @@ async def main():
                 if 'LongShort' in u: return await js(lsr())
                 if 'twelvedata' in u: return await js(stock('X'))
                 return await route.abort()
-            await pg.route(lambda u: not u.startswith('file:'),handle)
-            if MODE=='full' : await pg.add_init_script("try{localStorage.setItem('shiome.cfg',JSON.stringify({src:'auto',tdKey:'TESTKEY'}))}catch(e){}")
-            await pg.goto('file:///home/claude/btc/index.html')
+            await pg.route(lambda u: not u.startswith('http://localhost'),handle)
+            if MODE=='full' : await pg.add_init_script("try{localStorage.setItem('shiome.pos',JSON.stringify([{sym:'MSTU',cost:38.5,qty:120,date:'2026-08-03'},{sym:'CONL',cost:4.2,qty:500,date:null},{sym:'MSTZ',cost:9.1,qty:50,date:'2026-10-01'}]))}catch(e){}")
+            await pg.goto('http://localhost:8765/index.html')
             await pg.wait_for_function("window.__S && window.__S.at && !window.__S.loading",timeout=60000)
             await pg.wait_for_timeout(300)
-            st=await pg.evaluate("JSON.stringify({status:__S.status,act:__S.act,flags:__S.flags,price:__S.price,liq:{lr:__S.liq.longRisk,sr:__S.liq.shortRisk,oi7:__S.liq.oi7,fp:__S.liq.fundPct,cl:__S.liq.clusters&&__S.liq.clusters.below},opt:__S.opt&&{pcr:__S.opt.pcrOI,skew:__S.opt.skew,atm:__S.opt.atmIV,mp:__S.opt.main.maxPain,cw:__S.opt.callWall,pw:__S.opt.putWall},n:__S.d.c.length,fac:__S.R.hz.m.sc.factors.filter(f=>f.w).map(f=>f.id+':'+f.ic.toFixed(2)),stk:__S.stocks.MSTR&&__S.stocks.MSTR.an&&{b:__S.stocks.MSTR.an.beta,c:__S.stocks.MSTR.an.corr,bt:__S.stocks.MSTR.an.bt.m}})")
+            st=await pg.evaluate("JSON.stringify({cyc:__S.cyc&&{p:__S.cyc.phase,d:__S.cyc.day,s:__S.cyc.score},plan:__S.plan&&{a:__S.plan.a,why:__S.plan.why},hold:(__S.hold||[]).map(h=>[h.p.sym,h.a,h.now,h.pl,h.decay,h.need]),pcts:[__S.R.hz.s.pct,__S.R.hz.m.pct,__S.R.hz.l.pct],status:__S.status,act:__S.act,flags:__S.flags,price:__S.price,liq:{lr:__S.liq.longRisk,sr:__S.liq.shortRisk,oi7:__S.liq.oi7,fp:__S.liq.fundPct,cl:__S.liq.clusters&&__S.liq.clusters.below},opt:__S.opt&&{pcr:__S.opt.pcrOI,skew:__S.opt.skew,atm:__S.opt.atmIV,mp:__S.opt.main.maxPain,cw:__S.opt.callWall,pw:__S.opt.putWall},n:__S.d.c.length,fac:__S.R.hz.m.sc.factors.filter(f=>f.w).map(f=>f.id+':'+f.ic.toFixed(2)),stk:__S.stocks.MSTR&&__S.stocks.MSTR.an&&{b:__S.stocks.MSTR.an.beta,c:__S.stocks.MSTR.an.corr,bt:__S.stocks.MSTR.an.bt.m}})")
             if scheme=='dark': print(json.dumps(json.loads(st),ensure_ascii=False,indent=1)[:5000])
             for tab in ['judge','verify','flow','events','stocks']:
                 await pg.evaluate(f"location.hash='{tab}'"); await pg.wait_for_timeout(250)

@@ -164,7 +164,7 @@ function scoreHorizon(d, F, H) {
     let num = 0, den = 0; const cn = {}, cd = {}, det = [];
     for (let j = 0; j < F.length; j++) {
       let ic = b >= 0 ? corrRange(p2[j], a, b) : NaN;
-      const w = ic === ic && Math.abs(ic) >= IC_FLOOR && !(F[j].cat === 'cyc' && H < 30) ? ic : 0;
+      const w = ic === ic && Math.abs(ic) >= IC_FLOOR && !(F[j].cat === 'cyc' && H < 90) ? ic : 0;
       const x = F[j].x[t], q = p1[j], m = q.N[t + 1] - q.N[za];
       let z = NaN;
       if (x === x && m >= MIN_Z) {
@@ -459,8 +459,11 @@ function longSeries(L) { // L: { t:[], c:[] } 日足
 const PHASE = { up: '上昇期', top: '天井圏', down: '下落期', bottom: '底値圏', recover: '回復期' };
 function cycleInfo(L, ls, now, price) {
   const n = L.c.length, DAYms = 864e5, cyc = [];
-  HALVINGS.forEach((h, k) => {
-    const nx = HALVINGS[k + 1] || Infinity; let pk = -1, lo = -1;
+  // 次の半減期の正確な日はまだ決まっていない。見込み日を過ぎたら、その日を仮の半減期として扱う
+  const NEXT_EST = Date.UTC(2028, 3, 15), HV = HALVINGS.slice(), estUsed = now >= NEXT_EST;
+  if (estUsed) HV.push(NEXT_EST);
+  HV.forEach((h, k) => {
+    const nx = HV[k + 1] || Infinity; let pk = -1, lo = -1;
     for (let i = 0; i < n; i++) { if (L.t[i] < h || L.t[i] >= nx) continue; if (L.t[i] <= h + 900 * DAYms && (pk < 0 || L.c[i] > L.c[pk])) pk = i; }
     if (pk < 0) return;
     for (let i = pk; i < n && L.t[i] < nx; i++) if (lo < 0 || L.c[i] < L.c[lo]) lo = i;
@@ -481,7 +484,7 @@ function cycleInfo(L, ls, now, price) {
     checks.push({ ok: ddNow >= -0.15, text: '高値との距離：サイクル高値から ' + (ddNow * 100).toFixed(0) + '%' });
     checks.push({ ok: valPct >= 0.75, text: '割高さ：長期成長線に対して過去の上位 ' + ((1 - valPct) * 100).toFixed(0) + '%' });
   }
-  return { cyc, cur, past, day, phase, name: PHASE[phase], valPct, w200: ls.w200[n - 1], ddNow, checks, score: checks.filter(c => c.ok).length, nextHalving: Date.UTC(2028, 3, 15) };
+  return { cyc, cur, past, day, phase, name: PHASE[phase], valPct, w200: ls.w200[n - 1], ddNow, checks, score: checks.filter(c => c.ok).length, nextHalving: estUsed ? NEXT_EST + 1458 * DAYms : NEXT_EST, estUsed };
 }
 
 /* ---------- top level ---------- */
