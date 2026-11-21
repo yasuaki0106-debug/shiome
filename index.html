@@ -1195,7 +1195,8 @@ function etfAt(sym, btc) { // BTCがその値段のときのETFの目安
   const e = ETF[sym], an = S.stocks[e.und] && S.stocks[e.und].an, lc = an ? etfClose(sym, an.date) : null; if (!an || !lc) return NaN;
   const und = stockAt(an, btc) / an.px - 1; return lc[1] * Math.max(0.05, 1 + e.L * und);
 }
-const HOLD = { hold: ['持ち続ける', 'v-buy'], add: ['買い足し可', 'v-buy'], trim: ['一部売る', 'v-wait'], sell: ['売る', 'v-avoid'], na: ['判定できません', 'v-na'] };
+const HOLD = { hold: ['持ち続ける', 'v-buy'], add: ['買い足し可', 'v-buy'], trim: ['一部売る', 'v-wait'], sell: ['売る', 'v-avoid'], switch: ['元の株に乗り換える', 'v-wait'], relev: ['2倍に戻せる', 'v-buy'], na: ['判定できません', 'v-na'] };
+const LEV_OFF = 20, LEV_ON = 75;   // 守りのルール：中期20未満で2倍→元の株、75以上で元の株→2倍（research/protect.js）
 function holdOne(p) {
   const e = ETF[p.sym], c = S.cyc, ph = c ? c.phase : null, plan = S.plan, now = etfAt(p.sym, S.price); let a = 'hold'; const why = [];
   if (!ok(now)) return { a: 'na', why: ['株価データを取得できていません'], now: NaN };
@@ -1205,6 +1206,10 @@ function holdOne(p) {
     else if (ph === 'up' && c.day >= 300 && S.below200) { a = 'trim'; why.push('上昇期ですが、BTCが200日線を2週間下回りました'); }
     else if ((ph === 'bottom' || ph === 'recover') && plan && plan.a === 'buy') { a = 'add'; why.push('買い判定が出ています（' + plan.why.join('、') + '）'); }
     else { a = 'hold'; why.push(ph ? 'サイクルは' + c.name + '。売る合図は出ていません' : '売る合図は出ていません'); if ((ph === 'bottom' || ph === 'recover') && plan && plan.a === 'skip') why.push('買い足しは、買い判定が出るまで待ちます'); }
+    // 守りのルール（天井圏・下落期の判断が優先）
+    const mm = S.R.hz.m.pct, cyc2 = ph !== 'top' && ph !== 'down';
+    if (cyc2 && e.L > 1 && ok(mm) && mm < LEV_OFF && (a === 'hold' || a === 'add')) { a = 'switch'; why.length = 0; why.push('中期の判定が' + Math.round(mm) + 'まで崩れました（' + LEV_OFF + '未満）。2倍の分は ' + e.und + ' に乗り換えて、判定が' + LEV_ON + '以上に戻ったら2倍に戻します。サイクルの作戦自体は続けます'); }
+    if (cyc2 && e.L === 1 && ok(mm) && mm >= LEV_ON && (ph === 'bottom' || ph === 'recover' || ph === 'up') && a === 'hold') { a = 'relev'; why.push('中期の判定が' + Math.round(mm) + 'まで戻りました。2倍で持つ作戦なら、' + (p.sym === 'MSTR' ? 'MSTU' : 'CONL') + ' に戻す日です'); }
   } else {
     if (ph === 'down' && lvOf('m') === 0 && lvOf('s') === 0) { a = 'hold'; why.push('下落期で、判定も見送り。ただし逆2倍は目減りが大きいので短期で'); }
     else { a = 'sell'; why.push('このアプリは下げを予測できません。' + (ph ? 'サイクルは' + c.name + 'で、' : '') + '逆2倍は持つほど目減りします'); }
@@ -1690,6 +1695,12 @@ function ruleSignals() { // 今のサイクルで、買いルールが実際に�
   const avg = out.length / out.reduce((a, b) => a + 1 / b.px, 0); let mn = Infinity; for (let i = 0; i < d.c.length; i++) if (d.t[i] >= out[out.length - 1].t) mn = Math.min(mn, d.c[i]);
   return { out, avg, dd: mn / avg - 1, now: S.price / avg - 1 };
 }
+function protectCard() {
+  return '<section class="card"><h2>守りのルール（2倍で持つ場合）</h2><p>買った後に中期の判定が' + LEV_OFF + '未満まで崩れたら、MSTU・CONLを元の株（MSTR・COIN）に乗り換えます。判定が' + LEV_ON + '以上に戻ったら、2倍に戻します。サイクルの天井で売る作戦は、そのまま続けます。</p>' +
+    '<table class="tbl"><thead><tr><th>サイクル</th><th>守りなし</th><th>守りあり</th><th>乗り換え回数</th></tr></thead><tbody>' +
+    [['BTC2倍 2015年', '620倍', '583倍', '14回'], ['BTC2倍 2019年', '7.6倍', '15.3倍', '7回'], ['BTC2倍 2023年', '10.3倍', '11.0倍', '15回'], ['BTC2倍 今回', '0.7倍', '1.0倍', '1回'], ['MSTR2倍 2023年', '15.0倍', '16.5倍', '15回'], ['MSTR2倍 今回', '0.4倍', '1.0倍', '1回']].map(x => '<tr><th>' + x[0] + '</th><td class="num">' + x[1] + '</td><td class="num">' + x[2] + '</td><td class="num">' + x[3] + '</td></tr>').join('') + '</tbody></table>' +
+    '<p class="sub">買いルールの日に同額ずつ買い、次の天井の出口ルールで売った場合（今回は11/20時点）。手数料と2倍ETFの経費を差し引いた計算です。5通りの守り方を比べ、増え方を大きく削らずに下げを減らせたこのルールを選びました。2015年だけは守りなしの方がわずかに良く、どのサイクルでも途中の大きな下げ（2019年は-86%）は避けられていません。乗り換えのたびに税金がかかる場合がある点にも注意してください。</p></section>';
+}
 function fixedCard() {
   const rr = rangeRecord();
   return '<section class="card"><h2>予測と、いまの値の違い</h2><ul class="exit"><li><b>予測（朝9時に決めて、翌朝9時まで変えない）</b>：買う／買わない、短期・中期・長期の判定、今日の予測値幅、その先7日〜90日の値幅</li><li><b>いまの値（5分ごとに変わる）</b>：BTCの現在値、それを換算した株価の目安、清算やオプションの状況</li><li><b>暫定</b>：今の値段のまま今日が終わった場合の判定。わざと動くように作っている、確定前の速報です</li></ul>' +
@@ -1731,7 +1742,7 @@ function viewVerify() {
     '<table class="tbl"><thead><tr><th></th><th>年率</th><th>最大下落</th><th>保有日の割合</th></tr></thead><tbody><tr><th>シグナルに従う</th><td class="num">' + pc(sim.cagr, 0) + '</td><td class="num">' + pc(sim.mdd, 0) + '</td><td class="num">' + pc(sim.exposure, 0, false) + '</td></tr><tr><th>持ち続ける</th><td class="num">' + pc(sim.bcagr, 0) + '</td><td class="num">' + pc(sim.bmdd, 0) + '</td><td class="num">100%</td></tr></tbody></table>' +
     '<p class="sub">スコア60以上で買い、40未満で売り、その間は維持。売買のたびに手数料0.1%を引いています。売買 ' + sim.trades + ' 回、' + sim.years.toFixed(1) + ' 年間。BTC現物での結果で、関連株の結果は「関連株」タブにあります。</p></section>' +
     '<section class="card"><div class="row"><h2>直近の答え合わせ</h2><span class="num muted">' + hits + '/' + judged.length + ' 的中</span></div><ul class="calls">' + pend + calls + '</ul><p class="sub">' + h.d + '日おきに1件ずつ。買い系は上昇で的中、見送りは下落で的中、様子見は対象外です。</p></section>' +
-    ruleCard() + fixedCard() + provRecord() + '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
+    ruleCard() + protectCard() + fixedCard() + provRecord() + '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
     '<details class="card"><summary>計算のしかた</summary><p>テクニカル9種、出来高4種、オプション2種（Deribit DVOL、2021年以降）、資金調達率2種（Binance先物、2019年以降）、長期サイクル2種（長期成長線と200週線からの乖離。長期の判定だけに使用）の指標を毎日計算します。各指標が過去4年間で「' + h.d + '日後のリターン」とどれだけ連動していたかを相関で測り、それを重みにして合成したものがスコアです。スコアは過去4年の中での順位（0〜100）に直しています。</p><p>重みの計算にはその日より前に結果が確定していたデータしか使わないため、上の成績はすべて「当時知り得た情報だけで出した判定」の結果です。プット・コール比率、スキュー、建玉、清算の集中帯は長期の履歴が公開されていないのでスコアには入れず、警戒フラグとして判定を一段階下げる用途に限っています。</p></details>';
 }
 
