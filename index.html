@@ -42,6 +42,7 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .sess li b{display:block;font-size:12px;font-weight:500}.sess li.on{border-top-color:var(--brass);color:var(--ink)}.sess li.on b{font-weight:700}
 .cyc{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;border-left:4px solid var(--brass);padding:2px 0 2px 10px;margin:10px 0 6px}.cyc span{color:var(--muted);font-size:12px}
 .why2 li.chk.up::before{content:'✓'}.why2 li.chk.dn::before{content:'×'}
+.why3{margin:10px 0 4px;font-size:13px}.why3 li{padding:5px 0 5px 10px;border-left:3px solid var(--line);margin-bottom:4px;line-height:1.55}.why3 li.pm{border-left-color:var(--brass)}.why3 li.pc{border-left-color:var(--buy)}.why3 li.pn{color:var(--muted)}
 .exit{font-size:13.5px}.exit li{padding:5px 0 5px 16px;position:relative;border-bottom:1px solid var(--line)}.exit li::before{content:"";position:absolute;left:2px;top:14px;width:6px;height:6px;background:var(--brass)}
 .today h1{font-size:34px;line-height:1.25;font-weight:700;letter-spacing:.04em;margin:2px 0 8px}
 .today-lead{font-size:15px}.today-why{font-size:13px;color:var(--muted);margin-top:6px}
@@ -869,7 +870,7 @@ function compute() {
   S.liq = E.analyzeLiq({ oi: S.fut && S.fut.oi, fundDaily: ex.fund, fundNow: S.fut ? S.fut.fundNow : NaN, ls: S.fut && S.fut.ls, top: S.fut && S.fut.top }, d, S.price);
   S.zones = E.entryZones(d, S.R.ind, S.price, S.opt, S.liq);
   S.events = allEvents();
-  decide(); computeStocks(); S.up = upside(); S.plan = buildPlan(); S.hold = holdAll(); writeLog();
+  decide(); computeStocks(); S.up = upside(); S.plan = buildPlan(); S.hold = holdAll(); S.pick = pickStock(); writeLog();
 }
 
 function decide() {
@@ -1094,6 +1095,41 @@ function cycleCard() {
     '<p class="sub">日数は半減期から数えた日数。※は今のサイクルのここまでの安値で、まだ確定していません。</p><h3>出口の目安</h3><ul class="exit"><li>次の半減期（' + f(nh) + 'ごろの見込み）から400〜550日目、' + f(nh + 400 * DAY) + '〜' + f(nh + 550 * DAY) + 'ごろに分けて売る</li><li>その時期に入ってからBTCが200日線を2週間下回ったら、残りも売る</li><li>レバレッジETFは天井を過ぎて持たない。過去の検証では、売らなかった場合に利益の大半が消えました</li></ul>' +
     '<p class="sub">時期の区切りは、半減期から400日目まで上昇期、600日目まで天井圏、750日目まで下落期、1000日目まで底値圏、その後が回復期です。過去3回のサイクルだけが根拠で、上昇幅は回を追うごとに小さくなっています。次も同じになる保証はありません。</p></section>';
 }
+function pickStock() {
+  const A = S.stocks.MSTR && S.stocks.MSTR.an, B = S.stocks.COIN && S.stocks.COIN.an; if (!A || !B) return null;
+  const sc = { MSTR: 0, COIN: 0 }, why = [], pz = pairZ(), ph = S.cyc ? S.cyc.phase : null;
+  if (ok(B.rz) && B.rz <= -1.5) { sc.COIN += 2; why.push({ s: 'COIN', t: 'COINがBTCに対して割安（' + B.rz.toFixed(1) + 'σ）。過去は、この後3か月でBTCより平均10%強上回り、直近2年でも同じ傾向でした' }); }
+  if (ok(B.rz) && B.rz >= 1.5) { sc.COIN -= 2; why.push({ s: 'MSTR', t: 'COINがBTCに対して割高（+' + B.rz.toFixed(1) + 'σ）。この後はBTCに負けやすい傾向でした' }); }
+  if (ok(A.rz) && A.rz >= 1.5) { sc.MSTR -= 2; why.push({ s: 'COIN', t: 'MSTRがBTCに対して割高（+' + A.rz.toFixed(1) + 'σ）。この後はBTCに負けやすい傾向でした' }); }
+  if (ok(A.rz) && A.rz <= -1.5) why.push({ s: null, t: 'MSTRもBTCに対して割安（' + A.rz.toFixed(1) + 'σ）ですが、直近2年は割安なまま戻らない傾向で、材料にしていません' });
+  if (ok(pz) && pz >= 1) { sc.COIN += 1; why.push({ s: 'COIN', t: 'MSTRがCOINに対して割高（+' + pz.toFixed(1) + 'σ）' }); }
+  if (ok(pz) && pz <= -1) { sc.MSTR += 1; why.push({ s: 'MSTR', t: 'MSTRがCOINに対して割安（' + pz.toFixed(1) + 'σ）' }); }
+  if (ph === 'bottom' || ph === 'recover' || ph === 'up') { sc.MSTR += 1; why.push({ s: 'MSTR', t: 'サイクルの上昇局面では、MSTRの方が大きく動きます（前回の底からBTC天井まで MSTR +2188%、COIN +836%）' }); }
+  ['MSTR', 'COIN'].forEach(k => { const an = k === 'MSTR' ? A : B, b = an.bt.l; if (b && b.sig.n >= 30 && ok(b.sig.mean) && ok(b.all.mean)) { if (b.sig.mean > b.all.mean) { sc[k] += 1; why.push({ s: k, t: k + 'は長期の買い判定が当たっている（買い判定の日の平均 ' + pc(b.sig.mean) + '、全日 ' + pc(b.all.mean) + '）' }); } } });
+  // 手持ち
+  const ex = { MSTR: 0, COIN: 0 }; let haveQty = false, lossy = [];
+  (S.hold || []).forEach(h => { const e = ETF[h.p.sym]; if (e.L < 0) return; if (h.p.qty && ok(h.now)) { ex[e.und] += h.p.qty * h.now * Math.abs(e.L); haveQty = true; } if (h.pl <= -0.4) lossy.push(h.p.sym); });
+  const tot = ex.MSTR + ex.COIN, hold = [];
+  let tilt = null;
+  if (haveQty && tot > 0) { const sh = ex.MSTR / tot; if (sh >= 0.7) tilt = 'COIN'; else if (sh <= 0.3) tilt = 'MSTR'; hold.push('手持ちのレバレッジ込みの金額は MSTR系 ' + pc(sh, 0, false) + '、COIN系 ' + pc(1 - sh, 0, false) + '。' + (tilt ? '偏っているので、新しく買うなら ' + tilt + '系で偏りを減らせます' : '偏りは大きくありません')); }
+  else if ((S.hold || []).length) hold.push('保有銘柄に株数を入れると、どちらに偏っているかも見ます');
+  if (lossy.length) hold.push(lossy.join('・') + 'は含み損が大きいですが、それを理由に同じ銘柄を選ぶことはしていません。取り返しやすさは、どちらを買っても変わらないためです');
+  const diff = sc.MSTR - sc.COIN;
+  let pick = diff >= 2 ? 'MSTR' : diff <= -2 ? 'COIN' : 'even';
+  let final = pick;
+  if (tilt && pick === 'even') final = tilt;
+  return { pick, final, sc, why, hold, tilt };
+}
+function pickCard() {
+  const k = S.pick; if (!k) return '';
+  const skip = S.plan && S.plan.a === 'skip', lev = { MSTR: 'MSTU', COIN: 'CONL' };
+  const title = k.final === 'even' ? 'どちらも同じくらい（半分ずつ）' : k.final + '（' + lev[k.final] + '）';
+  const li = k.why.map(w => '<li class="' + (w.s === 'MSTR' ? 'pm' : w.s === 'COIN' ? 'pc' : 'pn') + '">' + (w.s ? '<b>' + w.s + '</b> ' : '') + esc(w.t) + '</li>').join('');
+  return '<section class="card"><div class="row"><h2>' + (skip ? '買うときに選ぶなら' : 'どっちを買うか') + '</h2><b class="v-buy">' + title + '</b></div>' +
+    '<p class="sub" style="margin-top:4px">点数：MSTR ' + k.sc.MSTR + ' ／ COIN ' + k.sc.COIN + (k.final !== k.pick ? '（点数は互角。手持ちの偏りから ' + k.final + ' を選んでいます）' : '') + '</p>' +
+    '<ul class="why3">' + li + '</ul>' + (k.hold.length ? '<h3>手持ちを踏まえると</h3><p>' + k.hold.map(esc).join('<br>') + '</p>' : '') +
+    '<p class="sub">差が2点以上なら片方、それ未満なら半分ずつにしています。割安・割高は、株価とBTCの比率が直近90日の平均からどれだけ離れているかです。</p></section>';
+}
 const PLAN = { buy: ['今夜買う', 'v-buy'], limit: ['指値で待つ', 'v-wait'], skip: ['今日は買わない', 'v-avoid'] };
 
 /* ---------- live log (forward verification) ---------- */
@@ -1104,8 +1140,9 @@ function writeLog() {
   const pct = {}, act = {}; E.HORIZONS.forEach(h => { pct[h.k] = Math.round(S.R.hz[h.k].pct); act[h.k] = S.act[h.k].a; });
   const pl = S.plan, sp = {}; if (pl) Object.keys(pl.stocks).forEach(sym => { const x = pl.stocks[sym]; sp[sym] = { a: x.a, px: +x.now.toFixed(2), lim: ok(x.lim) ? +x.lim.toFixed(2) : null }; });
   const up = S.up && S.up.type !== 'neutral' ? { t: S.up.type, lid: ok(S.up.lidLv) ? Math.round(S.up.lidLv) : null, tg: ok(S.up.tgt) ? Math.round(S.up.tgt) : null } : null;
+  const pk = S.pick ? S.pick.final : null;
   const hv = (S.hold || []).filter(h => ok(h.now)).map(h => ({ s: h.p.sym, a: h.a, px: +h.now.toFixed(2) }));
-  log.push({ k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, hv, cy: S.cyc ? S.cyc.phase : null, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, ev: !!S.ev48 });
+  log.push({ k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, hv, pk, cy: S.cyc ? S.cyc.phase : null, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, ev: !!S.ev48 });
   LS.set('log', log.slice(-900));
 }
 function evalLog() {
@@ -1124,6 +1161,12 @@ function evalLog() {
 }
 
 /* ---------- stocks ---------- */
+function pairZ() {
+  const a = S.stocks.MSTR && S.stocks.MSTR.an, b = S.stocks.COIN && S.stocks.COIN.an; if (!a || !b) return NaN;
+  const ds = [...a.vmap.keys()].filter(k => b.vmap.has(k)).sort().slice(-90); if (ds.length < 60) return NaN;
+  const r = ds.map(k => Math.log(a.vmap.get(k) / b.vmap.get(k))), mu = r.reduce((x, y) => x + y, 0) / r.length, sd = Math.sqrt(r.reduce((x, y) => x + (y - mu) ** 2, 0) / r.length);
+  return sd > 0 ? (r[r.length - 1] - mu) / sd : NaN;
+}
 function computeStocks() {
   const d = S.d, idx = new Map(); for (let i = 0; i < d.t.length; i++) idx.set(dkey(d.t[i]), i);
   ['MSTR', 'COIN'].forEach(sym => {
@@ -1144,7 +1187,7 @@ function computeStocks() {
       for (let i = 0; i + td < m; i++) { const p = pctA[bi[i] - 1]; if (!ok(p)) continue; const r = sc[i + td] / sc[i] - 1; all.push(r); if (p >= E.TH.try_) sig.push(r); else if (p < E.TH.wait) av.push(r); }
       bt[h.k] = { td, all: E.summarize(all), sig: E.summarize(sig), avoid: E.summarize(av) };
     });
-    st.an = { px: sc[m - 1], date: v[m - 1][0], chg: sc[m - 1] / sc[m - 2] - 1, beta, corr, rz, rsi: r14[m - 1], s50: s50[m - 1], s200: s200[m - 1], bt, btcAt: d.c[bi[m - 1]] };
+    st.an = { vmap: new Map(v), px: sc[m - 1], date: v[m - 1][0], chg: sc[m - 1] / sc[m - 2] - 1, beta, corr, rz, rsi: r14[m - 1], s50: s50[m - 1], s200: s200[m - 1], bt, btcAt: d.c[bi[m - 1]] };
   });
 }
 
@@ -1324,7 +1367,7 @@ function viewJudge() {
   const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
   const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
-  return todayCard() + holdCards() + '<h2 class="sec">時間軸ごとの判定</h2>' +
+  return todayCard() + pickCard() + holdCards() + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
     flags + cycleCard() + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
@@ -1479,11 +1522,11 @@ document.addEventListener('click', e => {
     if (!title || !ok(tm)) { t.textContent = '内容と日時を入力してください'; return; }
     const a = LS.get('events', []); a.push({ t: tm, title, impact: +$('#ev-imp').value, kind: 'custom' }); LS.set('events', a); S.events = allEvents(); if (S.R) decide(); render();
   }
-  else if (t.dataset.delpos != null) { const a = LS.get('pos', []); a.splice(+t.dataset.delpos, 1); LS.set('pos', a); if (S.R) S.hold = holdAll(); render(); }
+  else if (t.dataset.delpos != null) { const a = LS.get('pos', []); a.splice(+t.dataset.delpos, 1); LS.set('pos', a); if (S.R) { S.hold = holdAll(); S.pick = pickStock(); } render(); }
   else if (t.id === 'pos-add') {
     const cost = +$('#pos-cost').value, qty = +$('#pos-qty').value || null, date = $('#pos-date').value || null;
     if (!(cost > 0)) { t.textContent = '買値を入力してください'; return; }
-    const a = LS.get('pos', []); a.push({ sym: $('#pos-sym').value, cost, qty, date }); LS.set('pos', a); if (S.R) S.hold = holdAll(); location.hash = 'judge';
+    const a = LS.get('pos', []); a.push({ sym: $('#pos-sym').value, cost, qty, date }); LS.set('pos', a); if (S.R) { S.hold = holdAll(); S.pick = pickStock(); } location.hash = 'judge';
   }
   else if (t.id === 'cfg-save') { S.cfg = { tdKey: $('#td-key').value.trim(), src: $('#src').value }; LS.set('cfg', S.cfg); S.stocks = {}; refreshAll(); }
   else if (t.id === 'cfg-reset') {
