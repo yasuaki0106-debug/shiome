@@ -19,7 +19,7 @@ def yahoo(sym):
             ts, q = r["timestamp"], r["indicators"]["quote"][0]["close"]
             off = r.get("meta", {}).get("gmtoffset", -18000)
             rows = [[dt.datetime.utcfromtimestamp(t + off).strftime("%Y-%m-%d"), round(c, 4)] for t, c in zip(ts, q) if c]
-            if len(rows) > 200:
+            if len(rows) > 100:
                 return rows
         except Exception as e:
             last = e
@@ -33,7 +33,7 @@ def stooq(sym):
         p = line.split(",")
         if len(p) >= 5 and p[4] not in ("", "null"):
             rows.append([p[0], round(float(p[4]), 4)])
-    if len(rows) < 200:
+    if len(rows) < 100:
         raise RuntimeError(f"stooq {sym}: {txt[:80]}")
     return rows
 
