@@ -167,6 +167,11 @@ async function loadBybit() {
   if (ar.status === 'fulfilled' && ar.value.result) out.ls = ar.value.result.list.map(x => ({ t: +x.timestamp, r: +x.buyRatio / Math.max(1e-9, +x.sellRatio) }));
   return out;
 }
+async function loadOnchain() { // 恐怖と強欲指数・MVRV・ハッシュレート・マイナー収入（リポジトリの控え＋恐怖指数の最新値）
+  const j = await jget('data/onchain.json?t=' + Math.floor(Date.now() / 36e5), 30000);
+  try { const f = await jget('https://api.alternative.me/fng/?limit=3'); (f.data || []).forEach(x => { const k = dkey(+x.timestamp * 1000); if (j.fng && !j.fng.some(r => r[0] === k)) j.fng.push([k, +x.value]); }); } catch (e) { /* 最新値なし */ }
+  return j;
+}
 async function loadCoinbase() {
   const [tk, cd] = await Promise.all([jget('https://api.exchange.coinbase.com/products/BTC-USD/ticker'), jget('https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=86400')]);
   const days = {}; (cd || []).forEach(x => { days[dkey(x[0] * 1000)] = +x[4]; });
@@ -251,7 +256,7 @@ function compute() {
   S.zones = E.entryZones(d, S.R.ind, S.price, S.opt, S.liq);
   S.events = allEvents();
   S.prov = null;
-  decide(); computeStocks(); S.up = upside(); S.plan = buildPlan(); S.bo = bottomOutlook(); S.hold = holdAll(); S.pick = pickStock(); writeLog();
+  decide(); computeStocks(); S.up = upside(); S.plan = buildPlan(); S.bo = bottomOutlook(); try { S.bg = bottomGauge(); } catch (e) { S.bg = null; } S.hold = holdAll(); S.pick = pickStock(); writeLog();
 }
 
 function actsFrom(R) { // スコアの判定に、検証結果・イベント・清算リスクによる引き下げを反映する
@@ -636,7 +641,7 @@ function writeLog() {
   const up = S.up && S.up.type !== 'neutral' ? { t: S.up.type, lid: ok(S.up.lidLv) ? Math.round(S.up.lidLv) : null, tg: ok(S.up.tgt) ? Math.round(S.up.tgt) : null } : null;
   const pk = S.pick ? S.pick.final : null;
   const hv = (S.hold || []).filter(h => ok(h.now)).map(h => ({ s: h.p.sym, a: h.a, px: +h.now.toFixed(2) }));
-  const rec = { k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, hv, pk, cy: S.cyc ? S.cyc.phase : null, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, bo: S.bo ? { zl: S.bo.zone ? Math.round(S.bo.zone.lo) : null, zh: S.bo.zone ? Math.round(S.bo.zone.hi) : null, e1: S.bo.eta ? dkey(S.bo.eta.from) : null, e2: S.bo.eta ? dkey(S.bo.eta.to) : null } : null, ev: !!S.ev48, cbp: S.cbp && ok(S.cbp.gap) ? +S.cbp.gap.toFixed(5) : null };
+  const rec = { k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, hv, pk, cy: S.cyc ? S.cyc.phase : null, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, bg: S.bg ? Math.round(S.bg.g * 100) : null, st: (() => { try { return stageOf().k; } catch (e) { return null; } })(), bo: S.bo ? { zl: S.bo.zone ? Math.round(S.bo.zone.lo) : null, zh: S.bo.zone ? Math.round(S.bo.zone.hi) : null, e1: S.bo.eta ? dkey(S.bo.eta.from) : null, e2: S.bo.eta ? dkey(S.bo.eta.to) : null } : null, ev: !!S.ev48, cbp: S.cbp && ok(S.cbp.gap) ? +S.cbp.gap.toFixed(5) : null };
   const pv = S.prov ? { a: S.prov.a, f: +S.prov.frac.toFixed(2), s: Math.round(S.prov.pct.s), m: Math.round(S.prov.pct.m), l: Math.round(S.prov.pct.l) } : null;
   if (pv) rec.pv = pv;
   if (!old) { log.push(rec); LS.set('log', log.slice(-900)); return; }
@@ -739,6 +744,7 @@ async function refreshAll() {
     const got = ['Binance先物'].concat(S.okx ? ['OKX'] : [], S.bybit ? ['Bybit'] : []), miss = [].concat(S.okx ? [] : ['OKX'], S.bybit ? [] : ['Bybit']);
     S.status.agg = { ok: !miss.length, name: '建玉の合算', note: got.join('・') + (miss.length ? '（' + miss.join('・') + ' は取得できず）' : '') };
   }));
+  tasks.push(loadOnchain().then(v => { S.oc = v; S.status.oc = { ok: true, name: 'オンチェーン・恐怖指数', note: 'MVRV・マイナー収入・ハッシュレート・恐怖と強欲指数' }; }, () => { S.oc = null; S.status.oc = { ok: false, name: 'オンチェーン・恐怖指数', note: '取得できません。底らしさの一部が出ません' }; }));
   tasks.push(loadCoinbase().then(v => { S.cb = v; S.status.cb = { ok: true, name: 'コインベース・プレミアム', note: 'Coinbase BTC-USD' }; }, () => { S.cb = null; S.status.cb = { ok: false, name: 'コインベース・プレミアム', note: '取得できません' }; }));
   tasks.push(loadHourly().then(m => { S.hourly = m; }, () => { S.hourly = null; }));
   tasks.push(mark('long', '長期の価格履歴（サイクル用）', loadLong(), v => 'Bitstamp、' + v.length + '日分', '取得できません。サイクルの表示と長期要因は使えません').then(v => { if (v) S.longRows = v; else { const c = LS.get('long', null); S.longRows = c ? c.rows : null; } }));
@@ -891,6 +897,38 @@ function bottomOutlook() {
   const eta = lowScore ? { from: now + WAIT.q25 * DAY, to: now + WAIT.q75 * DAY, med: now + WAIT.med * DAY } : null;
   return { px, peak, daysTop, day: c.day, dd: px / peak - 1, w200, wr: Math.exp(w) - 1, valPct: c.valPct, lowSoFar, lowT: c.cur.lowT, zone, deep, tdays, hdays, timeDone, near: near.filter(x => ok(x.p) && x.p < S.price).sort((a, b) => b.p - a.p), mNow, eta };
 }
+function bottomGauge() {
+  // 底らしさ：いくつかの指標が、今のサイクルの天井の日から「過去の底の水準」までのどこまで来たか。過去の底の値のうち一番穏やかなものを目標にする（research/botind.py）
+  const c = S.cyc, L = S._L, ls = S._ls; if (!c || !L || !ls) return null;
+  const n = L.c.length, t = L.t, C = L.c, idx = new Map(); t.forEach((x, i) => idx.set(dkey(x), i));
+  const at = T => { let k = -1; for (let i = 0; i < n; i++) { if (t[i] <= T) k = i; else break; } return k; };
+  const mk = () => new Array(n).fill(NaN), fromOc = key => { const a = mk(); ((S.oc && S.oc[key]) || []).forEach(([d, v]) => { const i = idx.get(d); if (i != null) a[i] = +v; }); return a; };
+  const ff = a => { let last = NaN, gap = 0; for (let i = 0; i < n; i++) { if (a[i] === a[i]) { last = a[i]; gap = 0; } else if (last === last && ++gap <= 3) a[i] = last; } return a; };
+  const mvrv = ff(fromOc('mvrv')), mr = fromOc('minerrev'), fng = ff(fromOc('fng')), hr = fromOc('hash');
+  const sm = (a, w) => { const o = mk(); let s = 0, q = 0; for (let i = 0; i < n; i++) { const x = a[i]; if (x === x) { s += x; q++; } if (i >= w) { const y = a[i - w]; if (y === y) { s -= y; q--; } } if (i >= w - 1 && q >= w * 0.9) o[i] = s / q; } return o; };
+  const m200 = sm(C, 200), mr365 = sm(mr, 365), f30 = sm(fng, 30), h30 = sm(hr, 30), h60 = sm(hr, 60);
+  const wk = []; for (let i = n - 1; i >= 0; i -= 7) wk.unshift(i); const wr = E.rsi(Float64Array.from(wk.map(i => C[i])), 14), wrsi = mk(); wk.forEach((i, k) => { for (let j = i; j < Math.min(n, i + 7); j++) wrsi[j] = wr[k]; });
+  let mx = 0; const dd = C.map(x => { mx = Math.max(mx, x); return x / mx - 1; });
+  const w2 = Array.from(ls.w200, x => Math.exp(x));
+  const SER = [['MVRV（時価総額÷実現時価総額）', mvrv, 0.60, x => x.toFixed(2)], ['マイナー収入（1年平均比）', mr.map((x, i) => x / mr365[i]), 0.63, x => x.toFixed(2)], ['週足RSI', wrsi, 0.59, x => x.toFixed(0)], ['天井からの下落', dd, 0.56, x => pc(x, 0)], ['200週線比', w2, 0.47, x => x.toFixed(2)], ['200日線比', C.map((x, i) => x / m200[i]), 0.45, x => x.toFixed(2)]];
+  const pk = at(c.cur.peakT), lows = c.past.map(p => at(p.lowT)).filter(i => i >= 0), i0 = n - 1, parts = []; let tot = 0, ws = 0;
+  SER.forEach(([nm, a, w, fmt]) => {
+    const bots = lows.map(i => a[i]).filter(ok), now = a[i0], top = a[pk]; if (!bots.length || !ok(now) || !ok(top)) return;
+    const tgt = Math.max(...bots); if (!(top > tgt)) return;
+    const p = Math.min(1, Math.max(0, (top - now) / (top - tgt))); tot += p * w; ws += w;
+    parts.push({ nm, p, now: fmt(now), bots: bots.map(fmt).join('・') });
+  });
+  const extra = [];
+  if (ok(fng[i0])) extra.push('恐怖と強欲指数 ' + fng[i0] + (ok(f30[i0]) ? '（30日平均 ' + Math.round(f30[i0]) + '）' : '') + '。極度の恐怖（25以下）は底の近く以外でもよく出るため、底らしさには入れていません');
+  if (ok(h30[i0]) && ok(h60[i0])) extra.push('ハッシュレートの30日平均は60日平均の' + pc(h30[i0] / h60[i0] - 1, 1) + (h30[i0] < h60[i0] ? '（マイナーの撤退中。回復すると「ハッシュリボン」の買いの合図）' : ''));
+  return ws ? { g: tot / ws, parts, extra } : null;
+}
+function stageOf() { // まだ／準備／買い の3段階
+  const p = S.plan, m = S.R.hz.m.pct, ph = S.cyc ? S.cyc.phase : null, inPhase = ph === 'bottom' || ph === 'recover';
+  if (p && p.a === 'buy') return { k: 'buy', name: '買い', cls: 'v-buy', text: '買い判定が出ています。上の「今日どうするか」のとおりに買ってください。' };
+  if (inPhase && ok(m) && m >= 40) return { k: 'ready', name: '準備', cls: 'v-wait', text: '中期の判定が持ち直してきました（今 ' + Math.round(m) + '、買い好機は75）。過去の底値圏では、この段階から半分くらいの確率で、1か月前後で買い判定が出ています（残りは、いったん弱まりました）。予定額を手元に用意して、毎日見てください。' };
+  return { k: 'wait', name: 'まだ', cls: 'v-avoid', text: inPhase ? '中期の判定はまだ弱いままです（今 ' + (ok(m) ? Math.round(m) : '—') + '）。40を超えると「準備」に変わります。' : 'サイクルは' + (S.cyc ? S.cyc.name : '不明') + 'です。' };
+}
 function bottomCard() {
   const b = S.bo; if (!b) return '';
   const f = t => { const d = new Date(t); return (d.getMonth() + 1) + '月' + (d.getDate() <= 10 ? '上旬' : d.getDate() <= 20 ? '中旬' : '下旬'); };
@@ -900,7 +938,9 @@ function bottomCard() {
     ['過去並みの深い下げ', usd(b.deep) + '前後', '天井から' + pc(b.deep / b.peak - 1, 0) + '（過去の底の下落率のうち一番浅い値）。下落率は回を追って浅くなっていて、可能性は低め']
   ];
   const near = b.near.slice(0, 4).map(x => '<li><b class="num">' + usd(x.p) + '</b><span class="num dist">' + pc(x.p / S.price - 1) + '</span><span>' + esc(x.why) + '</span></li>').join('');
-  return '<section class="card"><h2>底と買い場の見込み</h2>' +
+  const sg = stageOf(), gg = S.bg;
+  const gauge = gg ? '<h3>底らしさ <span class="num">' + Math.round(gg.g * 100) + '%</span></h3><p class="sub" style="margin-top:0">天井の日を0%、過去の底の水準を100%として、今どこまで来たか（6つの指標の加重平均）。</p><ul class="gauge">' + gg.parts.map(x => '<li><span>' + esc(x.nm) + '</span><span class="gbar"><b style="width:' + Math.round(x.p * 100) + '%"></b></span><span class="num">' + Math.round(x.p * 100) + '%</span><span class="sub2">今 ' + x.now + '／過去の底 ' + x.bots + '</span></li>').join('') + '</ul>' + gg.extra.map(x => '<p class="sub">' + esc(x) + '</p>').join('') + '<p class="sub">過去の検証では、この数字が高まるのは底の数か月前からで、「あと何日」を当てる力はありません。底値圏にいることの確認に使い、買う日は下の判定で決めます。</p>' : '';
+  return '<section class="card"><div class="row"><h2>底と買い場の見込み</h2><b class="' + sg.cls + '">' + sg.name + '</b></div><p>' + esc(sg.text) + '</p>' + gauge +
     '<p>今は天井から <b class="num">' + pc(b.dd, 0) + '</b>、' + b.daysTop + '日。半減期から' + b.day + '日目。200週線の' + pc(b.wr, 0) + '、長期成長線に対して過去の下位' + pc(b.valPct, 0, false) + 'の安さです。</p>' +
     '<h3>底の値段のシナリオ</h3><table class="tbl"><tbody>' + scen.map(x => '<tr><th>' + x[0] + '</th><td class="num">' + x[1] + '</td></tr><tr><td colspan="2" class="sub" style="text-align:left;padding-top:0">' + esc(x[2]) + '</td></tr>').join('') + '</tbody></table>' +
     (near ? '<h3>この先数週間の下値の目安</h3><ul class="clist">' + near + '</ul>' : '') +
