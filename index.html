@@ -1623,8 +1623,12 @@ function whereCard() { // 今どこ？：いろいろな指標を、底値圏の
   const since = last90 >= 0 ? i - last90 : 99; add('90日ぶりの安値から', since === 0 ? '今日' : since + '日', since >= 10, '新しい安値を付けているうちは、まだ下げの途中');
   if (S.rt) {
     const lr = S.liveRow && S.liveRow[0] > d.t[n - 1] ? Math.min(S.liveRow[3], S.price) : Infinity; let l10 = lr; for (let j = n - 10; j < n; j++) l10 = Math.min(l10, d.l[j]);
-    const wickNew = l10 < S.rt.lo;
-    add('前の安値（' + kfmt(S.rt.lo) + '）', S.rt.broke ? '終値で割った' : wickNew ? '日中に割った' : S.rt.retest ? '試している' : '—', !S.rt.broke && !S.rt.retest && !wickNew, wickNew && !S.rt.broke ? '日中に ' + usd(l10) + ' まで下げて、前の安値を更新しました（終値ではまだ割っていない）。この ' + kfmt(l10) + ' が新しい「直近の安値」で、終値で割ると本当の新安値です。分かれ目は ' + usd(S.rt.level) : S.rt.broke ? '終値で割ると、過去は一段下げの形' : '分かれ目 ' + usd(S.rt.level));
+    // 前の底のヒゲ：終値の安値の日の前後5日の、日中の安値
+    let ki = -1; for (let j = n - 1; j >= 0; j--) if (Math.abs(d.c[j] - S.rt.lo) < 0.5) { ki = j; break; }
+    let wPrev = S.rt.lo, wDay = ki; if (ki >= 0) for (let j = Math.max(0, ki - 5); j <= Math.min(n - 11, ki + 5); j++) if (d.l[j] < wPrev) { wPrev = d.l[j]; wDay = j; }
+    const wickNew = l10 < wPrev;
+    add('前の安値（終値 ' + kfmt(S.rt.lo) + '・日中 ' + kfmt(wPrev) + '）', S.rt.broke ? '終値で割った' : wickNew ? '日中で割った' : S.rt.retest ? '試している' : '—', !S.rt.broke && !S.rt.retest && !wickNew,
+      '前の底も日中は ' + usd(wPrev) + (wDay >= 0 ? '（' + md(d.t[wDay]) + '）' : '') + ' まで下げていました。' + (wickNew && !S.rt.broke ? '今回は日中に ' + usd(l10) + ' まで下げて、日中同士でも ' + pc(l10 / wPrev - 1) + ' 下に更新。終値ではまだ割っていません。終値で ' + usd(S.rt.level) + '（分かれ目）を割ると、過去は一段下げの形' : S.rt.broke ? '終値で割ると、過去は一段下げの形' : '分かれ目 ' + usd(S.rt.level)));
   }
   const mm = S.R.hz.m.pct; add('中期の判定（上向きの確認）', Math.round(mm), mm >= 75, '75以上で「上がり始め」と判断（過去の検証で一番安定していた合図）');
   const nOk = rows.filter(x => x.ok).length;
