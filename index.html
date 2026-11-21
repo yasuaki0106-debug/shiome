@@ -935,7 +935,7 @@ function compute() {
   S.zones = E.entryZones(d, S.R.ind, S.price, S.opt, S.liq);
   S.events = allEvents();
   S.prov = null;
-  decide(); computeStocks(); S.up = upside(); try { S.bg = bottomGauge(); } catch (e) { S.bg = null; } S.plan = buildPlan(); S.bo = bottomOutlook(); try { S.rt = retestState(); } catch (e) { S.rt = null; } S.hold = holdAll(); S.pick = pickStock(); writeLog();
+  decide(); computeStocks(); S.up = upside(); try { S.bg = bottomGauge(); } catch (e) { S.bg = null; } S.plan = buildPlan(); S.bo = bottomOutlook(); try { S.rt = retestState(); } catch (e) { S.rt = null; } S.pick = pickStock(); S.hold = holdAll(); writeLog();
 }
 
 function actsFrom(R) { // スコアの判定に、検証結果・イベント・清算リスクによる引き下げを反映する
@@ -1238,7 +1238,8 @@ function etfAt(sym, btc) { // BTCがその値段のときのETFの目安
 const HOLD = { reinvest: ['1倍で買う', 'v-buy'], relevbuy: ['2倍で買い直す', 'v-buy'], cashwait: ['現金で待つ', 'v-wait'], hold: ['持ち続ける', 'v-buy'], add: ['買い足し可', 'v-buy'], trim: ['一部売る', 'v-wait'], sell: ['売る', 'v-avoid'], switch: ['1倍に乗り換える', 'v-wait'], relev: ['2倍に戻せる', 'v-buy'], na: ['判定できません', 'v-na'] };
 const LEV_OFF = 20, LEV_ON = 75;   // 守りのルール：中期20未満で2倍→元の株、75以上で元の株→2倍（research/protect.js）
 function buyTicker() { const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return t; const k = S.pick ? S.pick.final : 'MSTR'; return k === 'COIN' ? 'CONL' : 'MSTU'; }
-function prefUnd(fallback) { return fallback; }   // 持っている玉の乗り換えは、同じ元の株の中だけ（MSTU⇔MSTR、CONL⇔COIN）。新しく買う銘柄だけを状況で選ぶ
+function pickUnd() { const k = S.pick ? S.pick.final : null; return k === 'COIN' ? 'COIN' : 'MSTR'; }   // その日の状況（BTCに対する割安・割高など）で選んだ元の株
+function prefUnd(fallback) { const t = (S.cfg && S.cfg.buy) || 'auto'; return t === 'auto' ? pickUnd() : (ETF[t] ? ETF[t].und : fallback); }
 function cashBal() { return +LS.get('cash', 0) || 0; }
 function setCash(v) { LS.set('cash', Math.max(0, Math.round(v * 100) / 100)); }
 function migrateCash() { // 以前の「売ったお金」の記録を、現金の残高にまとめる
@@ -1287,7 +1288,7 @@ function holdOne(p) {
     // 守りのルール（天井圏・下落期の判断が優先）
     const mm = S.R.hz.m.pct, cyc2 = ph !== 'top' && ph !== 'down';
     if (cyc2 && e.L > 1 && ok(mm) && mm < LEV_OFF && (a === 'hold' || a === 'add')) { const tg = prefUnd(e.und); a = 'switch'; why.length = 0; why.push('中期の判定が' + Math.round(mm) + 'まで崩れました（' + LEV_OFF + '未満）。2倍の分は ' + tg + ' に乗り換えて、判定が' + LEV_ON + '以上に戻ったら ' + LEVOF[tg] + ' に戻します。サイクルの作戦自体は続けます'); }
-    if (cyc2 && e.L === 1 && ok(mm) && mm >= LEV_ON && (ph === 'bottom' || ph === 'recover' || ph === 'up') && a === 'hold') { a = 'relev'; why.push('中期の判定が' + Math.round(mm) + 'まで戻りました。2倍で持つ作戦なら、' + (p.sym === 'MSTR' ? 'MSTU' : 'CONL') + ' に戻す日です'); }
+    if (cyc2 && e.L === 1 && ok(mm) && mm >= LEV_ON && (ph === 'bottom' || ph === 'recover' || ph === 'up') && a === 'hold') { a = 'relev'; why.push('中期の判定が' + Math.round(mm) + 'まで戻りました。2倍で持つ作戦なら、' + LEVOF[prefUnd(p.sym)] + ' に替える日です'); }
   } else {
     if (ph === 'down' && lvOf('m') === 0 && lvOf('s') === 0) { a = 'hold'; why.push('下落期で、判定も見送り。ただし逆2倍は目減りが大きいので短期で'); }
     else { a = 'sell'; why.push('このアプリは下げを予測できません。' + (ph ? 'サイクルは' + c.name + 'で、' : '') + '逆2倍は持つほど目減りします'); }
@@ -1387,7 +1388,7 @@ function pickCard() {
   return '<section class="card"><div class="row"><h2>' + (skip ? '買うときに選ぶなら' : 'どっちを買うか') + '</h2><b class="v-buy">' + title + '</b></div>' +
     '<p class="sub" style="margin-top:4px">点数：MSTR ' + k.sc.MSTR + ' ／ COIN ' + k.sc.COIN + (k.final === 'even' ? '（差が2点未満なので、サイクルの上昇局面で伸びが大きかったMSTRにしています）' : '') + '</p>' +
     '<ul class="why3">' + li + '</ul>' + '' +
-    '<p class="sub">差が2点以上なら点の高い方、それ未満ならMSTRです。手持ちの銘柄は見ていません。決まった銘柄は、新しく買うお金にだけ使います。持っている玉を別の銘柄へ入れ替えることはしません。割安・割高は、株価とBTCの比率が直近90日の平均からどれだけ離れているかです。割安・割高を点数に入れるのは、過去の全期間と直近2年の両方で実際に効いていた場合だけで、開くたびに確かめ直しています。</p></section>';
+    '<p class="sub">差が2点以上なら点の高い方、それ未満ならMSTRです。手持ちの銘柄やバランスは見ていません。新しく買う日、2倍から1倍に乗り換える日、1倍から2倍に戻す日に、その日の結果で銘柄を決めます。割安・割高は、株価とBTCの比率が直近90日の平均からどれだけ離れているかです。割安・割高を点数に入れるのは、過去の全期間と直近2年の両方で実際に効いていた場合だけで、開くたびに確かめ直しています。</p></section>';
 }
 const PLAN = { buy: ['買う', 'v-buy'], limit: ['指値で待つ', 'v-wait'], skip: ['買わない', 'v-avoid'], trial: ['試し買い', 'v-wait'], exit: ['試し分を撤退', 'v-avoid'] };
 function planLabel(a) {
@@ -2089,13 +2090,13 @@ document.addEventListener('click', e => {
     if (!title || !ok(tm)) { t.textContent = '内容と日時を入力してください'; return; }
     const a = LS.get('events', []); a.push({ t: tm, title, impact: +$('#ev-imp').value, kind: 'custom' }); LS.set('events', a); $('#ev-title').value = ''; $('#ev-time').value = ''; S.events = allEvents(); if (S.R) decide(); render();
   }
-  else if (t.dataset.delpos != null) { const a = LS.get('pos', []); a.splice(+t.dataset.delpos, 1); LS.set('pos', a); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); S.pick = pickStock(); } render(); }
-  else if (t.id === 'imp-ok') { const rs = new Set((S.pendingImport || []).filter(x => x.r).map(x => x.sym)); const a = LS.get('pos', []).filter(x => !rs.has(x.sym)), key = x => [x.sym, x.kind, x.date, +x.cost, x.qty || 0].join('|'), have = new Set(a.map(key)); const imp = S.pendingImport || []; if (imp.some(x => x.kind === 'cash')) setCash((imp.some(x => x.r) ? 0 : cashBal()) + imp.filter(x => x.kind === 'cash').reduce((s, x) => s + (+x.cost || 0), 0)); imp.filter(x => x.kind !== 'cash').forEach(x => { if (!have.has(key(x))) a.push(Object.assign({ at: Date.now() }, x)); }); LS.set('pos', a); S.pendingImport = null; if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); S.pick = pickStock(); writeLog(); } location.hash = 'judge'; }
+  else if (t.dataset.delpos != null) { const a = LS.get('pos', []); a.splice(+t.dataset.delpos, 1); LS.set('pos', a); if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); } render(); }
+  else if (t.id === 'imp-ok') { const rs = new Set((S.pendingImport || []).filter(x => x.r).map(x => x.sym)); const a = LS.get('pos', []).filter(x => !rs.has(x.sym)), key = x => [x.sym, x.kind, x.date, +x.cost, x.qty || 0].join('|'), have = new Set(a.map(key)); const imp = S.pendingImport || []; if (imp.some(x => x.kind === 'cash')) setCash((imp.some(x => x.r) ? 0 : cashBal()) + imp.filter(x => x.kind === 'cash').reduce((s, x) => s + (+x.cost || 0), 0)); imp.filter(x => x.kind !== 'cash').forEach(x => { if (!have.has(key(x))) a.push(Object.assign({ at: Date.now() }, x)); }); LS.set('pos', a); S.pendingImport = null; if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); writeLog(); } location.hash = 'judge'; }
   else if (t.id === 'imp-no') { S.pendingImport = null; render(); }
-  else if (t.dataset.sell != null) { const k = +t.dataset.sell, a = LS.get('pos', []), v = +$('#s-' + k).value; if (!(v > 0)) { $('#s-' + k).placeholder = '受取額を入れて'; return; } setCash(cashBal() + v); a.splice(k, 1); LS.set('pos', a); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); S.pick = pickStock(); } render(); }
+  else if (t.dataset.sell != null) { const k = +t.dataset.sell, a = LS.get('pos', []), v = +$('#s-' + k).value; if (!(v > 0)) { $('#s-' + k).placeholder = '受取額を入れて'; return; } setCash(cashBal() + v); a.splice(k, 1); LS.set('pos', a); if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); } render(); }
   else if (t.id === 'cash-save') { const v = +$('#cash-set').value; if (v >= 0 && $('#cash-set').value !== '') { setCash(v); render(); } }
   else if (t.id === 'tk-save') { S.cfg = Object.assign({}, S.cfg, { buy: $('#buy-tk').value }); LS.set('cfg', S.cfg); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
-  else if (t.dataset.qty != null) { const k = +t.dataset.qty, a = LS.get('pos', []), v = +$('#q-' + k).value; if (a[k] && v > 0) { a[k].qty = v; LS.set('pos', a); if (S.R) { S.hold = holdAll(); S.pick = pickStock(); } render(); } }
+  else if (t.dataset.qty != null) { const k = +t.dataset.qty, a = LS.get('pos', []), v = +$('#q-' + k).value; if (a[k] && v > 0) { a[k].qty = v; LS.set('pos', a); if (S.R) { S.pick = pickStock(); S.hold = holdAll(); } render(); } }
   else if (t.id === 'pos-add') {
     const cost = +$('#pos-cost').value, qty = +$('#pos-qty').value || null, date = $('#pos-date').value || null;
     if (!(cost > 0)) { t.textContent = '買値を入力してください'; return; }
@@ -2103,7 +2104,7 @@ document.addEventListener('click', e => {
       const lot = { sym: $('#pos-sym').value, cost, qty, date: dt, kind, at: Date.now() }; if (dt === today && ok(S.price)) lot.btc = Math.round(S.price);
       const a = LS.get('pos', []); a.push(lot);
       if ((kind === 'buy' || kind === 'trial') && qty && $('#pos-pay') && $('#pos-pay').checked) setCash(cashBal() - cost * qty);
-      LS.set('pos', a); S.recKind = null; if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); S.pick = pickStock(); writeLog(); } location.hash = 'judge';
+      LS.set('pos', a); S.recKind = null; if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); writeLog(); } location.hash = 'judge';
   }
   else if (t.dataset.rec) { S.recKind = t.dataset.rec === 'trial' ? 'trial' : 'buy'; location.hash = 'stocks'; setTimeout(() => { const el = document.getElementById('pos-form'); if (el) el.scrollIntoView(); }, 80); }
   else if (t.id === 'trial-add') { LS.set('trial', { t: Date.now(), btc: Math.round(S.price) }); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
