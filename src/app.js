@@ -746,6 +746,15 @@ function holdOne(p) {
   return { a, why, now, pl, plUsd: p.qty ? (now - p.cost) * p.qty : null, days, decay, undRet, need, undNeed: need != null && an ? stockAt(an, S.price) * (1 + need) : null, lim, alarm, line, eb };
 }
 function holdAll() { migrateCash(); return LS.get('pos', []).map((p, i) => Object.assign({ i, p }, holdOne(p))); }
+function howMoomoo(items, p) { // その日にやることに合わせた、moomooでの注文の入れ方
+  const H = [], lo = p && p.a === 'ladder' && !placedOrders() ? ladderOrders(p) : null, po = placedOrders();
+  if (items.some(x => /売って .* に替える/.test(x.t))) H.push(['2倍を元の株に替える（売ってから買う）', ['売り：注文方法「指値」、値段は今の買い気配に近い値段、取引時間は「立会時間」（日本時間23:30〜翌6:00）がおすすめ。夜間は気配の差が開きやすい', '買い：売れたら、受け取った金額の範囲で「指値」、値段は今の売り気配に近い値段、期間「本日中」', '終わったら、アプリの「関連株」タブで株数を直して、新しい株を「以前からの保有」で記録']]);
+  if (lo) H.push(['買い下がりの指値（4本）', ['注文方法「指値」、値段と株数は「今日やること」の一覧のとおり', '取引時間「24時間取引」を選ぶと、平日の朝10時からの夜間取引でも約定する', '期間：1本目は「期間指定（GTD）」で期限を ' + mdUS(lo.exp) + '（米国の日付）に。2〜4本目は選べる一番長い期間にして、期限が来たら入れ直す', '注意：「本日中」で入れると、その日の米国20時（日本時間の朝10時）で消えて、夜間に引き継がれない', '入れたら、アプリの「4本入れた」を押す']]);
+  if (po && !ladderLots().length) H.push(['1本目が期限までに届かなかったとき', ['期限の日の立会時間（日本時間23:30〜翌6:00）に、1本目の指値を取り消す', '同じ株数で「引成（引けで成行）」の買い注文を入れる。選べない場合は、引けの少し前（日本時間の朝5時半ごろ）に指値を今の売り気配で入れ直す', '約定したら「関連株」タブで記録（2〜4本目の値段を出し直します）']]);
+  if (p && p.a === 'buy') H.push(['確認買い', ['注文方法「指値」、値段は今の売り気配に近い値段（下で待たない）、期間「本日中」', '立会時間（日本時間23:30〜翌6:00）なら気配の差が小さく確実', '約定したら「関連株」タブで記録']]);
+  if (!H.length) return '';
+  return '<details class="more-in hm"><summary>moomooでの入れ方</summary>' + H.map(h => '<p class="hm-h">' + esc(h[0]) + '</p><ol>' + h[1].map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>').join('') + '<p class="sub">逆指値やトリガー注文は使いません（この買い方は損切りを置かない決まりのため）。想定外ラインや節目は、アプリの通知かmoomooの価格アラートで知らせを受けて、自分で判断してください。画面の名前はmoomooの更新で変わることがあります。</p></details>';
+}
 function doneSet() { const k = 'done.' + dkey(Date.now()); return new Set(LS.get(k, [])); }
 function todoCard() { // 画面を開いて最初に見る場所：今日やることを番号で並べる
   const p = S.plan; if (!p) return '';
@@ -778,7 +787,7 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   const nothing = !items.length;
   if (nothing) items.push({ lv: 'info', t: '今日は売り買いなし。' + (b.cash > 0 ? '現金 ' + usd(b.cash) + ' はそのまま待機' : '次の合図を待つ') });
   const cn = (() => { try { const t = planTicker(p); return concernsFor(ETF[t] ? ETF[t].und : t).length; } catch (e) { return 0; } })();
-  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + (x.btn === 'ord-set' ? '<button class="btn small" data-ord="set">4本入れた</button>' : x.btn === 'ord-fix' ? '<button class="btn small" data-ord="fix">変えた</button>' : x.btn === 'ord-cancel' ? '<button class="btn small" data-ord="cancel">取り消した</button>' : '') + '</li>').join('') + '</ol><p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
+  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + (x.btn === 'ord-set' ? '<button class="btn small" data-ord="set">4本入れた</button>' : x.btn === 'ord-fix' ? '<button class="btn small" data-ord="fix">変えた</button>' : x.btn === 'ord-cancel' ? '<button class="btn small" data-ord="cancel">取り消した</button>' : '') + '</li>').join('') + '</ol>' + howMoomoo(items, p) + '<p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
 }
 function glossary() {
   const G = [['買い下がり', '底値圏で、下がるたびに分けて買う買い方。予定額の半分を4本の指値（-10%ごと）で'], ['確認買い', '上向きを確かめてから買う買い方。残り半分を2回。中期の判定が75以上で出る'],
