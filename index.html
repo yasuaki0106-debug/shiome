@@ -1713,11 +1713,13 @@ function councilCard() { // 大事な判断は、いつも5人（奇数）で意
       V('検証の人（過去のルール）', 'A', '迷ったらMSTR。2021年以降、6か月後にMSTRがCOINを上回った割合63%'),
       (() => { const dd60 = sym => { const v = S.stocks[sym] && S.stocks[sym].vals; if (!v || v.length < 60) return NaN; const a = v.slice(-60).map(x => x[1]); return a[a.length - 1] / Math.max(...a) - 1; }; const m = dd60('MSTR'), cc = dd60('COIN'); const side = ok(m) && ok(cc) ? (m < cc ? 'A' : 'B') : 'A';
         return V('気持ちの人（売られすぎ）', side, '直近60営業日の高値からの下げ：MSTR ' + pc(m, 0) + '・COIN ' + pc(cc, 0) + '。より投げられている方を拾う'); })()] }];
-  const out = D.map(x => { const a = x.v.filter(v => v.side === 'A').length, b = x.v.length - a, win = a > b ? 'A' : 'B'; return Object.assign(x, { a, b, win }); });
+  // 票の重み：買い始めと1倍・2倍は、過去の検証で確かめた決まり（検証の人）を3票にする（合計7票、奇数）。1人1票だと、過去のサイクルで今のルールに勝ったのは5回中2回で、結果のぶれが大きかった（research/council_bt4.js）。銘柄は長い検証ができないので1人1票
+  const wOf = (x, v) => (x.q !== 'MSTR系かCOIN系か' && /検証の人/.test(v.who)) ? 3 : 1;
+  const out = D.map(x => { const a = x.v.filter(v => v.side === 'A').reduce((t, v) => t + wOf(x, v), 0), tot = x.v.reduce((t, v) => t + wOf(x, v), 0), b = tot - a, win = a > b ? 'A' : 'B'; return Object.assign(x, { a, b, win }); });
   const newC = out[2].win === 'A' ? 'MSTR' : 'COIN'; if (S.council !== newC) { S.council = newC; setTimeout(() => { S.plan = buildPlan(); S.hold = holdAll(); render(); }, 0); }
-  return '<section class="card" id="c-council"><h2>5人の会議</h2><p class="sub" style="margin-top:0">大事な判断は、見る物差しの違う5人に意見を出させて、多い方に決めます（奇数なので必ず決まる）。</p>' +
-    out.map(x => '<div class="cq"><div class="row"><b>' + esc(x.q) + '</b><b class="' + (x.win === 'A' ? 'v-buy' : 'v-wait') + '">' + esc(x.win === 'A' ? x.A : x.B) + '（' + Math.max(x.a, x.b) + '対' + Math.min(x.a, x.b) + '）</b></div><details class="more-in"><summary>5人の意見</summary><ul class="cv">' + x.v.map(v => '<li class="' + (v.side === x.win ? 'win' : 'lose') + '"><b>' + esc(v.who) + '</b><span>' + esc(v.side === 'A' ? x.A : x.B) + '</span><small>' + esc(v.why) + '</small></li>').join('') + '</ul></details></div>').join('') +
-    '<p class="sub">3対2のように差が小さいときは、負けた側の心配も残っているということです。「状況で選ぶ」設定のとき、新しく買う銘柄はこの会議の結果に従います（今日やることの指値も同じ銘柄）。会議の結果は毎朝9時の確定データで出し直します。</p></section>';
+  return '<section class="card" id="c-council"><h2>5人の会議</h2><p class="sub" style="margin-top:0">大事な判断は、見る物差しの違う5人に意見を出させて、多い方に決めます。買い始めと1倍・2倍は、過去のデータで確かめた決まりを持つ「検証の人」を3票（合計7票）にしています。銘柄は1人1票です。どちらも奇数なので必ず決まります。</p>' +
+    out.map(x => '<div class="cq"><div class="row"><b>' + esc(x.q) + '</b><b class="' + (x.win === 'A' ? 'v-buy' : 'v-wait') + '">' + esc(x.win === 'A' ? x.A : x.B) + '（' + Math.max(x.a, x.b) + '対' + Math.min(x.a, x.b) + '）</b></div><details class="more-in"><summary>5人の意見</summary><ul class="cv">' + x.v.map(v => '<li class="' + (v.side === x.win ? 'win' : 'lose') + '"><b>' + esc(v.who) + '</b><span>' + esc(v.side === 'A' ? x.A : x.B) + (wOf(x, v) > 1 ? '（' + wOf(x, v) + '票）' : '') + '</span><small>' + esc(v.why) + '</small></li>').join('') + '</ul></details></div>').join('') +
+    '<p class="sub">票の差が小さいときは、負けた側の心配も残っているということです。「状況で選ぶ」設定のとき、新しく買う銘柄はこの会議の結果に従います（今日やることの指値も同じ銘柄）。会議の結果は毎朝9時の確定データで出し直します。</p></section>';
 }
 function miniGrid() { // 1か所で全部見えるように：大事な数字を小さな札で並べる（緑＝買いの材料、赤＝注意、灰＝参考）
   const R = []; const add = (go, name, val, tone, note) => R.push('<button class="mini m-' + tone + '" data-go="' + go + '"><span class="mn">' + name + '</span><b class="num">' + val + '</b><span class="mt">' + note + '</span></button>');
