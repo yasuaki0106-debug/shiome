@@ -72,6 +72,8 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .lad-h{font-size:11px;fill:var(--muted);font-weight:700}
 .lv .story{display:block!important;padding:6px 0 2px;font-size:13px;line-height:1.65}.story p{margin:4px 0}.lv details>summary{list-style:none;cursor:pointer;display:grid;gap:2px}.lv details>summary::-webkit-details-marker{display:none}
 .wk li{border-bottom:1px solid var(--line);padding:8px 0}.wk details>summary{list-style:none;cursor:pointer}.wk details>summary::-webkit-details-marker{display:none}.wk-h{display:flex;justify-content:space-between;font-size:14px}.wk small{color:var(--muted);font-size:11.5px}.wk-why{margin:3px 0 0;font-size:13px}.wk .story a{color:inherit}
+.now-lab{paint-order:stroke;stroke:var(--surface);stroke-width:3px;font-weight:700}
+.topband{fill:var(--avoid);opacity:.08}.k-top{display:inline-block;width:12px;height:10px!important;background:var(--avoid)!important;opacity:.25}.ax.lt{fill:var(--avoid)}.ax.lb{fill:var(--buy)}
 .lad{width:100%;height:auto;margin:6px 0}.lad-ax{stroke:var(--line);stroke-width:2}.lad-t{font-size:12.5px;fill:var(--ink)}.lad-now{font-size:11px;fill:var(--ink);font-weight:700}
 .btn.small{display:inline-block;width:auto;min-height:0;padding:6px 14px;margin-top:6px;font-size:13.5px}
 .todo{border:1px solid var(--line);border-left:5px solid var(--brass);border-radius:6px;padding:10px 12px;margin:0 0 14px;background:var(--surface)}.todo.has-al{border-left-color:var(--avoid)}.todo h2{font-size:15px;margin:0}.todo ol{margin:6px 0 0 20px;font-size:15px;line-height:1.55}.todo li{padding:3px 0}.todo li.t-warn{color:var(--avoid);font-weight:700}.todo li.t-buy{font-weight:700}.todo li.t-info{color:var(--muted);font-size:13.5px}
@@ -2039,6 +2041,7 @@ function longChart() {
   // 次の天井の時期と見込み
   const w0 = c.nextHalving + 520 * DAY, w1 = c.nextHalving + 560 * DAY;
   g += '<rect x="' + sx(w0).toFixed(1) + '" y="' + pt + '" width="' + Math.max(3, sx(w1) - sx(w0)).toFixed(1) + '" height="' + (Hh - pt - pb) + '" class="zone"/>';
+  { const y0 = sy(TOPS[2].p), y1 = sy(TOPS[0].p), x0 = sx(Date.now()); g += '<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + (sx(w1) - x0).toFixed(1) + '" height="' + (y1 - y0).toFixed(1) + '" class="topband"/>'; }
   TOPS.forEach(T => { const y = sy(T.p).toFixed(1); g += '<line x1="' + (sx(w0) - 6).toFixed(1) + '" x2="' + (sx(w1) + 6).toFixed(1) + '" y1="' + y + '" y2="' + y + '" class="ln-buy"/>'; });
   g += '<text x="' + (sx(w0) - 4).toFixed(1) + '" y="' + (pt + 9) + '" class="ax" text-anchor="end">次の天井 ' + kfmt(TOPS[0].p) + '〜' + kfmt(TOPS[2].p) + '</text>';
   // 長期成長線（実線は過去、点線は延長）と200週線
@@ -2047,13 +2050,18 @@ function longChart() {
   const p2 = pts.filter(i => ok(w2(i))); g += '<path d="M' + p2.map(i => sx(t[i]).toFixed(1) + ' ' + sy(w2(i)).toFixed(1)).join('L') + '" class="ma200"/>';
   g += '<path d="M' + pts.map(i => sx(t[i]).toFixed(1) + ' ' + sy(C[i]).toFixed(1)).join('L') + '" class="px"/>';
   // 過去の天井と底
-  c.cyc.forEach(x => { g += '<circle cx="' + sx(x.peakT).toFixed(1) + '" cy="' + sy(x.peak).toFixed(1) + '" r="2.5" class="dot-top"/>'; if (x.done) g += '<circle cx="' + sx(x.lowT).toFixed(1) + '" cy="' + sy(x.low).toFixed(1) + '" r="2.5" class="dot-low"/>'; });
+  const idxAt = T => { let k = -1; for (let i = 0; i < n; i++) { if (t[i] <= T) k = i; else break; } return k; };
+  const mult = (T, p) => { const k = idxAt(T); return k >= 0 && ok(fair(k)) ? p / fair(k) : NaN; };
+  c.cyc.forEach(x => { const mt = mult(x.peakT, x.peak); g += '<circle cx="' + sx(x.peakT).toFixed(1) + '" cy="' + sy(x.peak).toFixed(1) + '" r="2.5" class="dot-top"/>' + (ok(mt) ? '<text x="' + sx(x.peakT).toFixed(1) + '" y="' + (sy(x.peak) - 5).toFixed(1) + '" class="ax lt" text-anchor="middle">×' + (mt >= 2 ? mt.toFixed(1) : mt.toFixed(2)) + '</text>' : '');
+    if (x.done) { const ml = mult(x.lowT, x.low); g += '<circle cx="' + sx(x.lowT).toFixed(1) + '" cy="' + sy(x.low).toFixed(1) + '" r="2.5" class="dot-low"/>' + (ok(ml) ? '<text x="' + sx(x.lowT).toFixed(1) + '" y="' + (sy(x.low) + 11).toFixed(1) + '" class="ax lb" text-anchor="middle">×' + ml.toFixed(2) + '</text>' : ''); } });
   // 今
-  const X = sx(t[i2]), Y = sy(C[i2]); g += '<circle cx="' + X.toFixed(1) + '" cy="' + Y.toFixed(1) + '" r="4" class="dot"/><text x="' + (X + 6).toFixed(1) + '" y="' + (Y + 14).toFixed(1) + '" class="ax wk-lab">今 ' + kfmt(C[i2]) + '</text>';
-  const ratio = C[i2] / fair(i2);
+  const X = sx(t[i2]), Y = sy(C[i2]); g += '<circle cx="' + X.toFixed(1) + '" cy="' + Y.toFixed(1) + '" r="4" class="dot"/><text x="' + (X + 2).toFixed(1) + '" y="' + (Y + 26).toFixed(1) + '" class="ax wk-lab now-lab" text-anchor="end">今 ' + kfmt(C[i2]) + '（×' + (C[i2] / fair(i2)).toFixed(2) + '）</text>';
+  const ratio = C[i2] / fair(i2), fmtM = m => '×' + (m >= 2 ? m.toFixed(1) : m.toFixed(2));
+  const topsM = c.cyc.map(x => mult(x.peakT, x.peak)).filter(ok), lowsM = c.cyc.filter(x => x.done).map(x => mult(x.lowT, x.low)).filter(ok);
   return '<section class="card" id="c-long"><h2>長期チャートで今どこか</h2><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="2012年からのBTCの長期チャート（対数目盛）。半減期、過去の天井と底、長期成長線、200週線、次の天井の見込みつき">' + g + '</svg>' +
-    '<p class="keys"><span><i class="k-px"></i>BTC（週ごと）</span><span><i class="k-50"></i>長期成長線（点線は延長）</span><span><i class="k-200"></i>200週線</span><span><i class="k-cu" style="border-radius:50%"></i>底</span><span><i class="k-cd" style="border-radius:50%"></i>天井</span><span><i class="k-zone"></i>次の天井の時期</span></p>' +
-    '<p>半減期から' + c.day + '日目の' + c.name + '。値段は長期成長線の<b>' + Math.round(ratio * 100) + '%</b>（過去の底は18〜49%、天井は127〜1060%）。</p></section>';
+    '<p class="keys"><span><i class="k-px"></i>BTC（週ごと）</span><span><i class="k-50"></i>長期成長線（点線は延長）</span><span><i class="k-200"></i>200週線</span><span><i class="k-cu" style="border-radius:50%"></i>底</span><span><i class="k-cd" style="border-radius:50%"></i>天井</span><span><i class="k-zone"></i>次の天井の時期</span><span><i class="k-top"></i>次の天井の見込み</span></p>' +
+    '<p>半減期から' + c.day + '日目の' + c.name + '。値段は長期成長線の<b>' + (ratio).toFixed(2) + '倍</b>です。</p>' +
+    '<p class="sub">これはレインボーチャートと同じ考え方（長期の成長の線からどれだけ上か下か）ですが、色の帯の代わりに、過去の天井と底が成長線の何倍だったかを点の横に書いています。天井は ' + topsM.map(fmtM).join(' → ') + ' と回を追って下がっていて、昔の天井の倍率をそのまま上の範囲にすると高すぎます。なので上の範囲は、この縮み方から出した「次の天井の見込み」（赤い帯、' + kfmt(TOPS[0].p) + '〜' + kfmt(TOPS[2].p) + '）で見てください。底は ' + lowsM.map(fmtM).join('・') + ' で、今の ×' + ratio.toFixed(2) + ' は' + (ratio <= Math.max(...lowsM) ? 'その範囲の中' : 'それより上') + 'です。成長線は、その時点までのデータだけで引いた線です。</p></section>';
 }
 function topCard() {
   const c = S.cyc; if (!c || !ok(S.price)) return '';
