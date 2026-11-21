@@ -1617,11 +1617,15 @@ function whereCard() { // 今どこ？：いろいろな指標を、底値圏の
   const c = S.cyc, d = S.d, n = d.c.length, i = n - 1, rows = [];
   const add = (nm, now, ok2, why) => rows.push({ nm, now, ok: ok2, why });
   const lowDays = c.past.map(p => p.lowDay); add('時期（半減期から）', c.day + '日目', c.day >= Math.min(...lowDays), '過去の底は ' + lowDays.join('・') + ' 日目');
-  (S.bg ? S.bg.parts : []).forEach(x => add(x.nm, x.now, x.p >= 0.9, '過去の底は ' + x.bots));
+  (S.bg ? S.bg.parts : []).forEach(x => add(x.nm + (/マイナー/.test(x.nm) ? '（参考）' : ''), x.now, x.p >= 0.9, '過去の底は ' + x.bots + (x.trend ? '。回を追って浅くなっているので、今回の目安は ' + x.tgt : '。今回の目安は ' + x.tgt) + (/マイナー/.test(x.nm) ? '。マイナーがAI向けデータセンターなどに収入源を広げていて、昔ほど売りに追い込まれにくい可能性がある' : '')));
   const fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null; if (fg != null) add('恐怖指数', fg, fg <= 25, '参考（底以外でもよく出る）');
   let last90 = -1; for (let k = n - 1; k >= n - 30; k--) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { last90 = k; break; } }
   const since = last90 >= 0 ? i - last90 : 99; add('90日ぶりの安値から', since === 0 ? '今日' : since + '日', since >= 10, '新しい安値を付けているうちは、まだ下げの途中');
-  if (S.rt) add('前の安値の試し直し', S.rt.broke ? '割った' : S.rt.retest ? '試している' : '—', !S.rt.broke && !S.rt.retest, S.rt.broke ? '終値で割ると、過去は一段下げの形' : '分かれ目 ' + usd(S.rt.level));
+  if (S.rt) {
+    const lr = S.liveRow && S.liveRow[0] > d.t[n - 1] ? Math.min(S.liveRow[3], S.price) : Infinity; let l10 = lr; for (let j = n - 10; j < n; j++) l10 = Math.min(l10, d.l[j]);
+    const wickNew = l10 < S.rt.lo;
+    add('前の安値（' + kfmt(S.rt.lo) + '）', S.rt.broke ? '終値で割った' : wickNew ? '日中に割った' : S.rt.retest ? '試している' : '—', !S.rt.broke && !S.rt.retest && !wickNew, wickNew && !S.rt.broke ? '日中に ' + usd(l10) + ' まで下げて、前の安値を更新しました（終値ではまだ割っていない）。この ' + kfmt(l10) + ' が新しい「直近の安値」で、終値で割ると本当の新安値です。分かれ目は ' + usd(S.rt.level) : S.rt.broke ? '終値で割ると、過去は一段下げの形' : '分かれ目 ' + usd(S.rt.level));
+  }
   const mm = S.R.hz.m.pct; add('中期の判定（上向きの確認）', Math.round(mm), mm >= 75, '75以上で「上がり始め」と判断（過去の検証で一番安定していた合図）');
   const nOk = rows.filter(x => x.ok).length;
   const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : since < 10 || (S.rt && S.rt.broke) ? ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。'] : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
@@ -2041,9 +2045,12 @@ function bottomGauge() {
   const pk = at(c.cur.peakT), lows = c.past.map(p => at(p.lowT)).filter(i => i >= 0), i0 = n - 1, parts = []; let tot = 0, ws = 0;
   SER.forEach(([nm, a, w, fmt]) => {
     const bots = lows.map(i => a[i]).filter(ok), now = a[i0], top = a[pk]; if (!bots.length || !ok(now) || !ok(top)) return;
-    const tgt = Math.max(...bots); if (!(top > tgt)) return;
+    // 回を追って底が浅くなっている指標は、その縮み方を次の回まで延ばした値を目標にする（直線で延長。延ばした方が穏やかなときだけ使う）
+    let tgt = Math.max(...bots), trend = null;
+    if (bots.length >= 3) { const k = bots.length, xs = bots.map((_, j) => j), mx = (k - 1) / 2, my = bots.reduce((a2, b2) => a2 + b2, 0) / k; let sxy = 0, sxx = 0; xs.forEach((x, j) => { sxy += (x - mx) * (bots[j] - my); sxx += (x - mx) ** 2; }); const pred = my + sxy / sxx * (k - mx); if (pred > tgt && pred < top) { trend = pred; tgt = pred; } }
+    if (!(top > tgt)) return;
     const p = Math.min(1, Math.max(0, (top - now) / (top - tgt))); tot += p * w; ws += w;
-    parts.push({ nm, p, now: fmt(now), bots: bots.map(fmt).join('・') });
+    parts.push({ nm, p, now: fmt(now), bots: bots.map(fmt).join('・'), tgt: fmt(tgt), trend: trend != null });
   });
   const extra = [];
   if (ok(w2[i0])) extra.push('200週線比 ' + w2[i0].toFixed(2) + '。過去の底の目安として有名ですが、点いたのは2022年だけで、時点ごとの検証で安定しなかったため、底らしさから外しました');

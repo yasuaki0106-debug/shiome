@@ -24,7 +24,7 @@ function gauge() {
   const at = T => { let k = -1; for (let i = 0; i < n; i++) if (d.t[i] <= T) k = i; return k; };
   const pk = at(cyc.cur.peakT), lows = cyc.past.map(p => at(p.lowT)).filter(i => i >= 0);
   const S = [[mvrv, .60], [mr.map((x, i) => x / mr365[i]), .63], [wrsi, .59], [dd, .56], [Array.from(d.c).map((x, i) => x / m200[i]), .45]];
-  let tot = 0, ws = 0; S.forEach(([a, w]) => { const b = lows.map(i => a[i]).filter(x => x === x), nw = a[last], tp = a[pk]; if (!b.length || !(nw === nw) || !(tp === tp)) return; const tg = Math.max(...b); if (!(tp > tg)) return; tot += Math.min(1, Math.max(0, (tp - nw) / (tp - tg))) * w; ws += w; });
+  let tot = 0, ws = 0; S.forEach(([a, w]) => { const b = lows.map(i => a[i]).filter(x => x === x), nw = a[last], tp = a[pk]; if (!b.length || !(nw === nw) || !(tp === tp)) return; let tg = Math.max(...b); if (b.length >= 3) { const k = b.length, mx = (k - 1) / 2, my = b.reduce((x, y) => x + y, 0) / k; let sxy = 0, sxx = 0; b.forEach((v, j) => { sxy += (j - mx) * (v - my); sxx += (j - mx) ** 2; }); const pr = my + sxy / sxx * (k - mx); if (pr > tg && pr < tp) tg = pr; } if (!(tp > tg)) return; tot += Math.min(1, Math.max(0, (tp - nw) / (tp - tg))) * w; ws += w; });
   return ws ? tot / ws : NaN;
 }
 const g = gauge(), inPhase = cyc.phase === 'bottom' || cyc.phase === 'recover';
@@ -40,6 +40,7 @@ try {
   const Z = E.entryZones(d, R.ind, price, null, null), L0 = [];
   const add = (p, name, kind, why) => { if (p > 0 && isFinite(p) && Math.abs(p / price - 1) < 0.3 && !L0.some(x => Math.abs(x.p / p - 1) < 0.01)) L0.push({ p: Math.round(p), name, kind, why }); };
   if (rt && (rt.retest || rt.broke)) { add(rt.lv, '分かれ目（前の安値の3%下）', 'split', '日足の終値で割ると、過去は一段下げの形'); add(rt.lo, '前の安値', 'prevlow', '二番底になるかの境目'); }
+  { let l10 = Infinity; for (let j = last - 9; j <= last; j++) l10 = Math.min(l10, d.l[j]); if (rt && l10 < rt.lo) add(l10, '直近の安値（日中）', 'recentlow', 'ヒゲで付けた新しい安値。終値でここを割ると、本当の新安値'); }
   (Z.above || []).slice(0, 2).forEach(z => add(z.mid, '上値の壁', 'wall', [...new Set(z.items.map(x => x.label))].join('・')));
   (Z.below || []).slice(0, 2).forEach(z => add(z.mid, '下値の支え', 'support', [...new Set(z.items.map(x => x.label))].join('・')));
   // 短い時間の節目：前日の高値・安値、直近7日の高値・安値
