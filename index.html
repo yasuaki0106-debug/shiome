@@ -1,0 +1,1174 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>潮目｜BTCで読むMSTR・COINのエントリー</title>
+<meta name="description" content="ビットコインのテクニカル・出来高・オプション・建玉から、関連株のエントリー時期を判定し、過去の判定を自動で検証します。">
+<meta name="theme-color" content="#EDF0F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D131E" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="潮目">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230D131E'/%3E%3Cpath d='M8 40c8-14 14-14 22 0s14 14 26-6' fill='none' stroke='%2335C2BA' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='30' cy='40' r='5' fill='%23E0AE4C'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EDF0F2;--surface:#FBFCFC;--ink:#17212F;--muted:#5E6B7B;--line:#D3DAE1;--brass:#9A6A12;--buy:#0B7A78;--try:#5FAAA5;--wait:#B98A2E;--avoid:#B24A3C;--soft:#E3E8EC;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0D131E;--surface:#161F2E;--ink:#E7ECF2;--muted:#93A1B3;--line:#27344B;--brass:#E0AE4C;--buy:#4FD6CD;--try:#2F9892;--wait:#D9A94A;--avoid:#EE8473;--soft:#1D283A;color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;font-size:15px;line-height:1.7;-webkit-font-smoothing:antialiased;padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+.num{font-family:"Saira Semi Condensed","Zen Kaku Gothic New",system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:500;letter-spacing:.01em}
+h1,h2,h3,p,ul,dl,table{margin:0}ul{padding:0;list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px}
+.top-in{max-width:560px;margin:0 auto;display:flex;align-items:baseline;gap:10px}
+.brand{font-weight:700;font-size:15px;letter-spacing:.12em}
+#px{font-size:22px;font-weight:600;margin-left:auto}
+.top-meta{max-width:560px;margin:0 auto;display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+#refresh{font-size:12px;color:var(--brass);text-decoration:underline;text-underline-offset:3px;min-height:28px}
+#refresh:disabled{opacity:.5}
+main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
+.lead{margin:6px 0 20px}
+.lead h1{font-size:23px;line-height:1.45;font-weight:700;letter-spacing:.01em;text-wrap:balance;word-break:auto-phrase}
+.lead p{margin-top:8px;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;margin:0 0 14px}
+.card h2{font-size:16px;font-weight:700;margin-bottom:10px}
+.card h3{font-size:14px;font-weight:700;margin:18px 0 8px}
+.card>p+p{margin-top:8px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.row h2{margin-bottom:0}.row+*{margin-top:10px}
+.sub{font-size:12.5px;color:var(--muted);line-height:1.65;margin-top:10px}.muted{color:var(--muted)}
+/* rails */
+.rails{margin:0 0 14px;border-top:2px solid var(--ink)}
+.rail{display:block;width:100%;text-align:left;padding:14px 2px 14px;border-bottom:1px solid var(--line);position:relative}
+.rail.on{background:linear-gradient(90deg,var(--soft),transparent)}
+.rail.on::before{content:"";position:absolute;left:-16px;top:0;bottom:0;width:4px;background:var(--ink)}
+.rail-head{display:flex;justify-content:space-between;align-items:baseline}
+.rail-name{font-weight:700;font-size:15px}.rail-name small{font-weight:400;color:var(--muted);margin-left:8px;font-size:12.5px}
+.rail-verdict{font-size:24px;font-weight:700;letter-spacing:.04em;line-height:1.2}
+.v-buy{color:var(--buy)}.v-try{color:var(--buy)}.v-wait{color:var(--wait)}.v-avoid{color:var(--avoid)}.v-na{color:var(--muted)}
+.track{display:flex;height:10px;margin:26px 0 8px;position:relative;gap:2px}
+.z{display:block;height:100%;border-radius:1px}.za{flex:40;background:var(--avoid);opacity:.55}.zw{flex:20;background:var(--wait);opacity:.5}.zt{flex:15;background:var(--try);opacity:.75}.zb{flex:25;background:var(--buy)}
+.needle{position:absolute;top:-7px;width:3px;height:24px;background:var(--ink);transform:translateX(-50%);border-radius:1px;box-shadow:0 0 0 2px var(--bg)}
+.rail.on .needle{box-shadow:0 0 0 2px var(--soft)}
+.needle em{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-style:normal;font-size:13px;font-weight:600;line-height:1.3}
+.rail-sub,.rail-why{display:block;font-size:12.5px;color:var(--muted);line-height:1.6}
+.rail-why{color:var(--wait)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);padding:8px 2px 0}
+.legend span,.keys span{display:inline-flex;align-items:center;gap:5px}.legend .z{width:14px;height:6px;flex:none}
+/* flags */
+.flags{margin:0 0 14px}
+.flags li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:10px 12px;border-left:3px solid var(--line);background:var(--surface);margin-bottom:6px;font-size:13.5px;line-height:1.6}
+.flags b{font-weight:700;white-space:nowrap}.flags i{font-style:normal;font-size:11.5px;color:var(--muted);white-space:nowrap}
+.f-warn{border-left-color:var(--avoid)!important}.f-warn i{color:var(--avoid)}.f-good{border-left-color:var(--buy)!important}.f-good i{color:var(--buy)}.f-info{border-left-color:var(--wait)!important}
+/* category bars & factors */
+.cat{display:grid;grid-template-columns:8.5em 1fr 2.2em;gap:10px;align-items:center;font-size:13.5px;padding:3px 0}
+.cat .num{text-align:right}
+.cat-bar{height:6px;background:var(--soft);border-radius:1px;overflow:hidden}.cat-bar b{display:block;height:100%}
+.cb-buy{background:var(--buy)}.cb-try{background:var(--try)}.cb-wait{background:var(--wait)}.cb-avoid{background:var(--avoid)}
+.facts{margin-top:12px;border-top:1px solid var(--line)}
+.facts li{display:grid;grid-template-columns:4.6em 1fr auto;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
+.up{color:var(--buy)}.dn{color:var(--avoid)}
+/* charts */
+.chart{width:100%;height:auto;display:block;margin-top:6px}
+.grid{stroke:var(--line);stroke-width:.6}.ax{fill:var(--muted);font-size:9px;font-family:"Saira Semi Condensed",system-ui,sans-serif}
+.px{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-linejoin:round}.ma50{fill:none;stroke:var(--brass);stroke-width:1}.ma200{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:3 2}
+.cone1{fill:var(--buy);opacity:.13}.cone2{fill:var(--buy);opacity:.26}.med{stroke:var(--buy);stroke-width:1.2;stroke-dasharray:3 2}.nowl{stroke:var(--muted);stroke-width:.7;stroke-dasharray:2 2}
+.zone{fill:var(--brass);opacity:.22}.dot{fill:var(--ink)}
+.rb-buy{fill:var(--buy)}.rb-try{fill:var(--try)}.rb-wait{fill:var(--line)}.rb-avoid{fill:var(--avoid);opacity:.7}
+.bar-c{fill:var(--buy)}.bar-p{fill:var(--avoid);opacity:.8}
+.spark{width:120px;height:28px}
+.keys{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted);margin-top:8px}
+.keys i{display:inline-block;width:14px;height:0;border-top:2px solid var(--ink)}.k-50{border-color:var(--brass)!important}.k-200{border-top:2px dashed var(--muted)!important}
+.k-cone,.k-zone,.k-c,.k-p{height:8px!important;border:0!important}.k-cone{background:var(--buy);opacity:.3}.k-zone{background:var(--brass);opacity:.3}.k-c{background:var(--buy)}.k-p{background:var(--avoid)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{padding:5px 11px;font-size:12.5px;min-height:32px;color:var(--muted)}.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg);font-weight:700}
+.seg.wide{display:flex;margin-bottom:14px}.seg.wide button{flex:1;min-height:40px}
+/* zones */
+.zrow{padding:11px 0;border-bottom:1px solid var(--line)}.zrow:last-child{border-bottom:0}
+.zrow div{display:flex;align-items:baseline;gap:10px}.zrow b{font-size:18px;font-weight:600}.dist{color:var(--muted);font-size:13px}
+.str{margin-left:auto;color:var(--brass);font-size:10px;letter-spacing:2px}
+.zrow p{font-size:13px;color:var(--muted)}.zrow .sub{margin-top:2px}
+/* tables */
+.tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.tbl th,.tbl td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:right;font-weight:400}
+.tbl thead th{font-size:11.5px;color:var(--muted)}.tbl th:first-child{text-align:left}.tbl tbody th{font-weight:500}
+.kv{display:grid;grid-template-columns:minmax(44%,1fr) minmax(0,auto);gap:0 12px;font-size:13.5px;margin-top:6px}
+.kv dt,.kv dd{padding:7px 0;border-bottom:1px solid var(--line);margin:0}.kv dt{color:var(--muted)}.kv dd{text-align:right}
+.stat li{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13px;padding:6px 0 6px 14px;border-bottom:1px solid var(--line);position:relative}
+.stat li::before{content:"";position:absolute;left:0;top:14px;width:7px;height:7px;border-radius:50%;background:var(--buy)}.stat .ng::before{background:var(--avoid)}
+.stat span{color:var(--muted)}
+.badge{font-size:12.5px;font-weight:700;padding:2px 10px;border:1.5px solid currentColor;border-radius:3px;white-space:nowrap}
+.b-ok{color:var(--buy)}.b-warn{color:var(--wait)}.b-bad{color:var(--avoid)}.b-thin{color:var(--muted)}
+.calls li{display:grid;grid-template-columns:6.2em auto 1fr;gap:2px 10px;font-size:13px;padding:8px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.calls li>span:nth-child(3){grid-column:1/3;color:var(--muted)}.calls b{grid-column:3;grid-row:1/3;justify-self:end;align-self:center;font-size:12.5px;padding:2px 9px;border-radius:3px}
+.hit{background:var(--buy);color:var(--bg)}.miss{background:var(--avoid);color:var(--bg)}.na{color:var(--muted);font-weight:400;border:1px solid var(--line)}
+/* meters */
+.meter{margin-bottom:14px}.meter .row{font-size:13.5px}.mtrack{height:8px;background:var(--soft);margin-top:6px!important;border-radius:1px;overflow:hidden}.mtrack b{display:block;height:100%}
+.m-lo{background:var(--muted)}.m-mid{background:var(--wait)}.m-hi{background:var(--avoid)}.lvl-lo{color:var(--muted)}.lvl-mid{color:var(--wait)}.lvl-hi{color:var(--avoid)}
+.note.good{border-left:3px solid var(--buy);padding:6px 10px;font-size:13.5px;margin-bottom:8px}
+.clist li,.pair li{display:flex;gap:12px;align-items:baseline;font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--line)}.clist b{font-size:16px;font-weight:600}.clist li span:last-child{margin-left:auto;color:var(--muted)}.pair li{justify-content:space-between}
+.events li{padding:11px 0;border-bottom:1px solid var(--line)}.events li div:first-child{display:flex;justify-content:space-between;gap:10px}.events .sub{margin-top:0}
+.events .soon b{color:var(--avoid)}.imp{color:var(--brass);font-size:10px;letter-spacing:2px;white-space:nowrap}
+.link{color:var(--brass);text-decoration:underline;font-size:12.5px}
+.form{display:grid;gap:12px;margin-top:10px}.form label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.form details label{margin-top:10px}.form details summary{cursor:pointer}
+.form input,.form select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:10px;min-height:44px;width:100%}
+.btn{background:var(--ink);color:var(--bg);font-weight:700;padding:11px 14px;border-radius:4px;min-height:46px;margin-top:4px}.btn.ghost{background:none;color:var(--muted);border:1px solid var(--line);font-weight:400}
+.big{font-size:20px}.big small{font-size:13px;color:var(--muted)}
+details.card summary{font-weight:700;cursor:pointer}details.card p{font-size:13.5px;margin-top:10px;color:var(--muted)}
+.disc{font-size:12px;color:var(--muted);padding:4px 2px 12px}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs div{max-width:560px;margin:0 auto;display:flex}
+.tabs a{flex:1;text-align:center;padding:13px 0 11px;font-size:13.5px;color:var(--muted);text-decoration:none;border-top:3px solid transparent;margin-top:-1px;min-height:52px}
+.tabs a[aria-current=page]{color:var(--ink);font-weight:700;border-top-color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){.needle{transition:left .5s cubic-bezier(.2,.8,.2,1)}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in"><span class="brand">潮目</span><span class="muted" style="font-size:12px">BTC/USD</span><span id="px" class="num">—</span></div>
+  <div class="top-meta"><span id="chg" class="num"></span><span><span id="at"></span>　<button id="refresh">いま更新する</button></span></div>
+</header>
+<main id="view"><section class="card"><p class="muted">データを読み込んでいます…</p></section></main>
+<nav class="tabs" aria-label="画面の切り替え"><div>
+  <a href="#judge" data-tab="judge">判定</a><a href="#verify" data-tab="verify">検証</a><a href="#flow" data-tab="flow">需給</a><a href="#events" data-tab="events">予定</a><a href="#stocks" data-tab="stocks">関連株</a>
+</div></nav>
+<script>
+(function (g) {
+'use strict';
+const HORIZONS = [
+  { k: 's', d: 7, name: '短期', span: '1週間' },
+  { k: 'm', d: 30, name: '中期', span: '1か月' },
+  { k: 'l', d: 90, name: '長期', span: '3か月' }
+];
+const W = 1460, MIN_Z = 250, MIN_IC = 365, IC_FLOOR = 0.03;
+const TH = { buy: 75, try_: 60, wait: 40 };
+const CATS = { tech: 'テクニカル', vol: '出来高', opt: 'オプション', lev: '建玉・資金調達' };
+
+/* ---------- basic series helpers ---------- */
+const nan = n => new Float64Array(n).fill(NaN);
+function sma(a, n) {
+  const o = nan(a.length); let s = 0, c = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === a[i]) { s += a[i]; c++; }
+    if (i >= n) { const x = a[i - n]; if (x === x) { s -= x; c--; } }
+    if (c === n) o[i] = s / n;
+  }
+  return o;
+}
+function ema(a, n) {
+  const o = nan(a.length), k = 2 / (n + 1); let p = NaN;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    if (x !== x) { o[i] = p; continue; }
+    p = p === p ? p + k * (x - p) : x; o[i] = p;
+  }
+  return o;
+}
+function rollStd(a, n) {
+  const o = nan(a.length); let s = 0, ss = 0, c = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === a[i]) { s += a[i]; ss += a[i] * a[i]; c++; }
+    if (i >= n) { const x = a[i - n]; if (x === x) { s -= x; ss -= x * x; c--; } }
+    if (c === n) { const m = s / n; o[i] = Math.sqrt(Math.max(0, ss / n - m * m)); }
+  }
+  return o;
+}
+function rollExt(a, n, isMax) {
+  const o = nan(a.length);
+  for (let i = 0; i < a.length; i++) {
+    let m = isMax ? -Infinity : Infinity;
+    for (let j = Math.max(0, i - n + 1); j <= i; j++) { const x = a[j]; if (x === x) m = isMax ? Math.max(m, x) : Math.min(m, x); }
+    o[i] = isFinite(m) ? m : NaN;
+  }
+  return o;
+}
+function rsi(c, n) {
+  const o = nan(c.length); let ag = 0, al = 0;
+  for (let i = 1; i < c.length; i++) {
+    const d = c[i] - c[i - 1], gn = Math.max(d, 0), ls = Math.max(-d, 0);
+    if (i <= n) { ag += gn / n; al += ls / n; if (i === n) o[i] = 100 - 100 / (1 + ag / (al || 1e-12)); }
+    else { ag = (ag * (n - 1) + gn) / n; al = (al * (n - 1) + ls) / n; o[i] = 100 - 100 / (1 + ag / (al || 1e-12)); }
+  }
+  return o;
+}
+function atr(d, n) {
+  const tr = nan(d.c.length);
+  for (let i = 1; i < d.c.length; i++) tr[i] = Math.max(d.h[i] - d.l[i], Math.abs(d.h[i] - d.c[i - 1]), Math.abs(d.l[i] - d.c[i - 1]));
+  return sma(tr, n);
+}
+function quantile(sorted, q) {
+  if (!sorted.length) return NaN;
+  const p = (sorted.length - 1) * q, lo = Math.floor(p), hi = Math.ceil(p);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (p - lo);
+}
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+/* ---------- factors ---------- */
+function buildFactors(d, ex) {
+  const n = d.c.length, c = d.c, v = d.v;
+  const ret = nan(n); for (let i = 1; i < n; i++) ret[i] = Math.log(c[i] / c[i - 1]);
+  const s20 = sma(c, 20), s50 = sma(c, 50), s200 = sma(c, 200), sd20 = rollStd(c, 20);
+  const e12 = ema(c, 12), e26 = ema(c, 26);
+  const macd = nan(n); for (let i = 0; i < n; i++) macd[i] = e12[i] - e26[i];
+  const sig = ema(macd, 9), r14 = rsi(c, 14), hi365 = rollExt(d.h, 365, true);
+  const rv30 = rollStd(ret, 30);
+  const v20 = sma(v, 20), v100 = sma(v, 100);
+  const sv = nan(n), cap = nan(n), obv = nan(n);
+  let ob = 0;
+  for (let i = 1; i < n; i++) {
+    const rel = v20[i] > 0 ? v[i] / v20[i] - 1 : NaN;
+    sv[i] = rel === rel ? Math.sign(ret[i]) * rel : NaN;
+    cap[i] = rel === rel ? Math.max(0, -ret[i]) * Math.max(0, rel) : NaN;
+    ob += Math.sign(ret[i]) * v[i]; obv[i] = ob;
+  }
+  const svE = ema(sv, 5), capE = ema(cap, 10), obvS = sma(obv, 30), vSum30 = sma(v, 30);
+  const dv = ex && ex.dvol ? ex.dvol : nan(n), fu = ex && ex.fund ? ex.fund : nan(n);
+  const dv365 = sma(dv, 365), fu7 = sma(fu, 7), fu30 = sma(fu, 30);
+  const F = [
+    { id: 't_ma200', cat: 'tech', label: '200日線からの乖離', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(1) + '%' },
+    { id: 't_cross', cat: 'tech', label: '50日線と200日線の位置', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(1) + '%' },
+    { id: 't_mom30', cat: 'tech', label: '30日モメンタム', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(1) + '%' },
+    { id: 't_mom7', cat: 'tech', label: '7日モメンタム', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(1) + '%' },
+    { id: 't_rsi', cat: 'tech', label: 'RSI(14)', x: r14, fmt: x => x.toFixed(0) },
+    { id: 't_macd', cat: 'tech', label: 'MACDヒストグラム', x: nan(n), fmt: x => (x * 100).toFixed(2) + '%' },
+    { id: 't_bb', cat: 'tech', label: 'ボリンジャーバンド位置', x: nan(n), fmt: x => x.toFixed(2) + 'σ' },
+    { id: 't_dd', cat: 'tech', label: '1年高値からの下落率', x: nan(n), fmt: x => (x * 100).toFixed(1) + '%' },
+    { id: 't_rv', cat: 'tech', label: '実現ボラティリティ(30日)', x: nan(n), fmt: x => (x * 100).toFixed(0) + '%' },
+    { id: 'v_flow', cat: 'vol', label: '方向つき出来高（買い/売りの勢い）', x: svE, fmt: x => (x >= 0 ? '+' : '') + x.toFixed(2) },
+    { id: 'v_obv', cat: 'vol', label: 'OBVのトレンド', x: nan(n), fmt: x => (x >= 0 ? '+' : '') + x.toFixed(2) },
+    { id: 'v_cap', cat: 'vol', label: '投げ売り出来高（セリングクライマックス）', x: capE, fmt: x => (x * 100).toFixed(2) },
+    { id: 'v_trend', cat: 'vol', label: '出来高の増減（20日/100日）', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(0) + '%' },
+    { id: 'o_dvol', cat: 'opt', label: 'インプライドボラ（DVOL）の水準', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(0) + '%（1年平均比）' },
+    { id: 'o_vrp', cat: 'opt', label: 'IVと実現ボラの差', x: nan(n), fmt: x => (x >= 0 ? '+' : '') + x.toFixed(0) + 'pt' },
+    { id: 'f_fund7', cat: 'lev', label: '資金調達率（7日平均）', x: fu7, fmt: x => (x * 100).toFixed(4) + '%' },
+    { id: 'f_fund30', cat: 'lev', label: '資金調達率（30日平均）', x: fu30, fmt: x => (x * 100).toFixed(4) + '%' }
+  ];
+  const get = id => F.find(f => f.id === id).x;
+  for (let i = 0; i < n; i++) {
+    if (s200[i] === s200[i]) { get('t_ma200')[i] = Math.log(c[i] / s200[i]); get('t_cross')[i] = Math.log(s50[i] / s200[i]); }
+    if (i >= 30) get('t_mom30')[i] = Math.log(c[i] / c[i - 30]);
+    if (i >= 7) get('t_mom7')[i] = Math.log(c[i] / c[i - 7]);
+    get('t_macd')[i] = (macd[i] - sig[i]) / c[i];
+    if (sd20[i] > 0) get('t_bb')[i] = (c[i] - s20[i]) / sd20[i];
+    if (hi365[i] === hi365[i]) get('t_dd')[i] = c[i] / hi365[i] - 1;
+    get('t_rv')[i] = rv30[i] * Math.sqrt(365);
+    if (vSum30[i] > 0 && obvS[i] === obvS[i]) get('v_obv')[i] = (obv[i] - obvS[i]) / (vSum30[i] * 30);
+    if (v100[i] > 0 && v20[i] > 0) get('v_trend')[i] = Math.log(v20[i] / v100[i]);
+    if (dv[i] > 0 && dv365[i] > 0) get('o_dvol')[i] = Math.log(dv[i] / dv365[i]);
+    if (dv[i] > 0 && rv30[i] === rv30[i]) get('o_vrp')[i] = dv[i] - rv30[i] * Math.sqrt(365) * 100;
+  }
+  return { F, ind: { s20, s50, s200, sd20, r14, rv30, atr14: atr(d, 14) } };
+}
+
+/* ---------- walk-forward scoring ---------- */
+function prefix1(x) {
+  const n = x.length, N = new Float64Array(n + 1), S = new Float64Array(n + 1), Q = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) { const ok = x[i] === x[i]; N[i + 1] = N[i] + (ok ? 1 : 0); S[i + 1] = S[i] + (ok ? x[i] : 0); Q[i + 1] = Q[i] + (ok ? x[i] * x[i] : 0); }
+  return { N, S, Q };
+}
+function prefix2(x, y) {
+  const n = x.length, N = new Float64Array(n + 1), X = new Float64Array(n + 1), Y = new Float64Array(n + 1), XX = new Float64Array(n + 1), YY = new Float64Array(n + 1), XY = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) {
+    const ok = x[i] === x[i] && y[i] === y[i], a = ok ? x[i] : 0, b = ok ? y[i] : 0;
+    N[i + 1] = N[i] + (ok ? 1 : 0); X[i + 1] = X[i] + a; Y[i + 1] = Y[i] + b; XX[i + 1] = XX[i] + a * a; YY[i + 1] = YY[i] + b * b; XY[i + 1] = XY[i] + a * b;
+  }
+  return { N, X, Y, XX, YY, XY };
+}
+function corrRange(p, a, b) { // inclusive a..b
+  if (b < a) return NaN;
+  const n = p.N[b + 1] - p.N[a]; if (n < MIN_IC) return NaN;
+  const sx = p.X[b + 1] - p.X[a], sy = p.Y[b + 1] - p.Y[a];
+  const vx = (p.XX[b + 1] - p.XX[a]) - sx * sx / n, vy = (p.YY[b + 1] - p.YY[a]) - sy * sy / n;
+  if (vx <= 0 || vy <= 0) return NaN;
+  return ((p.XY[b + 1] - p.XY[a]) - sx * sy / n) / Math.sqrt(vx * vy);
+}
+
+function scoreHorizon(d, F, H) {
+  const n = d.c.length, c = d.c;
+  const y = nan(n); for (let s = 0; s + H < n; s++) y[s] = Math.log(c[s + H] / c[s]);
+  const p1 = F.map(f => prefix1(f.x)), p2 = F.map(f => prefix2(f.x, y));
+  const raw = nan(n), pct = nan(n);
+  const cats = Object.keys(CATS), catRaw = {}; cats.forEach(k => catRaw[k] = nan(n));
+  let last = null;
+  for (let t = 0; t < n; t++) {
+    const b = t - H, a = Math.max(0, b - W + 1), za = Math.max(0, t - W + 1);
+    let num = 0, den = 0; const cn = {}, cd = {}, det = [];
+    for (let j = 0; j < F.length; j++) {
+      let ic = b >= 0 ? corrRange(p2[j], a, b) : NaN;
+      const w = ic === ic && Math.abs(ic) >= IC_FLOOR ? ic : 0;
+      const x = F[j].x[t], q = p1[j], m = q.N[t + 1] - q.N[za];
+      let z = NaN;
+      if (x === x && m >= MIN_Z) {
+        const mu = (q.S[t + 1] - q.S[za]) / m, va = (q.Q[t + 1] - q.Q[za]) / m - mu * mu;
+        if (va > 0) z = clamp((x - mu) / Math.sqrt(va), -3, 3);
+      }
+      if (w !== 0 && z === z) {
+        num += w * z; den += Math.abs(w);
+        const k = F[j].cat; cn[k] = (cn[k] || 0) + w * z; cd[k] = (cd[k] || 0) + Math.abs(w);
+      }
+      if (t === n - 1) det.push({ id: F[j].id, cat: F[j].cat, label: F[j].label, ic, w, z, x, text: x === x ? F[j].fmt(x) : '—' });
+    }
+    if (den > 0) raw[t] = num / den;
+    cats.forEach(k => { if (cd[k] > 0) catRaw[k][t] = cn[k] / cd[k]; });
+    if (t === n - 1) { det.forEach(o => o.contrib = den > 0 && o.w !== 0 && o.z === o.z ? o.w * o.z / den : 0); last = det; }
+  }
+  const rank = (arr, t) => {
+    const v = arr[t]; if (v !== v) return NaN;
+    let lo = 0, m = 0;
+    for (let s = Math.max(0, t - W); s < t; s++) { const u = arr[s]; if (u === u) { m++; if (u < v) lo++; else if (u === v) lo += 0.5; } }
+    return m >= MIN_Z ? 100 * lo / m : NaN;
+  };
+  for (let t = 0; t < n; t++) pct[t] = rank(raw, t);
+  const catPct = {}; cats.forEach(k => catPct[k] = rank(catRaw[k], n - 1));
+  return { H, raw, pct, catPct, factors: last };
+}
+
+const verdictOf = p => p !== p ? 'na' : p >= TH.buy ? 'buy' : p >= TH.try_ ? 'try' : p >= TH.wait ? 'wait' : 'avoid';
+const VERDICT = { buy: '買い好機', try: '打診買い', wait: '様子見', avoid: '見送り', na: '判定不能' };
+
+function summarize(rs) {
+  if (!rs.length) return { n: 0, win: NaN, mean: NaN, med: NaN };
+  const s = rs.slice().sort((a, b) => a - b);
+  return { n: rs.length, win: rs.filter(x => x > 0).length / rs.length, mean: rs.reduce((a, b) => a + b, 0) / rs.length, med: quantile(s, 0.5) };
+}
+
+function evaluate(d, sc) {
+  const n = d.c.length, H = sc.H, c = d.c, lastM = n - 1 - H;
+  const groups = { all: [], buy: [], try: [], wait: [], avoid: [], sig: [] }, rec = { all: [], sig: [], avoid: [] }, yr = { all: [], sig: [], avoid: [] };
+  let first = -1;
+  for (let t = 0; t <= lastM; t++) {
+    const p = sc.pct[t]; if (p !== p) continue;
+    if (first < 0) first = t;
+    const r = c[t + H] / c[t] - 1, v = verdictOf(p);
+    groups.all.push(r); groups[v].push(r); if (p >= TH.try_) groups.sig.push(r);
+    if (t > lastM - 730) { rec.all.push(r); if (p >= TH.try_) rec.sig.push(r); if (v === 'avoid') rec.avoid.push(r); }
+    if (t > lastM - 365) { yr.all.push(r); if (p >= TH.try_) yr.sig.push(r); if (v === 'avoid') yr.avoid.push(r); }
+  }
+  const st = {}; Object.keys(groups).forEach(k => st[k] = summarize(groups[k]));
+  const rc = {}; Object.keys(rec).forEach(k => rc[k] = summarize(rec[k]));
+  const y1 = {}; Object.keys(yr).forEach(k => y1[k] = summarize(yr[k]));
+  const edgeAll = st.sig.mean - st.all.mean, edgeRec = rc.sig.n >= 20 ? rc.sig.mean - rc.all.mean : NaN;
+  const sepAll = st.sig.mean - st.avoid.mean;
+  let status = 'ok';
+  if (!(st.sig.n >= 60)) status = 'thin';
+  else if (!(edgeAll > 0) || !(sepAll > 0)) status = 'bad';
+  else if (edgeRec === edgeRec && edgeRec <= 0) status = 'warn';
+  // non-overlapping recent calls
+  const calls = [];
+  for (let t = lastM; t >= 0 && calls.length < 12; t -= H) {
+    const p = sc.pct[t]; if (p !== p) break;
+    const r = c[t + H] / c[t] - 1, v = verdictOf(p);
+    const hit = v === 'buy' || v === 'try' ? r > 0 : v === 'avoid' ? r < 0 : null;
+    calls.push({ t: d.t[t], p, v, px: c[t], px2: c[t + H], r, hit });
+  }
+  // pending (not matured yet) calls
+  const pending = [];
+  for (let t = n - 1; t > lastM && pending.length < 3; t -= Math.max(1, Math.floor(H / 3))) {
+    const p = sc.pct[t]; if (p === p) pending.push({ t: d.t[t], p, v: verdictOf(p), px: c[t], due: d.t[t] + H * 864e5 });
+  }
+  return { H, first, st, rc, y1, edgeAll, edgeRec, sepAll, status, calls, pending, indep: Math.floor(st.all.n / H) };
+}
+
+function simulate(d, sc) {
+  const n = d.c.length, c = d.c, fee = 0.001;
+  let pos = 0, eq = 1, bh = 1, peak = 1, mdd = 0, bpeak = 1, bmdd = 0, days = 0, inDays = 0, trades = 0, start = -1;
+  const E = [], B = [], T = [], rets = [];
+  for (let t = 0; t < n - 1; t++) {
+    const p = sc.pct[t]; if (p !== p) { if (start >= 0) { /* hold state */ } else continue; }
+    if (start < 0) start = t;
+    let np = pos;
+    if (p === p) { if (p >= TH.try_) np = 1; else if (p < TH.wait) np = 0; }
+    if (np !== pos) { eq *= 1 - fee; trades++; pos = np; }
+    const r = c[t + 1] / c[t] - 1, sr = pos ? r : 0;
+    eq *= 1 + sr; bh *= 1 + r; rets.push(sr);
+    peak = Math.max(peak, eq); mdd = Math.min(mdd, eq / peak - 1);
+    bpeak = Math.max(bpeak, bh); bmdd = Math.min(bmdd, bh / bpeak - 1);
+    days++; inDays += pos; E.push(eq); B.push(bh); T.push(d.t[t + 1]);
+  }
+  const yrs = days / 365, mu = rets.reduce((a, b) => a + b, 0) / (rets.length || 1);
+  const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mu) * (b - mu), 0) / (rets.length || 1));
+  return { T, E, B, cagr: Math.pow(eq, 1 / yrs) - 1, bcagr: Math.pow(bh, 1 / yrs) - 1, mdd, bmdd, exposure: inDays / days, trades, sharpe: sd > 0 ? mu / sd * Math.sqrt(365) : NaN, years: yrs, total: eq - 1, btotal: bh - 1 };
+}
+
+function forecast(d, sc) {
+  const n = d.c.length, H = sc.H, c = d.c, now = sc.pct[n - 1];
+  if (now !== now) return null;
+  let band = 12.5, rs = [];
+  for (let k = 0; k < 3 && rs.length < 60; k++, band *= 1.6) {
+    rs = [];
+    for (let t = 0; t + H < n; t++) { const p = sc.pct[t]; if (p === p && Math.abs(p - now) <= band) rs.push(c[t + H] / c[t] - 1); }
+  }
+  rs.sort((a, b) => a - b);
+  return { H, n: rs.length, up: rs.filter(x => x > 0).length / (rs.length || 1), q10: quantile(rs, 0.1), q25: quantile(rs, 0.25), q50: quantile(rs, 0.5), q75: quantile(rs, 0.75), q90: quantile(rs, 0.9) };
+}
+
+/* ---------- volume profile & entry zones ---------- */
+function volumeProfile(d, days, bins) {
+  const n = d.c.length, a = Math.max(0, n - days); let lo = Infinity, hi = -Infinity;
+  for (let i = a; i < n; i++) { lo = Math.min(lo, d.l[i]); hi = Math.max(hi, d.h[i]); }
+  const w = (hi - lo) / bins, vol = new Float64Array(bins);
+  for (let i = a; i < n; i++) {
+    const b0 = clamp(Math.floor((d.l[i] - lo) / w), 0, bins - 1), b1 = clamp(Math.floor((d.h[i] - lo) / w), 0, bins - 1), sh = d.v[i] / (b1 - b0 + 1);
+    for (let b = b0; b <= b1; b++) vol[b] += sh;
+  }
+  let poc = 0; for (let b = 1; b < bins; b++) if (vol[b] > vol[poc]) poc = b;
+  const nodes = [];
+  for (let b = 1; b < bins - 1; b++) if (vol[b] >= vol[b - 1] && vol[b] >= vol[b + 1] && vol[b] >= 0.6 * vol[poc]) nodes.push({ price: lo + (b + 0.5) * w, vol: vol[b], poc: b === poc });
+  if (!nodes.some(x => x.poc)) nodes.push({ price: lo + (poc + 0.5) * w, vol: vol[poc], poc: true });
+  return { lo, hi, w, vol, nodes };
+}
+
+function entryZones(d, ind, price, opt, liq) {
+  const n = d.c.length, i = n - 1, L = [];
+  const add = (p, label, kind) => { if (p > 0 && isFinite(p)) L.push({ p, label, kind }); };
+  add(ind.s20[i], '20日線', 'tech'); add(ind.s50[i], '50日線', 'tech'); add(ind.s200[i], '200日線', 'tech');
+  add(ind.s20[i] - 2 * ind.sd20[i], 'ボリンジャー下限', 'tech'); add(ind.s20[i] + 2 * ind.sd20[i], 'ボリンジャー上限', 'tech');
+  add(rollExt(d.l, 30, false)[i], '30日安値', 'tech'); add(rollExt(d.l, 90, false)[i], '90日安値', 'tech');
+  add(rollExt(d.h, 30, true)[i], '30日高値', 'tech'); add(rollExt(d.h, 90, true)[i], '90日高値', 'tech');
+  const vp = volumeProfile(d, 180, 48);
+  vp.nodes.forEach(x => add(x.price, x.poc ? '出来高最多の価格帯' : '出来高の厚い価格帯', 'vol'));
+  if (opt) {
+    add(opt.main && opt.main.maxPain, 'マックスペイン', 'opt');
+    add(opt.putWall && opt.putWall.K, 'プット建玉の壁', 'opt'); add(opt.callWall && opt.callWall.K, 'コール建玉の壁', 'opt');
+  }
+  if (liq && liq.clusters) {
+    liq.clusters.below.slice(0, 2).forEach(x => add(x.p, 'ロング清算の集中帯（推定）', 'lev'));
+    liq.clusters.above.slice(0, 2).forEach(x => add(x.p, 'ショート清算の集中帯（推定）', 'lev'));
+  }
+  const group = (arr) => {
+    arr.sort((a, b) => a.p - b.p); const Z = [];
+    arr.forEach(x => { const z = Z[Z.length - 1]; if (z && x.p / z.hi - 1 <= 0.015) { z.hi = x.p; z.items.push(x); } else Z.push({ lo: x.p, hi: x.p, items: [x] }); });
+    Z.forEach(z => { z.mid = (z.lo + z.hi) / 2; z.dist = z.mid / price - 1; z.kinds = [...new Set(z.items.map(x => x.kind))]; z.strength = z.items.length + z.kinds.length - 1; });
+    return Z;
+  };
+  const a14 = ind.atr14[i];
+  const below = group(L.filter(x => x.p < price * 0.998 && x.p > price * 0.6)).reverse();
+  const above = group(L.filter(x => x.p > price * 1.002 && x.p < price * 1.6));
+  below.forEach(z => z.stop = z.lo - a14);
+  return { below, above, atr: a14, vp };
+}
+
+/* ---------- options (Deribit book summary) ---------- */
+const MON = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+function parseInstr(name) {
+  const m = /^BTC-(\d{1,2})([A-Z]{3})(\d{2})-(\d+)-([CP])$/.exec(name || ''); if (!m) return null;
+  return { exp: Date.UTC(2000 + +m[3], MON[m[2]], +m[1], 8), K: +m[4], type: m[5] };
+}
+function analyzeOptions(list, spot, now) {
+  const E = new Map(); let cO = 0, pO = 0, cV = 0, pV = 0; const byK = new Map();
+  (list || []).forEach(r => {
+    const q = parseInstr(r.instrument_name); if (!q || q.exp <= now) return;
+    const oi = +r.open_interest || 0, vol = +r.volume || 0, iv = +r.mark_iv || 0;
+    if (!E.has(q.exp)) E.set(q.exp, { exp: q.exp, callOI: 0, putOI: 0, callVol: 0, putVol: 0, K: new Map(), und: +r.underlying_price || spot });
+    const e = E.get(q.exp); if (!e.K.has(q.K)) e.K.set(q.K, { K: q.K, c: 0, p: 0, civ: 0, piv: 0 });
+    const k = e.K.get(q.K);
+    if (q.type === 'C') { e.callOI += oi; e.callVol += vol; k.c += oi; k.civ = iv; cO += oi; cV += vol; }
+    else { e.putOI += oi; e.putVol += vol; k.p += oi; k.piv = iv; pO += oi; pV += vol; }
+    if (!byK.has(q.K)) byK.set(q.K, { K: q.K, c: 0, p: 0 });
+    const a = byK.get(q.K); if (q.type === 'C') a.c += oi; else a.p += oi;
+  });
+  const exps = [...E.values()].sort((a, b) => a.exp - b.exp); if (!exps.length) return null;
+  const days = e => (e.exp - now) / 864e5;
+  const maxPain = e => {
+    const ks = [...e.K.values()]; let best = NaN, bp = Infinity;
+    ks.forEach(a => { let pain = 0; ks.forEach(b => { pain += b.c * Math.max(0, a.K - b.K) + b.p * Math.max(0, b.K - a.K); }); if (pain < bp) { bp = pain; best = a.K; } });
+    return best;
+  };
+  const elig = exps.filter(e => days(e) >= 1);
+  const pool = elig.length ? elig : exps;
+  const mainE = pool.reduce((a, b) => (b.callOI + b.putOI > a.callOI + a.putOI ? b : a));
+  const nearE = pool[0];
+  const pack = e => ({ exp: e.exp, days: days(e), callOI: e.callOI, putOI: e.putOI, pcr: e.callOI > 0 ? e.putOI / e.callOI : NaN, maxPain: maxPain(e), strikes: [...e.K.values()].sort((a, b) => a.K - b.K), und: e.und });
+  // ~30d expiry for IV / skew
+  const c30 = exps.filter(e => days(e) >= 7); const e30 = (c30.length ? c30 : exps).reduce((a, b) => Math.abs(days(b) - 30) < Math.abs(days(a) - 30) ? b : a);
+  const interp = (e, target, key) => {
+    const ks = [...e.K.values()].filter(k => k[key] > 0).sort((a, b) => a.K - b.K); if (!ks.length) return NaN;
+    if (target <= ks[0].K) return ks[0][key]; if (target >= ks[ks.length - 1].K) return ks[ks.length - 1][key];
+    for (let i = 1; i < ks.length; i++) if (ks[i].K >= target) { const a = ks[i - 1], b = ks[i]; return a[key] + (b[key] - a[key]) * (target - a.K) / (b.K - a.K); }
+    return NaN;
+  };
+  const Fw = e30.und || spot, atmC = interp(e30, Fw, 'civ'), atmP = interp(e30, Fw, 'piv');
+  const atm = [atmC, atmP].filter(x => x === x); const atmIV = atm.length ? atm.reduce((a, b) => a + b, 0) / atm.length : NaN;
+  const skew = interp(e30, Fw * 0.9, 'piv') - interp(e30, Fw * 1.1, 'civ');
+  let callWall = null, putWall = null;
+  byK.forEach(a => {
+    if (a.K > spot && a.K < spot * 1.5 && (!callWall || a.c > callWall.oi)) callWall = { K: a.K, oi: a.c };
+    if (a.K < spot && a.K > spot * 0.5 && (!putWall || a.p > putWall.oi)) putWall = { K: a.K, oi: a.p };
+  });
+  const d30 = days(e30);
+  return {
+    spot, pcrOI: cO > 0 ? pO / cO : NaN, pcrVol: cV > 0 ? pV / cV : NaN, callOI: cO, putOI: pO,
+    main: pack(mainE), near: pack(nearE), atmIV, skew, ivDays: d30,
+    move30: atmIV === atmIV ? atmIV / 100 * Math.sqrt(30 / 365) : NaN, move7: atmIV === atmIV ? atmIV / 100 * Math.sqrt(7 / 365) : NaN,
+    callWall, putWall,
+    expiries: exps.slice(0, 8).map(e => ({ exp: e.exp, days: days(e), oi: e.callOI + e.putOI }))
+  };
+}
+
+/* ---------- liquidation precursors (futures OI / funding / positioning) ---------- */
+function pctRank(arr, v) { const a = arr.filter(x => x === x); if (a.length < 20 || v !== v) return NaN; return a.filter(x => x < v).length / a.length; }
+function analyzeLiq(inp, d, price) {
+  // inp: { oi:[{t,oi,px}], fundDaily: Float64Array aligned to d, fundNow, ls:[{t,r}], top:[{t,r}] }
+  const out = { ok: false, flags: [] };
+  const n = d.c.length;
+  const f7 = inp.fundDaily ? sma(inp.fundDaily, 7) : null;
+  if (f7) {
+    const cur = f7[n - 1]; out.fund7 = cur; out.fundPct = pctRank(Array.from(f7.slice(Math.max(0, n - 365))), cur);
+  }
+  out.fundNow = inp.fundNow;
+  const oi = (inp.oi || []).slice().sort((a, b) => a.t - b.t);
+  if (oi.length >= 12) {
+    const lastO = oi[oi.length - 1], at = ms => { let b = oi[0]; for (const x of oi) { if (x.t <= lastO.t - ms) b = x; else break; } return b; };
+    out.oiNow = lastO.oi; out.oiVal = lastO.oi * lastO.px;
+    out.oi1 = lastO.oi / at(864e5).oi - 1; out.oi3 = lastO.oi / at(3 * 864e5).oi - 1; out.oi7 = lastO.oi / at(7 * 864e5).oi - 1;
+    out.px7 = lastO.px / at(7 * 864e5).px - 1; out.px1 = lastO.px / at(864e5).px - 1;
+    out.oiPct = pctRank(oi.map(x => x.oi), lastO.oi);
+    out.oiSeries = oi;
+    // estimated liquidation clusters
+    const LEV = [[10, 0.35], [25, 0.35], [50, 0.2], [100, 0.1]], bw = 0.005, bins = new Map();
+    const put = (p, w, side) => { const key = Math.round(Math.log(p) / bw); const k = side + key; const o = bins.get(k) || { p: Math.exp(key * bw), w: 0, side }; o.w += w; bins.set(k, o); };
+    const k0 = Math.max(0, n - 60);
+    const dayExt = ts => { let mn = Infinity, mx = -Infinity; for (let k = k0; k < n; k++) if (d.t[k] + 864e5 > ts) { mn = Math.min(mn, d.l[k]); mx = Math.max(mx, d.h[k]); } return [mn, mx]; };
+    const sufMin = new Float64Array(oi.length + 1).fill(Infinity), sufMax = new Float64Array(oi.length + 1).fill(-Infinity);
+    for (let i = oi.length - 1; i >= 0; i--) { sufMin[i] = Math.min(sufMin[i + 1], oi[i].px); sufMax[i] = Math.max(sufMax[i + 1], oi[i].px); }
+    for (let i = 1; i < oi.length; i++) {
+      const dO = oi[i].oi - oi[i - 1].oi; if (dO <= 0) continue;
+      const ex = dayExt(oi[i].t + 864e5);
+      const mn = Math.min(sufMin[i + 1], ex[0], price), mx = Math.max(sufMax[i + 1], ex[1], price);
+      LEV.forEach(([lv, w]) => {
+        const lp = oi[i].px * (1 - 1 / lv + 0.005), sp = oi[i].px * (1 + 1 / lv - 0.005);
+        if (lp < mn) put(lp, dO * w, 'L'); if (sp > mx) put(sp, dO * w, 'S');
+      });
+    }
+    const all = [...bins.values()], tot = all.reduce((a, b) => a + b.w, 0) || 1;
+    const below = all.filter(x => x.side === 'L' && x.p < price && x.p > price * 0.8).sort((a, b) => b.w - a.w).slice(0, 4).map(x => ({ p: x.p, share: x.w / tot, dist: x.p / price - 1 }));
+    const above = all.filter(x => x.side === 'S' && x.p > price && x.p < price * 1.2).sort((a, b) => b.w - a.w).slice(0, 4).map(x => ({ p: x.p, share: x.w / tot, dist: x.p / price - 1 }));
+    const sum = (side, lo, hi) => all.filter(x => x.side === side && x.p > price * lo && x.p < price * hi).reduce((a, b) => a + b.w, 0);
+    out.clusters = { below, above, near5L: sum('L', 0.95, 1), near5S: sum('S', 1, 1.05), all: all.filter(x => x.p > price * 0.8 && x.p < price * 1.2).map(x => ({ p: x.p, w: x.w / tot, side: x.side })) };
+  }
+  const ls = (inp.ls || []).slice().sort((a, b) => a.t - b.t);
+  if (ls.length) { out.ls = ls[ls.length - 1].r; out.lsPct = pctRank(ls.map(x => x.r), out.ls); }
+  const top = (inp.top || []).slice().sort((a, b) => a.t - b.t);
+  if (top.length) out.top = top[top.length - 1].r;
+  // composite risks 0-100
+  const fp = out.fundPct === out.fundPct ? out.fundPct : 0.5, oz = out.oi7 === out.oi7 ? clamp(out.oi7 / 0.15, -1, 1) : 0, lp = out.lsPct === out.lsPct ? out.lsPct : 0.5;
+  const fAbs = out.fund7 === out.fund7 ? clamp(out.fund7 / 0.0003, -1, 1) : 0; // 0.03%/8h = clearly crowded
+  out.longRisk = Math.round(100 * clamp(0.3 * Math.max(0, (fp - 0.5) * 2) + 0.2 * Math.max(0, fAbs) + 0.3 * Math.max(0, oz) + 0.2 * lp, 0, 1));
+  out.shortRisk = Math.round(100 * clamp(0.3 * Math.max(0, (0.5 - fp) * 2) + 0.2 * Math.max(0, -fAbs) + 0.3 * Math.max(0, oz) + 0.2 * (1 - lp), 0, 1));
+  out.flush = out.oi3 === out.oi3 && (out.oi1 <= -0.07 || out.oi3 <= -0.12);
+  out.ok = out.oiNow > 0 || out.fund7 === out.fund7;
+  const lvl = r => r >= 65 ? '警戒' : r >= 45 ? '注意' : '平常';
+  out.longLevel = lvl(out.longRisk); out.shortLevel = lvl(out.shortRisk);
+  return out;
+}
+
+/* ---------- events ---------- */
+function lastFriday(y, m) { const dt = new Date(Date.UTC(y, m + 1, 0, 8)); while (dt.getUTCDay() !== 5) dt.setUTCDate(dt.getUTCDate() - 1); return dt.getTime(); }
+function autoExpiries(now, months) {
+  const o = [], d0 = new Date(now);
+  for (let k = 0; k < months; k++) {
+    const y = d0.getUTCFullYear() + Math.floor((d0.getUTCMonth() + k) / 12), m = (d0.getUTCMonth() + k) % 12, t = lastFriday(y, m);
+    if (t > now - 864e5) { const q = m % 3 === 2; o.push({ t, title: q ? 'BTCオプション四半期満期（Deribit）' : 'BTCオプション月次満期（Deribit）', kind: 'expiry', impact: q ? 3 : 2, auto: true }); }
+  }
+  return o;
+}
+
+/* ---------- top level ---------- */
+function run(d, ex) {
+  const { F, ind } = buildFactors(d, ex);
+  const res = { ind, hz: {} };
+  HORIZONS.forEach(h => {
+    const sc = scoreHorizon(d, F, h.d);
+    res.hz[h.k] = { sc, ev: evaluate(d, sc), sim: simulate(d, sc), fc: forecast(d, sc), pct: sc.pct[d.c.length - 1], verdict: verdictOf(sc.pct[d.c.length - 1]) };
+  });
+  return res;
+}
+
+g.Engine = { HORIZONS, TH, CATS, VERDICT, verdictOf, run, entryZones, analyzeOptions, analyzeLiq, autoExpiries, volumeProfile, sma, ema, rsi, rollStd, rollExt, quantile, clamp, parseInstr, summarize };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(function () {
+'use strict';
+const E = window.Engine, DAY = 864e5;
+const $ = s => document.querySelector(s);
+const LS = {
+  get(k, def) { try { const v = localStorage.getItem('shiome.' + k); return v ? JSON.parse(v) : def; } catch (e) { return def; } },
+  set(k, v) { try { localStorage.setItem('shiome.' + k, JSON.stringify(v)); } catch (e) { /* 容量超過などは無視 */ } },
+  del(k) { try { localStorage.removeItem('shiome.' + k); } catch (e) { /* noop */ } }
+};
+const S = { sel: 'm', range: 365, tab: 'judge', status: {}, cfg: LS.get('cfg', { src: 'auto', tdKey: '' }), stocks: {}, loading: false };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ok = x => x != null && x === x && isFinite(x);
+const usd = x => ok(x) ? '$' + Math.round(x).toLocaleString('en-US') : '—';
+const usd2 = x => ok(x) ? '$' + x.toFixed(2) : '—';
+const kfmt = v => v >= 1e5 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0);
+const pc = (x, dg, sign) => { if (!ok(x)) return '—'; let t = (x * 100).toFixed(dg == null ? 1 : dg); if (+t === 0) t = t.replace('-', ''); return (sign !== false && +t > 0 ? '+' : '') + t + '%'; };
+const dkey = t => new Date(t).toISOString().slice(0, 10);
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+const md = t => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate(); };
+const ymd = t => { const d = new Date(t); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate(); };
+const mdw = t => { const d = new Date(t); return md(t) + '（' + WD[d.getDay()] + '）'; };
+const hm = t => { const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const ORDER = ['avoid', 'wait', 'try', 'buy'];
+
+async function jget(url, ms) {
+  const c = new AbortController(), id = setTimeout(() => c.abort(), ms || 15000);
+  try { const r = await fetch(url, { signal: c.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+  finally { clearTimeout(id); }
+}
+async function tget(url, ms) {
+  const c = new AbortController(), id = setTimeout(() => c.abort(), ms || 20000);
+  try { const r = await fetch(url, { signal: c.signal, cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.text(); }
+  finally { clearTimeout(id); }
+}
+
+/* ================= data loaders ================= */
+const SRCNAME = { binance: 'Binance（BTC/USDT 現物）', bitstamp: 'Bitstamp（BTC/USD）', kraken: 'Kraken（BTC/USD）' };
+const LOADERS = {
+  async binance(cached) {
+    let rows = cached ? cached.slice(0, -1) : [];
+    let start = rows.length ? rows[rows.length - 1][0] + DAY : Date.UTC(2017, 7, 17);
+    let lastErr;
+    for (const host of ['https://data-api.binance.vision', 'https://api.binance.com']) {
+      try {
+        const add = []; let st = start;
+        for (let i = 0; i < 8; i++) {
+          const k = await jget(host + '/api/v3/klines?symbol=BTCUSDT&interval=1d&startTime=' + st + '&limit=1000');
+          if (!Array.isArray(k)) throw new Error('形式が違います');
+          k.forEach(x => add.push([+x[0], +x[1], +x[2], +x[3], +x[4], +x[5]]));
+          if (k.length < 1000) break; st = +k[k.length - 1][0] + DAY;
+        }
+        return rows.concat(add);
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  },
+  async bitstamp() {
+    const txt = await tget('https://raw.githubusercontent.com/rcaljouw/btc-price-history/main/data/btc-usd-daily.csv');
+    const rows = [];
+    txt.trim().split('\n').slice(1).forEach(l => { const p = l.split(','); if (p[0] >= '2014-01-01' && +p[4] > 0) rows.push([Date.parse(p[0] + 'T00:00:00Z'), +p[1], +p[2], +p[3], +p[4], +p[5]]); });
+    return rows;
+  },
+  async kraken() {
+    const j = await jget('https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1440');
+    const key = Object.keys(j.result || {}).find(k => k !== 'last'); if (!key) throw new Error('形式が違います');
+    return j.result[key].map(x => [x[0] * 1000, +x[1], +x[2], +x[3], +x[4], +x[6]]);
+  }
+};
+async function loadDaily() {
+  const cache = LS.get('daily', null), pref = S.cfg.src;
+  const order = pref === 'bitstamp' ? ['bitstamp', 'binance', 'kraken'] : pref === 'binance' ? ['binance', 'bitstamp', 'kraken'] : ['binance', 'bitstamp', 'kraken'];
+  const errs = [];
+  for (const src of order) {
+    try {
+      const fresh = src === 'bitstamp' && cache && cache.src === src && Date.now() - cache.at < 36e5;
+      const rows = fresh ? cache.rows : await LOADERS[src](cache && cache.src === src ? cache.rows : null);
+      if (rows && rows.length > 300) {
+        if (!fresh) LS.set('daily', { src, rows, at: Date.now() });
+        S.status.price = { ok: true, name: '価格・出来高', note: SRCNAME[src] + '、' + rows.length + '日分' + (errs.length ? '（' + errs.join('、') + ' は取得できず切り替え）' : '') };
+        return { src, rows };
+      }
+      errs.push(SRCNAME[src]);
+    } catch (e) { errs.push(SRCNAME[src]); }
+  }
+  if (cache) { S.status.price = { ok: false, name: '価格・出来高', note: '取得できません。' + ymd(cache.at) + ' に保存したデータを表示中' }; return cache; }
+  throw new Error('価格データを取得できません。通信環境を確認して、右上の更新ボタンを押してください。');
+}
+const DB = 'https://www.deribit.com/api/v2/public/';
+async function loadOptions() {
+  const [bs, ix] = await Promise.all([jget(DB + 'get_book_summary_by_currency?currency=BTC&kind=option', 20000), jget(DB + 'get_index_price?index_name=btc_usd')]);
+  if (!bs.result || !bs.result.length) throw new Error('empty');
+  return { list: bs.result, spot: ix.result.index_price };
+}
+async function loadDvol() {
+  const c = LS.get('dvol', {}), keys = Object.keys(c).sort();
+  const start = keys.length ? Date.parse(keys[keys.length - 1]) - 2 * DAY : Date.UTC(2021, 2, 1);
+  let end = Date.now();
+  for (let i = 0; i < 8; i++) {
+    const j = await jget(DB + 'get_volatility_index_data?currency=BTC&start_timestamp=' + start + '&end_timestamp=' + end + '&resolution=1D');
+    const r = j.result || {}, data = r.data || [];
+    data.forEach(x => { c[dkey(x[0])] = +x[4]; });
+    if (!r.continuation || !data.length || r.continuation <= start) break; end = r.continuation;
+  }
+  LS.set('dvol', c); return c;
+}
+const FB = 'https://fapi.binance.com';
+async function loadFunding() {
+  const c = LS.get('fund', { last: 0, days: {} });
+  let start = c.last ? c.last + 1 : Date.UTC(2019, 8, 1);
+  for (let i = 0; i < 12; i++) {
+    const a = await jget(FB + '/fapi/v1/fundingRate?symbol=BTCUSDT&startTime=' + start + '&limit=1000');
+    if (!Array.isArray(a) || !a.length) break;
+    a.forEach(x => { const k = dkey(+x.fundingTime), o = c.days[k] || (c.days[k] = [0, 0]); o[0] += +x.fundingRate; o[1]++; c.last = Math.max(c.last, +x.fundingTime); });
+    if (a.length < 1000) break; start = c.last + 1;
+  }
+  LS.set('fund', c); return c;
+}
+async function loadFutures() {
+  const q = '?symbol=BTCUSDT&period=4h&limit=180';
+  const r = await Promise.allSettled([
+    jget(FB + '/fapi/v1/premiumIndex?symbol=BTCUSDT'), jget(FB + '/futures/data/openInterestHist' + q),
+    jget(FB + '/futures/data/globalLongShortAccountRatio' + q), jget(FB + '/futures/data/topLongShortPositionRatio' + q)
+  ]);
+  const val = i => r[i].status === 'fulfilled' ? r[i].value : null, out = {};
+  if (val(0) && val(0).lastFundingRate != null) { out.fundNow = +val(0).lastFundingRate; out.mark = +val(0).markPrice; }
+  if (Array.isArray(val(1))) out.oi = val(1).map(x => ({ t: +x.timestamp, oi: +x.sumOpenInterest, px: +x.sumOpenInterestValue / +x.sumOpenInterest })).filter(x => x.oi > 0 && x.px > 0);
+  if (Array.isArray(val(2))) out.ls = val(2).map(x => ({ t: +x.timestamp, r: +x.longShortRatio }));
+  if (Array.isArray(val(3))) out.top = val(3).map(x => ({ t: +x.timestamp, r: +x.longShortRatio }));
+  if (!out.oi && out.fundNow == null) throw new Error('empty');
+  return out;
+}
+async function loadDeribitPerp() {
+  const j = await jget(DB + 'get_book_summary_by_currency?currency=BTC&kind=future');
+  const p = (j.result || []).find(x => x.instrument_name === 'BTC-PERPETUAL'); if (!p) throw new Error('empty');
+  return { fundNow: +p.funding_8h, mark: +p.mark_price };
+}
+async function loadStockRepo() {
+  const txt = await tget('data/stocks.json?t=' + Math.floor(Date.now() / 6e5), 15000);
+  const j = JSON.parse(txt); if (!j || !j.symbols) throw new Error('empty');
+  return j;
+}
+async function loadStock(sym) {
+  const today = dkey(Date.now()), c = LS.get('stk.' + sym, null);
+  if (c && c.day === today && c.key === S.cfg.tdKey) return c.vals;
+  const j = await jget('https://api.twelvedata.com/time_series?symbol=' + sym + '&interval=1day&outputsize=1500&apikey=' + encodeURIComponent(S.cfg.tdKey), 20000);
+  if (j.status === 'error' || !Array.isArray(j.values)) throw new Error(j.message || '取得できません');
+  const vals = j.values.map(x => [x.datetime.slice(0, 10), +x.close]).filter(x => x[1] > 0).sort((a, b) => a[0] < b[0] ? -1 : 1);
+  LS.set('stk.' + sym, { day: today, key: S.cfg.tdKey, vals }); return vals;
+}
+
+/* ================= events ================= */
+const U = (y, m, d, h, mi) => Date.UTC(y, m - 1, d, h, mi || 0);
+const BUILTIN = [
+  [U(2026, 12, 4, 13, 30), '米雇用統計（11月分）', 3], [U(2026, 12, 9, 19), 'FOMC 政策金利発表', 3], [U(2026, 12, 10, 13, 30), '米CPI（11月分）', 3],
+  [U(2027, 1, 8, 13, 30), '米雇用統計（12月分）', 3], [U(2027, 1, 13, 13, 30), '米CPI（12月分）', 3], [U(2027, 1, 27, 19), 'FOMC 政策金利発表', 3],
+  [U(2027, 2, 5, 13, 30), '米雇用統計（1月分）', 3], [U(2027, 2, 11, 13, 30), '米CPI（1月分）', 3],
+  [U(2027, 3, 5, 13, 30), '米雇用統計（2月分）', 3], [U(2027, 3, 10, 13, 30), '米CPI（2月分）', 3], [U(2027, 3, 17, 18), 'FOMC 政策金利発表', 3],
+  [U(2027, 4, 2, 12, 30), '米雇用統計（3月分）', 3], [U(2027, 4, 13, 12, 30), '米CPI（3月分）', 3], [U(2027, 4, 28, 18), 'FOMC 政策金利発表', 3],
+  [U(2027, 5, 12, 12, 30), '米CPI（4月分）', 3], [U(2027, 6, 9, 18), 'FOMC 政策金利発表', 3], [U(2027, 6, 10, 12, 30), '米CPI（5月分）', 3],
+  [U(2027, 7, 2, 12, 30), '米雇用統計（6月分）', 3], [U(2027, 7, 14, 12, 30), '米CPI（6月分）', 3], [U(2027, 7, 28, 18), 'FOMC 政策金利発表', 3],
+  [U(2027, 9, 14, 12, 30), '米CPI（8月分）', 3], [U(2027, 9, 15, 18), 'FOMC 政策金利発表', 3], [U(2027, 11, 17, 19), 'FOMC 政策金利発表', 3],
+  [U(2027, 12, 3, 13, 30), '米雇用統計（11月分）', 3], [U(2027, 12, 10, 13, 30), '米CPI（11月分）', 3]
+].map(x => ({ t: x[0], title: x[1], impact: x[2], kind: 'macro' }));
+function allEvents() {
+  const now = Date.now(), custom = LS.get('events', []).map((e, i) => Object.assign({ custom: true, idx: i }, e));
+  return BUILTIN.concat(E.autoExpiries(now, 4), custom).filter(e => e.t > now - 6 * 36e5).sort((a, b) => a.t - b.t);
+}
+
+/* ================= compute ================= */
+function setData(rows, src) {
+  const now = Date.now(), done = rows.filter(r => r[0] + DAY <= now), live = rows.length && rows[rows.length - 1][0] + DAY > now ? rows[rows.length - 1] : null;
+  const n = done.length, d = { t: new Float64Array(n), o: new Float64Array(n), h: new Float64Array(n), l: new Float64Array(n), c: new Float64Array(n), v: new Float64Array(n) };
+  done.forEach((r, i) => { d.t[i] = r[0]; d.o[i] = r[1]; d.h[i] = r[2]; d.l[i] = r[3]; d.c[i] = r[4]; d.v[i] = r[5]; });
+  S.d = d; S.src = src; S.liveRow = live;
+  S.stale = n ? (now - (d.t[n - 1] + DAY)) / DAY : 99;
+}
+function alignMap(getter) { const d = S.d, a = new Float64Array(d.c.length).fill(NaN); for (let i = 0; i < a.length; i++) { const v = getter(dkey(d.t[i])); if (ok(v)) a[i] = v; } return a; }
+
+function compute() {
+  const d = S.d; if (!d || d.c.length < 300) return;
+  const n = d.c.length, now = Date.now();
+  const ex = {
+    dvol: S.dvol ? alignMap(k => S.dvol[k]) : null,
+    fund: S.fund ? alignMap(k => { const o = S.fund.days[k]; return o && o[1] ? o[0] / o[1] : NaN; }) : null
+  };
+  S.R = E.run(d, ex);
+  S.price = (S.optRaw && S.optRaw.spot) || (S.fut && S.fut.mark) || (S.liveRow && S.liveRow[4]) || d.c[n - 1];
+  S.opt = S.optRaw ? E.analyzeOptions(S.optRaw.list, S.optRaw.spot || S.price, now) : null;
+  if (S.opt && S.dvol) { const ks = Object.keys(S.dvol).sort(), last = ks[ks.length - 1]; S.opt.dvol = S.dvol[last]; const yr = ks.slice(-365).map(k => S.dvol[k]); S.opt.dvolPct = yr.filter(x => x < S.opt.dvol).length / yr.length; }
+  S.liq = E.analyzeLiq({ oi: S.fut && S.fut.oi, fundDaily: ex.fund, fundNow: S.fut ? S.fut.fundNow : NaN, ls: S.fut && S.fut.ls, top: S.fut && S.fut.top }, d, S.price);
+  S.zones = E.entryZones(d, S.R.ind, S.price, S.opt, S.liq);
+  S.events = allEvents();
+  decide(); computeStocks(); writeLog();
+}
+
+function decide() {
+  const now = Date.now(), flags = [], liq = S.liq, opt = S.opt, price = S.price;
+  const big = S.events.find(e => e.impact >= 3 && e.t > now), hrs = big ? (big.t - now) / 36e5 : Infinity;
+  const ev48 = hrs <= 48;
+  if (big && hrs <= 48) flags.push({ lv: 'warn', src: 'イベント', text: big.title + ' まであと' + (hrs < 1 ? '1時間以内' : Math.round(hrs) + '時間') + '。発表の前後は値が飛びやすいため、短期の判定を一段階下げています。' });
+  else if (big && hrs <= 24 * 7) flags.push({ lv: 'info', src: 'イベント', text: mdw(big.t) + ' ' + hm(big.t) + ' に ' + big.title + '。その前に全額を入れない前提で。' });
+  if (liq && liq.ok) {
+    if (liq.flush) flags.push({ lv: 'good', src: '清算', text: '建玉が急減しました（24時間 ' + pc(liq.oi1) + '、3日 ' + pc(liq.oi3) + '）。レバレッジの整理が進んだ直後です。' });
+    if (liq.longRisk >= 65) flags.push({ lv: 'warn', src: '清算', text: 'ロングの清算リスクが高い状態（' + liq.longRisk + '/100）。買いが積み上がっており、下げ始めると連鎖しやすいため、短期・中期の判定を一段階下げています。' });
+    else if (liq.longRisk >= 45) flags.push({ lv: 'info', src: '清算', text: 'ロングがやや積み上がっています（清算リスク ' + liq.longRisk + '/100）。' });
+    if (liq.shortRisk >= 65) flags.push({ lv: 'info', src: '清算', text: 'ショートが積み上がっています（踏み上げリスク ' + liq.shortRisk + '/100）。上に動くと買い戻しで加速しやすい形です。' });
+    const cb = liq.clusters && liq.clusters.below[0];
+    if (cb && cb.dist > -0.06) flags.push({ lv: 'info', src: '清算', text: '下 ' + pc(cb.dist) + '（' + usd(cb.p) + ' 付近）にロング清算の集中帯（推定）。そこまで下ヒゲが伸びる展開に注意。' });
+  }
+  if (opt) {
+    if (ok(opt.skew) && opt.skew >= 8) flags.push({ lv: 'info', src: 'オプション', text: 'プットが割高です（スキュー ' + opt.skew.toFixed(1) + 'pt）。オプション市場は下落への備えを強めています。' });
+    if (ok(opt.skew) && opt.skew <= -5) flags.push({ lv: 'info', src: 'オプション', text: 'コールが割高です（スキュー ' + opt.skew.toFixed(1) + 'pt）。上昇期待が先行しています。' });
+    const nr = opt.near;
+    if (nr && nr.days <= 5 && ok(nr.maxPain) && Math.abs(nr.maxPain / price - 1) >= 0.03) flags.push({ lv: 'info', src: 'オプション', text: md(nr.exp) + ' 満期のマックスペインは ' + usd(nr.maxPain) + '（現値比 ' + pc(nr.maxPain / price - 1) + '）。満期までその方向に寄りやすいとされます。' });
+    if (opt.callWall && opt.callWall.K / price - 1 <= 0.05) flags.push({ lv: 'info', src: 'オプション', text: '上 ' + pc(opt.callWall.K / price - 1) + ' の ' + usd(opt.callWall.K) + ' にコール建玉の壁。上値が重くなりやすい水準です。' });
+  }
+  S.act = {};
+  E.HORIZONS.forEach(h => {
+    const z = S.R.hz[h.k]; let a = z.verdict; const why = [];
+    const down = r => { const i = ORDER.indexOf(a); if (i >= 2) { a = ORDER[i - 1]; why.push(r); } };
+    if (a !== 'na') {
+      if (z.ev.status === 'bad' && ORDER.indexOf(a) >= 2) { a = 'wait'; why.push('検証で優位性を確認できず'); }
+      if (h.k === 's' && ev48) down('重要イベント前');
+      if ((h.k === 's' || h.k === 'm') && liq && liq.ok && liq.longRisk >= 65) down('ロング清算リスク高');
+    }
+    S.act[h.k] = { a, why, raw: z.verdict };
+  });
+  if (S.stale > 2.5) flags.unshift({ lv: 'warn', src: 'データ', text: '価格データが ' + Math.floor(S.stale) + ' 日前で止まっています。判定は最新ではありません。' });
+  S.flags = flags; S.ev48 = ev48;
+}
+
+/* ---------- live log (forward verification) ---------- */
+function writeLog() {
+  const d = S.d, n = d.c.length, key = dkey(d.t[n - 1]), log = LS.get('log', []);
+  if (log.some(x => x.k === key)) return;
+  const liq = S.liq || {}, opt = S.opt || {};
+  log.push({ k: key, t: d.t[n - 1], px: d.c[n - 1], pct: { s: Math.round(S.R.hz.s.pct), m: Math.round(S.R.hz.m.pct), l: Math.round(S.R.hz.l.pct) }, act: { s: S.act.s.a, m: S.act.m.a, l: S.act.l.a }, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, ev: !!S.ev48 });
+  LS.set('log', log.slice(-900));
+}
+function evalLog() {
+  const d = S.d, log = LS.get('log', []), idx = new Map(); for (let i = 0; i < d.t.length; i++) idx.set(dkey(d.t[i]), i);
+  const res = { n: log.length, first: log.length ? log[0].t : null, hz: {}, risk: null };
+  E.HORIZONS.forEach(h => {
+    let buyN = 0, buyHit = 0, avN = 0, avHit = 0, pend = 0;
+    log.forEach(x => { const i = idx.get(x.k); if (i == null) return; const j = i + h.d; if (j >= d.c.length) { pend++; return; } const r = d.c[j] / d.c[i] - 1, a = x.act[h.k]; if (a === 'buy' || a === 'try') { buyN++; if (r > 0) buyHit++; } else if (a === 'avoid') { avN++; if (r < 0) avHit++; } });
+    res.hz[h.k] = { buyN, buyHit, avN, avHit, pend };
+  });
+  const hi = [], lo = [];
+  log.forEach(x => { const i = idx.get(x.k); if (i == null || x.lr == null || i + 7 >= d.c.length) return; (x.lr >= 65 ? hi : lo).push(d.c[i + 7] / d.c[i] - 1); });
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  if (hi.length >= 5 && lo.length >= 5) res.risk = { hiN: hi.length, hi: mean(hi), loN: lo.length, lo: mean(lo) };
+  return res;
+}
+
+/* ---------- stocks ---------- */
+function computeStocks() {
+  const d = S.d, idx = new Map(); for (let i = 0; i < d.t.length; i++) idx.set(dkey(d.t[i]), i);
+  ['MSTR', 'COIN'].forEach(sym => {
+    const st = S.stocks[sym]; if (!st || !st.vals) return;
+    const v = st.vals.filter(x => idx.has(x[0])), m = v.length; if (m < 120) { st.an = null; return; }
+    const sc = Float64Array.from(v, x => x[1]), bi = v.map(x => idx.get(x[0]));
+    const rs = [], rb = [];
+    for (let i = Math.max(1, m - 90); i < m; i++) { rs.push(Math.log(sc[i] / sc[i - 1])); rb.push(Math.log(d.c[bi[i]] / d.c[bi[i - 1]])); }
+    const mu = a => a.reduce((s, x) => s + x, 0) / a.length, ms = mu(rs), mb = mu(rb);
+    let cov = 0, vb = 0, vs = 0; for (let i = 0; i < rs.length; i++) { cov += (rs[i] - ms) * (rb[i] - mb); vb += (rb[i] - mb) ** 2; vs += (rs[i] - ms) ** 2; }
+    const beta = cov / vb, corr = cov / Math.sqrt(vb * vs);
+    const ratio = []; for (let i = Math.max(0, m - 90); i < m; i++) ratio.push(Math.log(sc[i] / d.c[bi[i]]));
+    const rm = mu(ratio), rsd = Math.sqrt(mu(ratio.map(x => (x - rm) ** 2))), rz = rsd > 0 ? (ratio[ratio.length - 1] - rm) / rsd : NaN;
+    const r14 = E.rsi(sc, 14), s50 = E.sma(sc, 50), s200 = E.sma(sc, 200);
+    const bt = {};
+    E.HORIZONS.forEach(h => {
+      const td = Math.round(h.d * 252 / 365), pctA = S.R.hz[h.k].sc.pct, all = [], sig = [], av = [];
+      for (let i = 0; i + td < m; i++) { const p = pctA[bi[i] - 1]; if (!ok(p)) continue; const r = sc[i + td] / sc[i] - 1; all.push(r); if (p >= E.TH.try_) sig.push(r); else if (p < E.TH.wait) av.push(r); }
+      bt[h.k] = { td, all: E.summarize(all), sig: E.summarize(sig), avoid: E.summarize(av) };
+    });
+    st.an = { px: sc[m - 1], date: v[m - 1][0], chg: sc[m - 1] / sc[m - 2] - 1, beta, corr, rz, rsi: r14[m - 1], s50: s50[m - 1], s200: s200[m - 1], bt, btcAt: d.c[bi[m - 1]] };
+  });
+}
+
+/* ================= refresh ================= */
+async function refreshAll() {
+  if (S.loading) return; S.loading = true; S.fatal = null; renderTop();
+  try { const dd = await loadDaily(); setData(dd.rows, dd.src); } catch (e) { if (!S.d) S.fatal = e.message; }
+  const mark = (k, name, p, okNote, ngNote) => p.then(v => { S.status[k] = { ok: true, name, note: typeof okNote === 'function' ? okNote(v) : okNote }; return v; }, () => { S.status[k] = { ok: false, name, note: ngNote }; return null; });
+  const tasks = [
+    mark('opt', 'オプション', loadOptions(), v => 'Deribit、' + v.list.length + '銘柄', 'Deribit から取得できません。オプション関連は非表示です').then(v => { if (v) S.optRaw = v; }),
+    mark('dvol', 'インプライドボラ履歴', loadDvol(), v => 'Deribit DVOL、' + Object.keys(v).length + '日分', '取得できません。オプション要因はスコアから外れます').then(v => { if (v) S.dvol = v; else S.dvol = Object.keys(LS.get('dvol', {})).length ? LS.get('dvol', {}) : null; }),
+    mark('fund', '資金調達率の履歴', loadFunding(), v => 'Binance先物、' + Object.keys(v.days).length + '日分', '取得できません。建玉要因はスコアから外れます').then(v => { if (v) S.fund = v; else { const c = LS.get('fund', null); S.fund = c && c.last ? c : null; } }),
+    mark('fut', '建玉・ロングショート比', loadFutures(), v => 'Binance先物' + (v.oi ? '、直近30日' : '（建玉履歴なし）'), '').then(async v => {
+      if (v) { S.fut = v; return; }
+      try { S.fut = await loadDeribitPerp(); S.status.fut = { ok: false, name: '建玉・ロングショート比', note: 'Binance先物に接続できません。Deribitの資金調達率のみ表示（清算の集中帯は推定不可）' }; }
+      catch (e) { S.status.fut = { ok: false, name: '建玉・ロングショート比', note: '取得できません。清算の予兆は表示できません' }; }
+    })
+  ];
+  tasks.push((async () => {
+    let repo = null; try { repo = await loadStockRepo(); } catch (e) { /* リポジトリ版がない */ }
+    for (const sym of ['MSTR', 'COIN']) {
+      const v = repo && repo.symbols[sym];
+      if (v && v.length > 120) { S.stocks[sym] = { vals: v }; S.stkSrc = '毎日自動取得（' + (repo.source || 'Yahoo Finance') + '、' + String(repo.updated || '').slice(0, 10) + ' 更新）'; continue; }
+      if (S.cfg.tdKey) { try { S.stocks[sym] = { vals: await loadStock(sym) }; S.stkSrc = 'Twelve Data'; } catch (e) { S.stocks[sym] = { err: e.message }; } }
+      else S.stocks[sym] = { err: '株価データがまだ用意されていません（毎日の自動取得を待っています）' };
+    }
+  })());
+  await Promise.allSettled(tasks);
+  { const er = ['MSTR', 'COIN'].filter(s => S.stocks[s] && S.stocks[s].err); S.status.stk = { ok: !er.length, name: '関連株（MSTR・COIN）', note: er.length ? er.join('・') + '：' + S.stocks[er[0]].err : S.stkSrc }; }
+  try { compute(); } catch (e) { S.fatal = '計算中にエラーが起きました：' + e.message; }
+  S.loading = false; S.at = Date.now(); render();
+}
+
+/* ================= charts ================= */
+const path = pts => pts.length ? 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L') : '';
+function logTicks(lo, hi, k) {
+  const out = [], a = Math.log(lo), b = Math.log(hi);
+  for (let i = 0; i < k; i++) { let v = Math.exp(a + (b - a) * (i + 0.5) / k); const mag = Math.pow(10, Math.floor(Math.log10(v)) - 1); v = Math.round(v / mag) * mag; if (!out.includes(v)) out.push(v); }
+  return out;
+}
+function priceChart() {
+  const d = S.d, n = d.c.length, N = Math.min(S.range, n), a = n - N, hz = S.R.hz[S.sel], fc = hz.fc, H = hz.sc.H, ind = S.R.ind, price = S.price;
+  const fut = Math.max(H, Math.round(N * 0.1)), Wd = 360, Hh = 230, pl = 4, pr = 44, pt = 10, pb = 30;
+  let lo = Infinity, hi = -Infinity; for (let i = a; i < n; i++) { lo = Math.min(lo, d.l[i]); hi = Math.max(hi, d.h[i]); }
+  if (fc) { lo = Math.min(lo, price * (1 + fc.q10)); hi = Math.max(hi, price * (1 + fc.q90)); }
+  const zs = S.zones.below.slice().sort((x, y) => y.strength - x.strength).slice(0, 3).filter(z => z.mid > lo * 0.85);
+  zs.forEach(z => { lo = Math.min(lo, z.lo * 0.99); });
+  lo *= 0.98; hi *= 1.02;
+  const sy = v => pt + (Math.log(hi) - Math.log(v)) / (Math.log(hi) - Math.log(lo)) * (Hh - pt - pb), sx = i => pl + (i - a) / (N - 1 + fut) * (Wd - pl - pr);
+  const line = arr => { const p = []; for (let i = a; i < n; i++) if (ok(arr[i])) p.push([sx(i), sy(arr[i])]); return path(p); };
+  let g = '';
+  logTicks(lo, hi, 4).forEach(v => { g += '<line x1="' + pl + '" x2="' + (Wd - pr) + '" y1="' + sy(v).toFixed(1) + '" y2="' + sy(v).toFixed(1) + '" class="grid"/><text x="' + (Wd - pr + 4) + '" y="' + (sy(v) + 3).toFixed(1) + '" class="ax">' + kfmt(v) + '</text>'; });
+  zs.forEach(z => { const y0 = sy(z.hi * 1.004), y1 = sy(z.lo * 0.996); g += '<rect x="' + pl + '" y="' + y0.toFixed(1) + '" width="' + (Wd - pr - pl) + '" height="' + Math.max(2, y1 - y0).toFixed(1) + '" class="zone"/>'; });
+  if (fc) {
+    const x0 = sx(n - 1), x1 = sx(n - 1 + H), y0 = sy(price), P = q => sy(price * (1 + q));
+    g += '<polygon points="' + [x0, y0, x1, P(fc.q90), x1, P(fc.q10)].map(v => v.toFixed(1)).join(' ') + '" class="cone1"/>';
+    g += '<polygon points="' + [x0, y0, x1, P(fc.q75), x1, P(fc.q25)].map(v => v.toFixed(1)).join(' ') + '" class="cone2"/>';
+    g += '<line x1="' + x0.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + P(fc.q50).toFixed(1) + '" class="med"/>';
+    g += '<line x1="' + x0.toFixed(1) + '" x2="' + x0.toFixed(1) + '" y1="' + pt + '" y2="' + (Hh - pb) + '" class="nowl"/>';
+  }
+  g += '<path d="' + line(ind.s200) + '" class="ma200"/><path d="' + line(ind.s50) + '" class="ma50"/><path d="' + line(d.c) + '" class="px"/>';
+  g += '<circle cx="' + sx(n - 1).toFixed(1) + '" cy="' + sy(price).toFixed(1) + '" r="3" class="dot"/>';
+  // signal ribbon
+  const pctA = hz.sc.pct; let run = null; const yb = Hh - pb + 4;
+  const flush = (end) => { if (run && run.v !== 'na') g += '<rect x="' + sx(run.s).toFixed(1) + '" y="' + yb + '" width="' + Math.max(0.6, sx(end) - sx(run.s)).toFixed(1) + '" height="5" class="rb-' + run.v + '"/>'; };
+  for (let i = a; i < n; i++) { const v = E.verdictOf(pctA[i]); if (!run || run.v !== v) { flush(i); run = { v, s: i }; } }
+  flush(n - 1);
+  const xl = [[a, ymd(d.t[a])], [n - 1, '現在']]; if (fc) xl.push([n - 1 + H, H + '日後']);
+  xl.forEach((x, k) => { g += '<text x="' + sx(x[0]).toFixed(1) + '" y="' + (Hh - 4) + '" class="ax" text-anchor="' + (k === 0 ? 'start' : k === 1 ? 'end' : 'middle') + '">' + x[1] + '</text>'; });
+  return '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="BTC価格、移動平均、過去の判定、予測レンジ">' + g + '</svg>';
+}
+function equityChart() {
+  const sim = S.R.hz[S.sel].sim, n = sim.T.length; if (n < 10) return '';
+  const Wd = 360, Hh = 170, pl = 4, pr = 44, pt = 8, pb = 18; let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) { lo = Math.min(lo, sim.E[i], sim.B[i]); hi = Math.max(hi, sim.E[i], sim.B[i]); }
+  const sy = v => pt + (Math.log(hi) - Math.log(v)) / (Math.log(hi) - Math.log(lo)) * (Hh - pt - pb), sx = i => pl + i / (n - 1) * (Wd - pl - pr), step = Math.max(1, Math.floor(n / 500));
+  const ln = arr => { const p = []; for (let i = 0; i < n; i += step) p.push([sx(i), sy(arr[i])]); p.push([sx(n - 1), sy(arr[n - 1])]); return path(p); };
+  let g = '';
+  logTicks(lo, hi, 3).forEach(v => { g += '<line x1="' + pl + '" x2="' + (Wd - pr) + '" y1="' + sy(v).toFixed(1) + '" y2="' + sy(v).toFixed(1) + '" class="grid"/><text x="' + (Wd - pr + 4) + '" y="' + (sy(v) + 3).toFixed(1) + '" class="ax">' + (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + '倍</text>'; });
+  g += '<path d="' + ln(sim.B) + '" class="ma200"/><path d="' + ln(sim.E) + '" class="px"/>';
+  g += '<text x="' + pl + '" y="' + (Hh - 3) + '" class="ax">' + ymd(sim.T[0]) + '</text><text x="' + (Wd - pr) + '" y="' + (Hh - 3) + '" class="ax" text-anchor="end">' + ymd(sim.T[n - 1]) + '</text>';
+  return '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="シグナルに従った場合と持ち続けた場合の資産推移">' + g + '</svg>';
+}
+function strikeChart() {
+  const o = S.opt.main, price = S.price, ks = o.strikes.filter(k => k.K > price * 0.65 && k.K < price * 1.45 && (k.c + k.p) > 0); if (ks.length < 3) return '';
+  const Wd = 360, Hh = 180, pl = 4, pr = 4, mid = 84, mx = Math.max(...ks.map(k => Math.max(k.c, k.p))), lo = ks[0].K, hi = ks[ks.length - 1].K;
+  const sx = K => pl + 8 + (K - lo) / (hi - lo) * (Wd - pl - pr - 16), bw = Math.max(2, Math.min(10, (Wd - 24) / ks.length - 1.5));
+  let g = '<line x1="' + pl + '" x2="' + (Wd - pr) + '" y1="' + mid + '" y2="' + mid + '" class="grid"/>';
+  ks.forEach(k => { const x = sx(k.K) - bw / 2; g += '<rect x="' + x.toFixed(1) + '" y="' + (mid - k.c / mx * 70).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (k.c / mx * 70).toFixed(1) + '" class="bar-c"/><rect x="' + x.toFixed(1) + '" y="' + mid + '" width="' + bw.toFixed(1) + '" height="' + (k.p / mx * 70).toFixed(1) + '" class="bar-p"/>'; });
+  const vline = (K, cls, label, up) => { if (K < lo || K > hi) return; const x = sx(K); g += '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="10" y2="158" class="' + cls + '"/><text x="' + x.toFixed(1) + '" y="' + (up ? 8 : 168) + '" class="ax" text-anchor="middle">' + label + '</text>'; };
+  vline(price, 'nowl', '現値', true); vline(o.maxPain, 'med', 'マックスペイン', false);
+  g += '<text x="' + pl + '" y="178" class="ax">' + kfmt(lo) + '</text><text x="' + (Wd - pr) + '" y="178" class="ax" text-anchor="end">' + kfmt(hi) + '</text>';
+  return '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="権利行使価格ごとの建玉。上がコール、下がプット">' + g + '</svg>';
+}
+function clusterChart() {
+  const cl = S.liq.clusters; if (!cl || !cl.all.length) return '';
+  const price = S.price, rows = []; for (let k = -15; k < 15; k++) rows.push({ k, L: 0, S: 0 });
+  cl.all.forEach(x => { const k = Math.floor((x.p / price - 1) * 100); if (k >= -15 && k < 15) rows[k + 15][x.side] += x.w; });
+  const mx = Math.max(...rows.map(r => Math.max(r.L, r.S))) || 1, Wd = 360, rh = 6, Hh = 30 * rh + 16, pl = 60;
+  let g = '';
+  rows.forEach((r, i) => { const y = 8 + (29 - i) * rh, w = (r.k < 0 ? r.L : r.S) / mx * (Wd - pl - 8); if (w > 0.3) g += '<rect x="' + pl + '" y="' + y + '" width="' + w.toFixed(1) + '" height="' + (rh - 1.5) + '" class="' + (r.k < 0 ? 'bar-p' : 'bar-c') + '"/>'; });
+  [-15, -10, -5, 0, 5, 10, 15].forEach(p => { const y = 8 + (15 - p) * rh; g += '<text x="' + (pl - 6) + '" y="' + (y + 3) + '" class="ax" text-anchor="end">' + (p === 0 ? '現値 ' : (p > 0 ? '+' : '') + p + '% ') + kfmt(price * (1 + p / 100)) + '</text>'; if (p === 0) g += '<line x1="' + pl + '" x2="' + (Wd - 4) + '" y1="' + y + '" y2="' + y + '" class="nowl"/>'; });
+  return '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="現値の上下15%にある清算の集中帯の推定">' + g + '</svg>';
+}
+function spark(vals, cls) {
+  const v = vals.filter(ok); if (v.length < 3) return '';
+  const lo = Math.min(...v), hi = Math.max(...v), Wd = 120, Hh = 28, p = v.map((x, i) => [i / (v.length - 1) * Wd, 2 + (hi - x) / ((hi - lo) || 1) * (Hh - 4)]);
+  return '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="spark" aria-hidden="true"><path d="' + path(p) + '" class="' + (cls || 'px') + '"/></svg>';
+}
+
+/* ================= render ================= */
+const railHTML = h => {
+  const z = S.R.hz[h.k], a = S.act[h.k], p = z.pct, fc = z.fc, st = z.ev.status;
+  const sub = !ok(p) ? '履歴が足りず判定できません' : fc ? '同じ水準だった過去 ' + fc.n + ' 日では、' + h.d + '日後に上昇 ' + pc(fc.up, 0, false) + '、中央値 ' + pc(fc.q50) : '';
+  const note = a.why.length ? '<span class="rail-why">スコア上は「' + E.VERDICT[a.raw] + '」ですが引き下げています（' + a.why.join('、') + '）</span>' : '';
+  const warn = st === 'warn' ? '<span class="rail-why">直近2年はこの時間軸のシグナルが平均を下回っています</span>' : st === 'bad' && !a.why.length ? '<span class="rail-why">この時間軸は検証で優位性を確認できていません</span>' : '';
+  return '<button class="rail' + (S.sel === h.k ? ' on' : '') + '" data-h="' + h.k + '" aria-pressed="' + (S.sel === h.k) + '">' +
+    '<span class="rail-head"><span class="rail-name">' + h.name + '<small>' + h.span + '</small></span><span class="rail-verdict v-' + a.a + '">' + E.VERDICT[a.a] + '</span></span>' +
+    '<span class="track"><i class="z za"></i><i class="z zw"></i><i class="z zt"></i><i class="z zb"></i>' + (ok(p) ? '<b class="needle" style="left:' + p.toFixed(1) + '%"><em class="num">' + Math.round(p) + '</em></b>' : '') + '</span>' +
+    '<span class="rail-sub">' + sub + '</span>' + note + warn + '</button>';
+};
+function headline() {
+  const groups = {}; E.HORIZONS.forEach(h => { const a = S.act[h.k].a; (groups[a] = groups[a] || []).push(h.name); });
+  const parts = ['buy', 'try', 'wait', 'avoid', 'na'].filter(k => groups[k]).map(k => groups[k].join('・') + 'は' + E.VERDICT[k]);
+  const best = Math.max(...E.HORIZONS.map(h => ORDER.indexOf(S.act[h.k].a)));
+  const z = S.zones.below.slice().sort((x, y) => y.strength - x.strength)[0], zn = S.zones.below[0];
+  let next = '';
+  if (best >= 3) next = '条件がそろっている時間軸があります。一度に入れず、下の価格帯に分けて指す形が向きます。';
+  else if (best === 2) next = '入るなら少額から。' + (zn ? '最初の候補は ' + usd(zn.mid) + '（' + pc(zn.dist) + '）。' : '');
+  else next = 'いまは待つ局面です。' + (z ? '買い場の候補として見ておくのは ' + usd(z.mid) + '（' + pc(z.dist) + '）付近。' : '');
+  return { title: parts.join('、') + '。', next };
+}
+function viewJudge() {
+  if (!S.R) return '<section class="card"><p class="muted">データを読み込んでいます…</p></section>';
+  const hl = headline(), hz = S.R.hz[S.sel], H = E.HORIZONS.find(h => h.k === S.sel), price = S.price;
+  const lv = { warn: '注意', info: '参考', good: '好材料' };
+  const flags = S.flags.length ? '<ul class="flags">' + S.flags.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
+  const cats = Object.keys(E.CATS).map(k => { const p = hz.sc.catPct[k]; return '<div class="cat"><span>' + E.CATS[k] + '</span><span class="cat-bar">' + (ok(p) ? '<b style="width:' + p.toFixed(0) + '%" class="cb-' + E.verdictOf(p) + '"></b>' : '') + '</span><span class="num">' + (ok(p) ? Math.round(p) : '—') + '</span></div>'; }).join('');
+  const fs = hz.sc.factors.filter(f => f.contrib).sort((x, y) => Math.abs(y.contrib) - Math.abs(x.contrib)).slice(0, 6);
+  const facts = fs.length ? '<ul class="facts">' + fs.map(f => '<li><span class="' + (f.contrib > 0 ? 'up' : 'dn') + '">' + (f.contrib > 0 ? '押し上げ' : '押し下げ') + '</span><span>' + f.label + '</span><span class="num">' + f.text + '</span></li>').join('') + '</ul>' : '';
+  const stockCols = ['MSTR', 'COIN'].filter(s => S.stocks[s] && S.stocks[s].an);
+  const zrow = (z, up) => '<li class="zrow"><div><b class="num">' + (z.hi / z.lo - 1 > 0.002 ? usd(z.lo) + '〜' + usd(z.hi) : usd(z.mid)) + '</b><span class="num dist">' + pc(z.dist) + '</span>' + (!up ? '<span class="str" title="根拠の重なり">' + '●'.repeat(Math.min(4, z.strength)) + '</span>' : '') + '</div><p>' + [...new Set(z.items.map(i => i.label))].join('、') + '</p>' +
+    (!up ? '<p class="sub">割れたら撤退を考える目安 <span class="num">' + usd(z.stop) + '</span>' + stockCols.map(s => { const an = S.stocks[s].an; return '　' + s + ' 換算 <span class="num">' + usd2(an.px * (1 + an.beta * (z.mid / an.btcAt - 1))) + '</span>'; }).join('') + '</p>' : '') + '</li>';
+  const below = S.zones.below.slice(0, 5).map(z => zrow(z, false)).join('') || '<li class="muted">現値より下に目立った節目がありません。</li>';
+  const above = S.zones.above.slice(0, 3).map(z => zrow(z, true)).join('');
+  const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
+  const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
+  const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
+  return '<section class="lead"><h1>' + hl.title + '</h1><p>' + hl.next + '</p></section>' +
+    '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
+    flags +
+    '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
+    '<section class="card"><div class="row"><h2>価格と予測レンジ</h2><div class="seg" role="group" aria-label="表示期間">' + [[90, '3か月'], [365, '1年'], [1460, '4年']].map(r => '<button data-range="' + r[0] + '" aria-pressed="' + (S.range === r[0]) + '">' + r[1] + '</button>').join('') + '</div></div>' + priceChart() +
+    '<p class="keys"><span><i class="k-px"></i>終値</span><span><i class="k-50"></i>50日線</span><span><i class="k-200"></i>200日線</span><span><i class="k-cone"></i>予測の幅（濃い帯は50%、薄い帯は80%）</span><span><i class="k-zone"></i>エントリー候補</span></p><p class="sub">チャート下の帯は、その日に出ていた' + H.name + '判定です。</p></section>' +
+    '<section class="card"><h2>エントリー候補の価格帯</h2><p class="sub">現値 <span class="num">' + usd(price) + '</span> より下で、テクニカル・出来高・オプション・清算の節目が重なる水準です。●が多いほど根拠が重なっています。</p><ul class="zones">' + below + '</ul>' + (above ? '<h3>上値の節目</h3><ul class="zones">' + above + '</ul>' : '') + '</section>' +
+    '<section class="card"><h2>この先の値幅の目安</h2><table class="tbl"><thead><tr><th></th><th>半分が収まった範囲</th><th>中央値</th><th>上昇した割合</th></tr></thead><tbody>' + fcRows + '</tbody></table><p class="sub">いまと同じスコア水準だった過去の日から、その後の値動きを集計したものです。</p>' + im + '</section>' +
+    '<section class="card"><h2>データの取得状況</h2><ul class="stat">' + stat + '</ul><p class="sub">判定に使う日足は ' + ymd(S.d.t[S.d.c.length - 1]) + '（UTC）の確定分まで。開いている間は5分ごとに更新します。</p></section>' +
+    '<p class="disc">過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
+}
+
+function viewVerify() {
+  if (!S.R) return '';
+  const h = E.HORIZONS.find(x => x.k === S.sel), z = S.R.hz[S.sel], ev = z.ev, sim = z.sim;
+  const stTxt = { ok: ['有効', 'シグナルが出た日の成績が、いつ買っても同じ場合を上回っています。'], warn: ['要注意', '全期間では上回っていますが、直近2年は下回っています。この時間軸の判定は割り引いて見てください。'], bad: ['機能していない', 'シグナルの優位性を確認できません。この時間軸では買い判定を出さず「様子見」に抑えています。'], thin: ['データ不足', '検証に必要な件数が足りません。'] }[ev.status];
+  const tr = (label, a, b) => '<tr><th>' + label + '</th><td class="num">' + pc(a.win, 0, false) + '</td><td class="num">' + pc(a.mean) + '</td><td class="num">' + pc(b.win, 0, false) + '</td><td class="num">' + pc(b.mean) + '</td></tr>';
+  const calls = ev.calls.map(c => '<li><span class="num">' + ymd(c.t) + '</span><span class="v-' + c.v + '">' + E.VERDICT[c.v] + '</span><span class="num">' + usd(c.px) + ' → ' + usd(c.px2) + '（' + pc(c.r) + '）</span><b class="' + (c.hit === null ? 'na' : c.hit ? 'hit' : 'miss') + '">' + (c.hit === null ? '対象外' : c.hit ? '的中' : '外れ') + '</b></li>').join('');
+  const judged = ev.calls.filter(c => c.hit !== null), hits = judged.filter(c => c.hit).length;
+  const pend = ev.pending.map(c => '<li><span class="num">' + ymd(c.t) + '</span><span class="v-' + c.v + '">' + E.VERDICT[c.v] + '</span><span class="num">' + usd(c.px) + '</span><b class="na">' + md(c.due) + ' に判定</b></li>').join('');
+  const lg = evalLog(), lz = lg.hz[S.sel];
+  const live = lg.n ? '<p>' + ymd(lg.first) + ' から ' + lg.n + ' 日分を記録。' + h.name + 'では、買い系の判定 ' + lz.buyN + ' 件中 ' + lz.buyHit + ' 件が的中、見送り判定 ' + lz.avN + ' 件中 ' + lz.avHit + ' 件が的中、' + lz.pend + ' 件が判定待ちです。</p>' + (lg.risk ? '<p>ロング清算リスクが「警戒」だった日の7日後は平均 ' + pc(lg.risk.hi) + '（' + lg.risk.hiN + '件）、それ以外の日は平均 ' + pc(lg.risk.lo) + '（' + lg.risk.loN + '件）。</p>' : '<p class="sub">清算・オプションの警戒フラグは過去データがないため、ここに記録が5件以上たまった時点で当たり外れを表示します。</p>') : '<p class="muted">まだ記録がありません。</p>';
+  return '<section class="lead"><h1>判定は当たっていたか</h1><p>開くたびに全期間を計算し直し、過去の判定をその後の値動きと突き合わせています。</p></section>' +
+    '<div class="seg wide" role="group" aria-label="時間軸">' + E.HORIZONS.map(x => '<button data-h="' + x.k + '" aria-pressed="' + (S.sel === x.k) + '">' + x.name + '（' + x.d + '日）</button>').join('') + '</div>' +
+    '<section class="card"><div class="row"><h2>' + h.name + 'シグナルの成績</h2><span class="badge b-' + ev.status + '">' + stTxt[0] + '</span></div><p>' + stTxt[1] + '</p>' +
+    '<table class="tbl"><thead><tr><th></th><th colspan="2">全期間</th><th colspan="2">直近2年</th></tr><tr><th></th><th>勝率</th><th>平均</th><th>勝率</th><th>平均</th></tr></thead><tbody>' + tr('買い系の判定の日', ev.st.sig, ev.rc.sig) + tr('いつ買っても', ev.st.all, ev.rc.all) + tr('見送り判定の日', ev.st.avoid, ev.rc.avoid) + '</tbody></table>' +
+    '<p class="sub">' + h.d + '日後に上がっていれば勝ち。検証期間は ' + (ev.first >= 0 ? ymd(S.d.t[ev.first]) : '—') + ' 以降の ' + ev.st.all.n + ' 日（重なりのない独立した期間に直すと約 ' + ev.indep + ' 回分）。各日の判定には、その日までに分かっていたデータだけを使っています。</p></section>' +
+    '<section class="card"><h2>シグナルどおりに売買した場合</h2>' + equityChart() + '<p class="keys"><span><i class="k-px"></i>シグナルに従う</span><span><i class="k-200"></i>持ち続ける</span></p>' +
+    '<table class="tbl"><thead><tr><th></th><th>年率</th><th>最大下落</th><th>保有日の割合</th></tr></thead><tbody><tr><th>シグナルに従う</th><td class="num">' + pc(sim.cagr, 0) + '</td><td class="num">' + pc(sim.mdd, 0) + '</td><td class="num">' + pc(sim.exposure, 0, false) + '</td></tr><tr><th>持ち続ける</th><td class="num">' + pc(sim.bcagr, 0) + '</td><td class="num">' + pc(sim.bmdd, 0) + '</td><td class="num">100%</td></tr></tbody></table>' +
+    '<p class="sub">スコア60以上で買い、40未満で売り、その間は維持。売買のたびに手数料0.1%を引いています。売買 ' + sim.trades + ' 回、' + sim.years.toFixed(1) + ' 年間。BTC現物での結果で、関連株の結果は「関連株」タブにあります。</p></section>' +
+    '<section class="card"><div class="row"><h2>直近の答え合わせ</h2><span class="num muted">' + hits + '/' + judged.length + ' 的中</span></div><ul class="calls">' + pend + calls + '</ul><p class="sub">' + h.d + '日おきに1件ずつ。買い系は上昇で的中、見送りは下落で的中、様子見は対象外です。</p></section>' +
+    '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
+    '<details class="card"><summary>計算のしかた</summary><p>テクニカル9種、出来高4種、オプション2種（Deribit DVOL、2021年以降）、資金調達率2種（Binance先物、2019年以降）の指標を毎日計算します。各指標が過去4年間で「' + h.d + '日後のリターン」とどれだけ連動していたかを相関で測り、それを重みにして合成したものがスコアです。スコアは過去4年の中での順位（0〜100）に直しています。</p><p>重みの計算にはその日より前に結果が確定していたデータしか使わないため、上の成績はすべて「当時知り得た情報だけで出した判定」の結果です。プット・コール比率、スキュー、建玉、清算の集中帯は長期の履歴が公開されていないのでスコアには入れず、警戒フラグとして判定を一段階下げる用途に限っています。</p></details>';
+}
+
+function meter(val, label, level) { return '<div class="meter"><div class="row"><span>' + label + '</span><b class="lvl-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '">' + level + '<span class="num"> ' + val + '</span></b></div><div class="mtrack"><b style="width:' + val + '%" class="m-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '"></b></div></div>'; }
+function viewFlow() {
+  if (!S.R) return '';
+  const q = S.liq, o = S.opt, price = S.price; let h = '<section class="lead"><h1>建玉とオプションの偏り</h1><p>レバレッジの積み上がりと、オプション市場の構えを見ます。</p></section>';
+  if (q && q.ok) {
+    const kv = [];
+    if (ok(q.fundNow)) kv.push(['資金調達率（直近）', pc(q.fundNow, 4) + ' / 8時間']);
+    if (ok(q.fund7)) kv.push(['同 7日平均', pc(q.fund7, 4) + (ok(q.fundPct) ? '（1年の下位' + pc(q.fundPct, 0, false) + '）' : '')]);
+    if (ok(q.oiNow)) { kv.push(['建玉（Binance USDT無期限）', Math.round(q.oiNow).toLocaleString('en-US') + ' BTC（約 $' + (q.oiVal / 1e9).toFixed(1) + 'B）']); kv.push(['建玉の増減', '24時間 ' + pc(q.oi1) + '、7日 ' + pc(q.oi7)]); kv.push(['同じ7日の価格', pc(q.px7)]); }
+    if (ok(q.ls)) kv.push(['ロング/ショート口座比', q.ls.toFixed(2) + (ok(q.lsPct) ? '（30日の下位' + pc(q.lsPct, 0, false) + '）' : '')]);
+    if (ok(q.top)) kv.push(['大口のロング/ショート比', q.top.toFixed(2)]);
+    h += '<section class="card"><h2>清算の予兆</h2>' + meter(q.longRisk, 'ロング清算リスク（下への連鎖）', q.longLevel) + meter(q.shortRisk, 'ショート踏み上げリスク（上への連鎖）', q.shortLevel) +
+      (q.flush ? '<p class="note good">建玉が急減しています。清算が一巡した可能性があります。</p>' : '') +
+      '<dl class="kv">' + kv.map(x => '<dt>' + x[0] + '</dt><dd class="num">' + x[1] + '</dd>').join('') + '</dl>' +
+      (q.oiSeries ? '<div class="row"><span class="sub">建玉の30日推移</span>' + spark(q.oiSeries.map(x => x.oi)) + '</div>' : '') +
+      '<p class="sub">資金調達率が高い・建玉が急増・ロング口座が多い、が重なるほどロング清算リスクを高く出します。65以上で「警戒」とし、短期・中期の判定を一段階下げます。</p></section>';
+    if (q.clusters) {
+      const li = (x, lab) => '<li><b class="num">' + usd(x.p) + '</b><span class="num dist">' + pc(x.dist) + '</span><span>' + lab + '</span></li>';
+      h += '<section class="card"><h2>清算が集中しそうな価格帯（推定）</h2>' + clusterChart() + '<p class="keys"><span><i class="k-p"></i>ロングの清算（下）</span><span><i class="k-c"></i>ショートの清算（上）</span></p>' +
+        '<ul class="clist">' + q.clusters.above.slice(0, 2).sort((x, y) => y.p - x.p).map(x => li(x, 'ショート清算')).join('') + q.clusters.below.slice(0, 3).sort((x, y) => y.p - x.p).map(x => li(x, 'ロング清算')).join('') + '</ul>' +
+        '<p class="sub">直近30日で建玉が増えた価格を建値とみなし、10・25・50・100倍のレバレッジで清算される水準を積み上げた推定です。すでに価格が通過した水準は除いています。取引所の実際の清算注文ではありません。</p></section>';
+    }
+  } else h += '<section class="card"><h2>清算の予兆</h2><p class="muted">先物データを取得できないため表示できません。' + esc((S.status.fut && S.status.fut.note) || '') + '</p></section>';
+  if (o) {
+    const kv = [['P/C比（建玉）', ok(o.pcrOI) ? o.pcrOI.toFixed(2) : '—'], ['P/C比（24時間の出来高）', ok(o.pcrVol) ? o.pcrVol.toFixed(2) : '—'], ['IV（約' + Math.round(o.ivDays) + '日満期・現値付近）', ok(o.atmIV) ? o.atmIV.toFixed(1) + '%' : '—'],
+      ['スキュー（下10%プット−上10%コール）', ok(o.skew) ? (o.skew > 0 ? '+' : '') + o.skew.toFixed(1) + 'pt' : '—'], ['DVOL', ok(o.dvol) ? o.dvol.toFixed(1) + (ok(o.dvolPct) ? '（1年の下位' + pc(o.dvolPct, 0, false) + '）' : '') : '—'],
+      ['織り込む変動幅', ok(o.move7) ? '7日 ±' + pc(o.move7, 1, false) + '（' + usd(price * (1 - o.move7)) + '〜' + usd(price * (1 + o.move7)) + '）' : '—'],
+      ['コール建玉の壁', o.callWall ? usd(o.callWall.K) + '（' + pc(o.callWall.K / price - 1) + '）' : '—'], ['プット建玉の壁', o.putWall ? usd(o.putWall.K) + '（' + pc(o.putWall.K / price - 1) + '）' : '—']];
+    h += '<section class="card"><h2>オプション市場</h2><dl class="kv">' + kv.map(x => '<dt>' + x[0] + '</dt><dd class="num">' + x[1] + '</dd>').join('') + '</dl></section>' +
+      '<section class="card"><h2>' + ymd(o.main.exp) + ' 満期の建玉（最大の満期）</h2>' + strikeChart() + '<p class="keys"><span><i class="k-c"></i>コール（上）</span><span><i class="k-p"></i>プット（下）</span></p>' +
+      '<dl class="kv"><dt>マックスペイン</dt><dd class="num">' + usd(o.main.maxPain) + '（' + pc(o.main.maxPain / price - 1) + '）</dd><dt>満期まで</dt><dd class="num">' + o.main.days.toFixed(1) + ' 日</dd><dt>この満期のP/C比</dt><dd class="num">' + (ok(o.main.pcr) ? o.main.pcr.toFixed(2) : '—') + '</dd>' +
+      (o.near.exp !== o.main.exp ? '<dt>直近満期（' + md(o.near.exp) + '）のマックスペイン</dt><dd class="num">' + usd(o.near.maxPain) + '</dd>' : '') + '</dl>' +
+      '<p class="sub">マックスペインは、オプションの買い手の受け取りが最も小さくなる価格です。満期が近いほど、価格がそこへ寄る傾向があるとされます。</p></section>';
+  } else h += '<section class="card"><h2>オプション市場</h2><p class="muted">Deribit から取得できないため表示できません。</p></section>';
+  return h;
+}
+
+function viewEvents() {
+  const now = Date.now(), ev = (S.events || allEvents()).filter(e => e.t < now + 120 * DAY);
+  const li = ev.map(e => { const dd = (e.t - now) / DAY, left = dd < 0 ? '発表済み' : dd < 1 ? 'あと' + Math.max(1, Math.round(dd * 24)) + '時間' : 'あと' + Math.floor(dd) + '日'; return '<li class="' + (dd >= 0 && dd <= 2 && e.impact >= 3 ? 'soon' : '') + '"><div><b>' + esc(e.title) + '</b><span class="imp" aria-label="重要度' + e.impact + '">' + '●'.repeat(e.impact) + '</span></div><div class="sub"><span class="num">' + mdw(e.t) + ' ' + hm(e.t) + '</span>　' + left + (e.custom ? '　<button class="link" data-del="' + e.idx + '">削除する</button>' : '') + '</div></li>'; }).join('');
+  return '<section class="lead"><h1>控えているイベント</h1><p>重要度●●●のイベントの48時間前から、短期の判定を一段階下げます。時刻はこの端末の現地時間です。</p></section>' +
+    '<section class="card"><ul class="events">' + li + '</ul><p class="sub">FOMCと米雇用統計・CPIは、FRBと米労働統計局が2026年11月時点で公表している予定です。日程は変更されることがあります。オプション満期は毎月最終金曜（17時 日本時間）を自動で計算しています。</p></section>' +
+    '<section class="card"><h2>イベントを追加する</h2><p class="sub">MSTR・COINの決算日など、発表されたら追加してください。</p><div class="form"><label>内容<input id="ev-title" type="text" placeholder="例：MSTR 決算発表" maxlength="40"></label><label>日時<input id="ev-time" type="datetime-local"></label><label>重要度<select id="ev-imp"><option value="3">●●● 判定を下げる</option><option value="2">●● 表示のみ</option><option value="1">● 表示のみ</option></select></label><button class="btn" id="ev-add">イベントを追加する</button></div></section>';
+}
+
+function viewStocks() {
+  let h = '<section class="lead"><h1>MSTR・COIN</h1><p>BTCの判定を、2銘柄の値動きに当てはめて確かめます。</p></section>';
+  const have = ['MSTR', 'COIN'].filter(s => S.stocks[s] && S.stocks[s].an);
+  ['MSTR', 'COIN'].forEach(sym => {
+    const st = S.stocks[sym]; if (!st) return;
+    if (st.err) { h += '<section class="card"><h2>' + sym + '</h2><p class="muted">取得できません：' + esc(st.err) + '</p></section>'; return; }
+    const an = st.an; if (!an) { h += '<section class="card"><h2>' + sym + '</h2><p class="muted">データが足りません。</p></section>'; return; }
+    const rel = !ok(an.rz) ? '—' : an.rz <= -1 ? 'BTCに対して割安（' + an.rz.toFixed(1) + 'σ）' : an.rz >= 1 ? 'BTCに対して割高（+' + an.rz.toFixed(1) + 'σ）' : 'BTCに対して平均的（' + (an.rz > 0 ? '+' : '') + an.rz.toFixed(1) + 'σ）';
+    const rows = E.HORIZONS.map(x => { const b = an.bt[x.k]; return '<tr><th>' + x.name + '（' + b.td + '営業日）</th><td class="num">' + pc(b.sig.win, 0, false) + '</td><td class="num">' + pc(b.sig.mean) + '</td><td class="num">' + pc(b.all.win, 0, false) + '</td><td class="num">' + pc(b.all.mean) + '</td></tr>'; }).join('');
+    const zl = S.zones.below.slice(0, 3).map(z => '<li><span class="num">BTC ' + usd(z.mid) + '</span><span class="num">' + sym + ' ' + usd2(an.px * (1 + an.beta * (z.mid / an.btcAt - 1))) + '</span></li>').join('');
+    h += '<section class="card"><div class="row"><h2>' + sym + '</h2><span class="num big">' + usd2(an.px) + ' <small>' + pc(an.chg) + '</small></span></div>' +
+      '<dl class="kv"><dt>BTCへの感応度（ベータ、90営業日）</dt><dd class="num">' + an.beta.toFixed(2) + ' 倍</dd><dt>BTCとの相関</dt><dd class="num">' + an.corr.toFixed(2) + '</dd><dt>BTC比の割安・割高</dt><dd>' + rel + '</dd><dt>RSI(14)</dt><dd class="num">' + an.rsi.toFixed(0) + '</dd><dt>50日線 / 200日線</dt><dd class="num">' + usd2(an.s50) + ' / ' + usd2(an.s200) + '</dd></dl>' +
+      '<h3>BTCのシグナルで買った場合の成績</h3><table class="tbl"><thead><tr><th></th><th colspan="2">買い系の判定の日</th><th colspan="2">いつ買っても</th></tr><tr><th></th><th>勝率</th><th>平均</th><th>勝率</th><th>平均</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<p class="sub">前日のBTC判定を見て、当日の終値で買ったと仮定。件数は ' + an.bt.m.all.n + ' 営業日（' + an.date + ' まで）。</p>' +
+      (zl ? '<h3>BTCのエントリー候補に対応する株価の目安</h3><ul class="pair">' + zl + '</ul><p class="sub">現在のベータで単純換算した値です。個別の材料や決算では大きくずれます。</p>' : '') + '</section>';
+  });
+  if (!have.length && !['MSTR', 'COIN'].some(s => S.stocks[s])) h += '<section class="card"><p class="muted">株価を読み込んでいます…</p></section>';
+  if (S.stkSrc) h += '<p class="sub">株価：' + esc(S.stkSrc) + '。米国市場の終値を、取引終了後に毎日取り込んでいます。</p>';
+  h += '<section class="card"><h2>設定</h2><div class="form"> <details><summary class="sub">予備の株価データ（通常は不要）</summary><label>Twelve Data のAPIキー<input id="td-key" type="text" autocomplete="off" value="' + esc(S.cfg.tdKey || '') + '" placeholder="キーを貼り付け"></label></details><label>BTCの価格データ<select id="src"><option value="auto"' + (S.cfg.src !== 'bitstamp' ? ' selected' : '') + '>Binance（2017年〜、出来高が大きい）</option><option value="bitstamp"' + (S.cfg.src === 'bitstamp' ? ' selected' : '') + '>Bitstamp（2014年〜、検証期間が長い）</option></select></label><button class="btn" id="cfg-save">設定を保存して更新する</button><button class="btn ghost" id="cfg-reset">保存データをすべて消す</button></div><p class="sub">設定・判定の記録・追加したイベントは、このブラウザの中だけに保存されます。</p></section>';
+  return h;
+}
+
+function renderTop() {
+  const p = S.price, d = S.d, prev = d && d.c.length ? d.c[d.c.length - 1] : NaN;
+  $('#px').textContent = ok(p) ? usd(p) : '—';
+  $('#chg').textContent = ok(p) && ok(prev) && p !== prev ? '前日終値比 ' + pc(p / prev - 1) : '';
+  $('#at').textContent = S.loading ? '更新中…' : S.at ? hm(S.at) + ' 更新' : '';
+  $('#refresh').disabled = !!S.loading;
+}
+function render() {
+  renderTop();
+  const v = $('#view');
+  if (S.fatal && !S.R) { v.innerHTML = '<section class="card"><h2>読み込めませんでした</h2><p>' + esc(S.fatal) + '</p><button class="btn" id="retry">もう一度読み込む</button></section>'; return; }
+  const views = { judge: viewJudge, verify: viewVerify, flow: viewFlow, events: viewEvents, stocks: viewStocks };
+  v.innerHTML = (views[S.tab] || viewJudge)();
+  document.querySelectorAll('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.tab === S.tab ? 'page' : 'false'));
+}
+
+/* ================= events / boot ================= */
+function route() { const t = (location.hash || '#judge').slice(1); S.tab = ['judge', 'verify', 'flow', 'events', 'stocks'].includes(t) ? t : 'judge'; render(); window.scrollTo(0, 0); }
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.h) { S.sel = t.dataset.h; render(); }
+  else if (t.dataset.range) { S.range = +t.dataset.range; render(); }
+  else if (t.id === 'refresh' || t.id === 'retry') refreshAll();
+  else if (t.dataset.del != null) { const a = LS.get('events', []); a.splice(+t.dataset.del, 1); LS.set('events', a); S.events = allEvents(); if (S.R) decide(); render(); }
+  else if (t.id === 'ev-add') {
+    const title = $('#ev-title').value.trim(), tm = Date.parse($('#ev-time').value);
+    if (!title || !ok(tm)) { t.textContent = '内容と日時を入力してください'; return; }
+    const a = LS.get('events', []); a.push({ t: tm, title, impact: +$('#ev-imp').value, kind: 'custom' }); LS.set('events', a); S.events = allEvents(); if (S.R) decide(); render();
+  }
+  else if (t.id === 'cfg-save') { S.cfg = { tdKey: $('#td-key').value.trim(), src: $('#src').value }; LS.set('cfg', S.cfg); S.stocks = {}; refreshAll(); }
+  else if (t.id === 'cfg-reset') {
+    if (t.dataset.sure) { ['daily', 'dvol', 'fund', 'log', 'events', 'cfg', 'stk.MSTR', 'stk.COIN'].forEach(LS.del); location.reload(); }
+    else { t.dataset.sure = '1'; t.textContent = 'もう一度押すと、記録もすべて消えます'; }
+  }
+});
+window.addEventListener('hashchange', route);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.at && Date.now() - S.at > 5 * 60e3) refreshAll(); });
+
+const cache = LS.get('daily', null);
+if (cache && cache.rows && cache.rows.length > 300) { try { setData(cache.rows, cache.src); S.dvol = LS.get('dvol', null); const f = LS.get('fund', null); S.fund = f && f.last ? f : null; compute(); } catch (e) { /* 保存データが壊れていたら無視 */ } }
+route();
+refreshAll();
+setInterval(() => { if (!document.hidden) refreshAll(); }, 5 * 60e3);
+window.__S = S;
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+
+</script>
+</body>
+</html>

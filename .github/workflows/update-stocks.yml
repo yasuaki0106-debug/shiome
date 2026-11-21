@@ -1,0 +1,26 @@
+name: 株価の自動取得
+on:
+  schedule:
+    - cron: "30 21 * * 1-5"   # 米国市場の終了後（夏時間）
+    - cron: "30 22 * * 1-5"   # 米国市場の終了後（冬時間）
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stocks
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/update_stocks.py
+      - name: 変更があれば保存
+        run: |
+          git config user.name "shiome-bot"
+          git config user.email "shiome-bot@users.noreply.github.com"
+          git add data/stocks.json
+          git diff --cached --quiet || (git commit -m "株価を更新" && git push)
