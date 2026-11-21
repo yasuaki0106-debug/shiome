@@ -10,7 +10,8 @@ const last = bars[bars.length - 1], close = last[4], tkey = String(last[0]);
 if (st.t === tkey) { console.log('同じ足'); process.exit(0); }
 const usd = x => '$' + Math.round(x).toLocaleString('en-US'), msgs = [], side = {};
 L.lines.forEach(l => {
-  const id = l.kind + ':' + l.p, now = close >= l.p ? 'up' : 'dn', was = st.side && st.side[id]; side[id] = now;
+  // 線の上下を行ったり来たりしても何度も鳴らないように、線から0.3%以上離れて抜けたときだけ「抜けた」とする
+  const id = l.kind + ':' + l.p, was = st.side && st.side[id], now = close >= l.p * 1.003 ? 'up' : close <= l.p * 0.997 ? 'dn' : (was || (close >= l.p ? 'up' : 'dn')); side[id] = now;
   if (!was || was === now) return;
   const up = now === 'up', head = 'BTCが ' + usd(l.p) + '（' + l.name + '）を' + (up ? '上に抜けました' : '割りました');
   const why = { split: up ? '前の安値の試し直しから戻した形です。朝9時の日足で上なら、二番底の見方が残ります' : '朝9時の日足の終値でも下なら、過去は一段下げの形です。買い下がりの指値が届きやすくなります',
