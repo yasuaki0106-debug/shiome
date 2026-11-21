@@ -39,16 +39,22 @@ def parse(q, q_key=""):
         seen.add(k); res.append(r)
     return res[:25]
 TR = {}
-def ja(text):
-    """見出しを日本語に（Googleの翻訳。失敗したら英語のまま）。同じ見出しは前回の訳を使う"""
-    if text in TR: return TR[text]
-    src = re.sub(r"\bStrategy\b(?!\s+(to|for|of)\b)", "MicroStrategy", text)   # 会社名のStrategyが「戦略」と訳されないように
-    try:
-        u = "https://translate.googleapis.com/translate_a/single?" + urllib.parse.urlencode({"client": "gtx", "sl": "en", "tl": "ja", "dt": "t", "q": src})
-        j = json.loads(get(u, 15)); out = "".join(seg[0] for seg in j[0] if seg and seg[0])
-        TR[text] = out; time.sleep(0.3); return out
-    except Exception as e:
-        print("warn translate", e, file=sys.stderr); return None
+def prep(t): return re.sub(r"\bStrategy\b(?!\s+(to|for|of)\b)", "MicroStrategy", t)   # 会社名のStrategyが「戦略」と訳されないように
+def translate_all(titles):
+    """まだ訳していない見出しを、まとめて少ない回数で訳す（Googleの翻訳。失敗したら英語のまま）"""
+    todo = [t for t in dict.fromkeys(titles) if t not in TR]
+    for k in range(0, len(todo), 12):
+        chunk = todo[k:k + 12]
+        for attempt in range(3):
+            try:
+                u = "https://translate.googleapis.com/translate_a/single?" + urllib.parse.urlencode({"client": "gtx", "sl": "en", "tl": "ja", "dt": "t", "q": "\n".join(prep(t) for t in chunk)})
+                j = json.loads(get(u, 20)); lines = "".join(seg[0] for seg in j[0] if seg and seg[0]).split("\n")
+                if len(lines) == len(chunk):
+                    for t, l in zip(chunk, lines): TR[t] = l.strip()
+                break
+            except Exception as e:
+                print("warn translate", e, file=sys.stderr); time.sleep(5 * (attempt + 1))
+        time.sleep(1.5)
 def earnings(sym):
     try:
         j = json.loads(get(f"https://api.nasdaq.com/api/analyst/{sym}/earnings-date"))
@@ -64,13 +70,15 @@ if os.path.exists(OUT):
 out = {"updated": int(time.time()), "items": {}, "earn": old.get("earn", {})}
 for k, v in old.get("items", {}).items():
     for r in v:
-        pass   # 訳し方を変えたので、前回の訳は使わず訳し直す
+        if r.get("ja") and "戦略" not in r["ja"]: TR[r["title"]] = r["ja"]   # 前回の訳を使う（会社名を「戦略」と訳したものは訳し直す）
 for k, q in Q.items():
     try:
         out["items"][k] = parse(q, k)
-        for r in out["items"][k]: r["ja"] = ja(r["title"])
     except Exception as e:
         print("warn news", k, e, file=sys.stderr); out["items"][k] = old.get("items", {}).get(k, [])
+translate_all([r["title"] for v in out["items"].values() for r in v])
+for v in out["items"].values():
+    for r in v: r["ja"] = TR.get(r["title"])
 for s in ["MSTR", "COIN"]:
     d = earnings(s)
     if d: out["earn"][s] = d
