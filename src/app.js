@@ -782,9 +782,15 @@ function glossary() {
     ['引けに成行', 'その日の取引の最後の値段で、値段を指定せずに買うこと'], ['MVRV', 'ビットコイン全体の時価が、みんなが買った値段の合計の何倍か。1を割ると、平均で含み損'], ['mNAV', 'MSTRの株の価値が、持っているBTCの価値の何倍か'], ['σ（シグマ）', '値動きの大きさのものさし。1σの中に約7割、2σの中に約95%が収まる']];
   return '<details class="more"><summary>言葉の説明</summary><dl class="gl">' + G.map(x => '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>').join('') + '</dl></details>';
 }
+function rv30() { // 30日の値動きの大きさ（日々の対数変化の二乗平均の平方根）。見込みの幅を、今の荒れ方に合わせるのに使う
+  const c = S.d.c, n = c.length; if (S._rvN === n && S._rvC === c[n - 1]) return S._rv;
+  const a = new Float64Array(n).fill(NaN); for (let i = 30; i < n; i++) { let s2 = 0; for (let j = i - 29; j <= i; j++) { const r = Math.log(c[j] / c[j - 1]); s2 += r * r; } a[i] = Math.sqrt(s2 / 30); }
+  S._rv = a; S._rvN = n; S._rvC = c[n - 1]; return a;
+}
+const scaleR = (r, now, then) => then > 0 && now > 0 ? Math.exp(Math.log(1 + r) * now / then) - 1 : r;   // 過去の動きを、今の荒れ方に合わせて伸び縮みさせる（research/n7check2.js：これで10〜90%の幅に入る割合が93%→80%と設計どおりになった）
 function fcAt(i, k) { // i日目の朝の時点で、その時点までのデータだけで出した見込み（engine の forecast と同じ方法）
   const d = S.d, sc = S.R.hz[k].sc, H = sc.H, now = sc.pct[i]; if (!(now === now)) return null;
-  let band = 12.5, rs = []; for (let r = 0; r < 3 && rs.length < 60; r++, band *= 1.6) { rs = []; for (let t = 0; t + H <= i; t++) { const p = sc.pct[t]; if (p === p && Math.abs(p - now) <= band) rs.push(d.c[t + H] / d.c[t] - 1); } }
+  const V = rv30(); let band = 12.5, rs = []; for (let r = 0; r < 3 && rs.length < 60; r++, band *= 1.6) { rs = []; for (let t = 0; t + H <= i; t++) { const p = sc.pct[t]; if (p === p && Math.abs(p - now) <= band) rs.push(scaleR(d.c[t + H] / d.c[t] - 1, V[i], V[t])); } }
   if (!rs.length) return null; rs.sort((a, b) => a - b); const q = x => rs[Math.floor((rs.length - 1) * x)];
   return { up: rs.filter(x => x > 0).length / rs.length, q10: q(0.1), q25: q(0.25), q50: q(0.5), q75: q(0.75), q90: q(0.9) };
 }
@@ -792,7 +798,8 @@ function fcPath(i) { // i日目の朝の時点で、似た状況（短期スコ�
   const d = S.d, pct = S.R.hz.s.sc.pct, now = pct[i]; if (!(now === now)) return null;
   let band = 12.5, idx = []; for (let r = 0; r < 3 && idx.length < 60; r++, band *= 1.6) { idx = []; for (let t = 0; t + 7 <= i; t++) { const p = pct[t]; if (p === p && Math.abs(p - now) <= band) idx.push(t); } }
   if (!idx.length) return null;
-  return [1, 2, 3, 4, 5, 6, 7].map(k => { const rs = idx.map(t => d.c[t + k] / d.c[t] - 1).sort((a, b) => a - b), q = x => rs[Math.floor((rs.length - 1) * x)]; return { k, up: rs.filter(x => x > 0).length / rs.length, q10: q(0.1), q25: q(0.25), q50: q(0.5), q75: q(0.75), q90: q(0.9) }; });
+  const V = rv30();
+  return [1, 2, 3, 4, 5, 6, 7].map(k => { const rs = idx.map(t => scaleR(d.c[t + k] / d.c[t] - 1, V[i], V[t])).sort((a, b) => a - b), q = x => rs[Math.floor((rs.length - 1) * x)]; return { k, up: rs.filter(x => x > 0).length / rs.length, q10: q(0.1), q25: q(0.25), q50: q(0.5), q75: q(0.75), q90: q(0.9) }; });
 }
 function next7Card() {
   const d = S.d; if (!d || d.c.length < 60) return '';
@@ -812,7 +819,7 @@ function next7Card() {
   [lo * 1.01, base, hi / 1.01].forEach(v => { g += '<text x="' + (Wd - pr + 4) + '" y="' + (sy(v) + 3).toFixed(1) + '" class="ax">' + kfmt(v) + '</text>'; });
   return '<section class="card" id="c-next7"><h2>この先7日の見込み</h2><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="直近7日のローソク足と、この先7日の見込みの幅">' + g + '</svg>' +
     '<div class="xscroll"><table class="tbl sm n7"><thead><tr><th>日</th><th>半分のケース</th><th>10回に8回</th><th>今より上</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '<p class="sub">今と似た状況だった過去の日の、その後1〜7日の値動きから出した幅です（日の区切りは日本時間の朝9時）。「今より上」は、その日の終わりに今朝の終値（' + kfmt(base) + '）より上だった割合。直近7日の答え合わせでは、1日の幅に収まったのは7日中5日で、急落の日は外れています。</p></section>';
+    '<p class="sub">今と似た状況だった過去の日の、その後1〜7日の値動きを、今の荒れ方に合わせて伸び縮みさせて出した幅です（日の区切りは日本時間の朝9時）。真ん中の線が平らなのは、向きの当たりが5割強しかなく、どちらとも言えないためです。見るべきは幅で、過去2年では「10回に8回」の幅に実際に入ったのが80%と、設計どおりでした。「今より上」は、その日の終わりに今朝の終値（' + kfmt(base) + '）より上だった割合。直近7日の答え合わせでは、1日の幅に収まったのは7日中5日で、急落の日は外れています。</p></section>';
 }
 function soonCard() { // この先数日で起きやすいこと（検証済みのことだけ確率つき、未検証は参考と明記）
   const d = S.d; if (!d || d.c.length < 30) return '';
