@@ -12,7 +12,7 @@ t = open(os.path.join(ROOT, "src", "tpl.html"), encoding="utf8").read().replace(
 if t != open(os.path.join(ROOT, "index.html"), encoding="utf8").read(): fail.append("index.html が src から作り直されていません")
 # 3) 過去の検証の数字（完了したサイクル）
 work = os.path.join(ROOT, "_work"); os.makedirs(work, exist_ok=True)
-for f in ["final.js"]: shutil.copy(os.path.join(R, f), work)
+for f in ["final.js", "fullrules.js"]: shutil.copy(os.path.join(R, f), work)
 shutil.copy(os.path.join(ROOT, "src", "engine.js"), work)
 lines = open(os.path.join(ROOT, "data", "btc-usd-daily.csv")).read().strip().split("\n")
 open(os.path.join(work, "btc.csv"), "w").write("\n".join([l for l in lines if l[:10] <= exp["asof"] or l.startswith("date")]) + "\n")
@@ -25,6 +25,15 @@ else:
     for k, v in exp["e2e"].items():
         g = int(got.get(k, -1))
         if abs(g - v) > max(2, v * 0.01): fail.append(f"通しの検証 {k}: 期待 {v} → 今 {g}")
+# 3b) 今のルールすべての通しの検証
+out2 = subprocess.run(["node", "fullrules.js"], cwd=work, capture_output=True, text=True).stdout
+m2 = re.search(r"今のアプリのルールすべて:\s+(.*)", out2)
+if not m2: fail.append("今のルールすべての通しの検証が動きません: " + out2[-300:])
+else:
+    got2 = dict(re.findall(r"(\w\d{4}):(\d+)", m2.group(1)))
+    for k, v in exp.get("full", {}).items():
+        g = int(got2.get(k, -1))
+        if abs(g - v) > max(2, v * 0.01): fail.append(f"今のルールすべて {k}: 期待 {v} → 今 {g}")
 # 4) 決めた日の判定
 r = subprocess.run(["node", os.path.join(ROOT, "scripts", "daily_signal.js")], cwd=work, capture_output=True, text=True, env=dict(os.environ, DRY="1", SIGNAL_CSV=os.path.join(work, "btc.csv"), SIGNAL_NOLOG="1"))
 try:

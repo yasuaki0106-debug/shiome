@@ -1549,12 +1549,12 @@ function next7Card() {
   [lo * 1.01, base, hi / 1.01].forEach(v => { g += '<text x="' + (Wd - pr + 4) + '" y="' + (sy(v) + 3).toFixed(1) + '" class="ax">' + kfmt(v) + '</text>'; });
   return '<section class="card" id="c-next7"><h2>この先7日の見込み</h2><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="直近7日のローソク足と、この先7日の見込みの幅">' + g + '</svg>' +
     '<div class="xscroll"><table class="tbl sm n7"><thead><tr><th>日</th><th>半分のケース</th><th>10回に8回</th><th>今より上</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '<p class="sub">今と似た状況だった過去の日の、その後1〜7日の値動きを、今の荒れ方に合わせて伸び縮みさせて出した幅です（日の区切りは日本時間の朝9時）。真ん中の線が平らなのは、向きの当たりが5割強しかなく、どちらとも言えないためです。見るべきは幅で、過去2年では「10回に8回」の幅に実際に入ったのが80%と、設計どおりでした。「今より上」は、その日の終わりに今朝の終値（' + kfmt(base) + '）より上だった割合。直近7日の答え合わせでは、1日の幅に収まったのは7日中5日で、急落の日は外れています。</p></section>';
+    '<p class="sub">今と似た状況だった過去の日の、その後1〜7日の値動きを、今の荒れ方に合わせて伸び縮みさせて出した幅です（日の区切りは日本時間の朝9時）。真ん中の線が平らなのは、向きの当たりが5割強しかなく、どちらとも言えないためです。見るべきは幅で、過去2年では「10回に8回」の幅に実際に入ったのが80%と、設計どおりでした。「今より上」は、その日の終わりに今朝の終値（' + kfmt(base) + '）より上だった割合。毎朝の幅が実際に当たっていたかは、チャートタブの「直近7日」で確かめられます。</p></section>';
 }
 function soonCard() { // この先数日で起きやすいこと（検証済みのことだけ確率つき、未検証は参考と明記）
   const d = S.d; if (!d || d.c.length < 30) return '';
   const n = d.c.length, i = n - 1, c = d.c, h = d.h, l = d.l, items = [];
-  const f1 = fcAt(i, 'd'), f7 = S.R.hz.s.fc;
+  const f1 = (fcPath(i) || [])[0], f7 = fcAt(i, 's') || S.R.hz.s.fc;
   if (f7) items.push(['1週間の向き', (f7.up >= 0.56 ? '上がりやすい' : f7.up <= 0.44 ? '下がりやすい' : '五分五分') + '（似た状況で上がった割合 ' + pc(f7.up, 0, false) + '、半分のケースは ' + kfmt(c[i] * (1 + f7.q25)) + '〜' + kfmt(c[i] * (1 + f7.q75)) + '）', '検証済み（当たりは5割強）']);
   if (f1) items.push(['明日（朝9時まで）の幅', kfmt(c[i] * (1 + f1.q10)) + '〜' + kfmt(c[i] * (1 + f1.q90)) + '（似た状況の10回に8回はこの中）', '検証済み']);
   const l7 = Math.min(...Array.from(l).slice(i - 7, i)), h7 = Math.max(...Array.from(h).slice(i - 7, i));
@@ -1566,7 +1566,7 @@ function soonCard() { // この先数日で起きやすいこと（検証済み�
   const now = Date.now(), ev = allEvents().filter(e => e.t > now && e.t < now + 5 * DAY && e.impact >= 2).concat(INDEX_EVENTS.filter(x => x.effT > now && x.effT < now + 10 * DAY).map(x => ({ t: x.effT, title: x.sym + 'の' + x.name })));
   ev.slice(0, 4).forEach(e => items.push([md(e.t) + ' ' + e.title, '前後で値が飛びやすい日', '予定']));
   const ef = etfState(); if (ef && ef.rank <= 0.1) items.push(['ETFからの流出', '直近20営業日で大きな流出が続いている。過去は流出が大きい時期の7日後、上がった割合42%とやや弱め', '検証済み（差は小さい）']);
-  return '<section class="card" id="c-soon"><h2>この先数日で起きやすいこと</h2><ul class="soon">' + items.map(x => '<li><b>' + esc(x[0]) + '</b><span>' + esc(x[1]) + '</span><small>' + esc(x[2]) + '</small></li>').join('') + '</ul><p class="sub">毎朝9時の確定データで書き直します。下の「直近7日」で、毎朝の見込みが実際どうだったかを確かめられます。</p></section>';
+  return '<section class="card" id="c-soon"><h2>この先数日で起きやすいこと</h2><ul class="soon">' + items.map(x => '<li><b>' + esc(x[0]) + '</b><span>' + esc(x[1]) + '</span><small>' + esc(x[2]) + '</small></li>').join('') + '</ul><p class="sub">毎朝9時の確定データで書き直します。チャートタブの「直近7日」で、毎朝の見込みが実際どうだったかを確かめられます。</p></section>';
 }
 function weekCard() { // 直近7日に何が起きたか：値動き・建玉・ETF・線・ニュースから、1日ずつ理由を書く
   const d = S.d; if (!d || !d.c.length) return '';
@@ -1579,7 +1579,7 @@ function weekCard() { // 直近7日に何が起きたか：値動き・建玉・
   const wd = ['日', '月', '火', '水', '木', '金', '土'];
   const dIdx = new Map(Array.from(d.t).map((t, k) => [t, k])); let hit = 0, tot = 0;
   const rows = days.reverse().map(x => {
-    const k0 = dIdx.has(x.t) ? dIdx.get(x.t) - 1 : n - 1, f = k0 >= 0 ? fcAt(k0, 'd') : null, base = k0 >= 0 ? d.c[k0] : NaN;
+    const k0 = dIdx.has(x.t) ? dIdx.get(x.t) - 1 : n - 1, f = k0 >= 0 ? (fcPath(k0) || [])[0] : null, base = k0 >= 0 ? d.c[k0] : NaN;
     let pred = '';
     if (f && ok(base)) { const lo = base * (1 + f.q10), hi = base * (1 + f.q90), inside = x.c >= lo && x.c <= hi; if (!x.live) { tot++; if (inside) hit++; }
       pred = '<p class="pred">その朝の見込み：' + kfmt(lo) + '〜' + kfmt(hi) + ' → ' + (x.live ? '途中' : inside ? '<b class="up">範囲内で終わった</b>' : '<b class="dn">' + (x.c < lo ? '下に外れた' : '上に外れた') + '</b>') + (x.l < lo && !x.live && inside ? '（日中は下に外れた）' : '') + '</p>'; }
@@ -1602,7 +1602,7 @@ function weekCard() { // 直近7日に何が起きたか：値動き・建玉・
 }
 function tilesCard() {
   if (!S.R) return '';
-  const fs = S.R.hz.s.fc, fm = S.R.hz.m.fc, c = S.cyc, bg = S.bg, p = S.plan || {};
+  const fs = fcAt(S.d.c.length - 1, 's') || S.R.hz.s.fc, fm = fcAt(S.d.c.length - 1, 'm') || S.R.hz.m.fc, c = S.cyc, bg = S.bg, p = S.plan || {};
   const arrow = f => !f ? ['—', 'v-na'] : f.up >= 0.56 ? ['↗', 'v-buy'] : f.up <= 0.44 ? ['↘', 'v-avoid'] : ['→', 'v-wait'];
   const [a7, c7] = arrow(fs), [a30, c30] = arrow(fm);
   const g = bg ? Math.round(bg.g * 100) : null, ring = v => '<svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" class="rg-bg"/><circle cx="18" cy="18" r="15" class="rg-fg" stroke-dasharray="' + (v * 0.942).toFixed(1) + ' 94.2" transform="rotate(-90 18 18)"/></svg>';
@@ -1632,7 +1632,7 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   const mv = bgp('MVRV'); const mvNow = S.oc && S.oc.mvrv && S.oc.mvrv.length ? +S.oc.mvrv[S.oc.mvrv.length - 1][1] : NaN, realized = ok(mvNow) ? L.c[nL - 1] / mvNow : NaN;
   if (mv) row(g2, 'MVRV（みんなの平均の買値との比）', mv.now, mv.p >= 0.9 ? 'ok' : 'ng', '過去の底は ' + mv.bots + '（平均の買値より下まで売られた）。今回の目安は ' + mv.tgt + (ok(realized) ? '。今の平均の買値（実現価格）は ' + usd(realized) : ''));
   const w2now = ok(ls.w200[nL - 1]) ? L.c[nL - 1] / Math.exp(ls.w200[nL - 1]) : NaN;
-  if (ok(w2now)) { const r = L.c[nL - 1] / w2now; row(g2, '200週線との比', r.toFixed(2), r <= 1.0 ? 'ok' : 'ng', '過去の底は 0.89・1.00・0.66。今の200週線は ' + usd(w2now)); }
+  if (ok(w2now)) { const r = L.c[nL - 1] / w2now; row(g2, '200週線との比', r.toFixed(2), 'ref', '参考。過去の底は 0.89・1.00・0.66 とばらつき、時点ごとの検証で安定しなかったので数に入れていません。今の200週線は ' + usd(w2now)); }
   const w200d = bgp('200日線比'); if (w200d) row(g2, '200日線との比', w200d.now, w200d.p >= 0.9 ? 'ok' : 'ng', '過去の底は ' + w200d.bots + '。今回の目安は ' + w200d.tgt);
   const fr = L.c[nL - 1] / Math.exp(ls.resid[nL - 1]); row(g2, '長期成長線との比', '×' + (L.c[nL - 1] / fr).toFixed(2), L.c[nL - 1] / fr <= 0.5 ? 'ok' : 'ng', '過去の底は ×0.15・×0.49・×0.36');
   // 3. 気持ち
@@ -1720,7 +1720,7 @@ function councilCard() { // 大事な判断は、いつも5人（奇数）で意
 }
 function miniGrid() { // 1か所で全部見えるように：大事な数字を小さな札で並べる（緑＝買いの材料、赤＝注意、灰＝参考）
   const R = []; const add = (go, name, val, tone, note) => R.push('<button class="mini m-' + tone + '" data-go="' + go + '"><span class="mn">' + name + '</span><b class="num">' + val + '</b><span class="mt">' + note + '</span></button>');
-  const f1 = S.d && S.d.c.length > 30 ? fcAt(S.d.c.length - 1, 'd') : null, c0 = S.d ? S.d.c[S.d.c.length - 1] : NaN;
+  const f1 = S.d && S.d.c.length > 30 ? (fcPath(S.d.c.length - 1) || [])[0] : null, c0 = S.d ? S.d.c[S.d.c.length - 1] : NaN;
   if (f1) add('soon', '明日の幅', kfmt(c0 * (1 + f1.q10)) + '〜' + kfmt(c0 * (1 + f1.q90)), 'n', '10回に8回はこの中');
   const wr = S.bg && S.bg.parts.find(x => /週足RSI/.test(x.nm)); if (wr) add('bottom', '売られすぎ（週足RSI）', wr.now, +wr.now <= 35 ? 'g' : 'n', +wr.now <= 35 ? '過去の底と同じ水準' : '底の水準ではない');
   const fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null; if (fg != null) add('bottom', '恐怖指数', fg, 'n', (fg <= 25 ? '極度の恐怖' : fg >= 75 ? '極度の強欲' : '中間') + '・参考（効き目なし）');
@@ -1977,7 +1977,7 @@ function logTicks(lo, hi, k) {
   return out;
 }
 function priceChart() {
-  const d = S.d, n = d.c.length, N = Math.min(S.range, n), a = n - N, hz = S.R.hz[S.sel], fc = hz.fc, H = hz.sc.H, ind = S.R.ind, price = S.price;
+  const d = S.d, n = d.c.length, N = Math.min(S.range, n), a = n - N, hz = S.R.hz[S.sel], fc = fcAt(n - 1, S.sel) || hz.fc, H = hz.sc.H, ind = S.R.ind, price = S.price;
   const fut = Math.max(H, Math.round(N * 0.1)), Wd = 360, Hh = 230, pl = 4, pr = 44, pt = 10, pb = 30;
   let lo = Infinity, hi = -Infinity; for (let i = a; i < n; i++) { lo = Math.min(lo, d.l[i]); hi = Math.max(hi, d.h[i]); }
   if (fc) { lo = Math.min(lo, price * (1 + fc.q10)); hi = Math.max(hi, price * (1 + fc.q90)); }
@@ -2297,7 +2297,7 @@ const STORY = [
 function storyOf(labels, up) { const out = []; STORY.forEach(([rx, what, u, d]) => { if (labels.some(l => rx.test(l)) && (up ? u : d)) out.push(what + (up ? u : d)); }); return out; }
 function dirCard() {
   if (!S.R || !S.zones) return '';
-  const fs = S.R.hz.s.fc, fm = S.R.hz.m.fc, price = S.price;
+  const fs = fcAt(S.d.c.length - 1, 's') || S.R.hz.s.fc, fm = fcAt(S.d.c.length - 1, 'm') || S.R.hz.m.fc, price = S.price;
   const vd = f => !f ? ['—', 'v-na'] : f.up >= 0.56 ? ['上がりやすい', 'v-buy'] : f.up <= 0.44 ? ['下がりやすい', 'v-avoid'] : ['五分五分', 'v-wait'];
   const hzRow = (nm, f) => { const [v, cl] = vd(f); return '<tr><th>' + nm + '</th><td><b class="' + cl + '">' + v + '</b></td><td class="num">' + (f ? pc(f.up, 0, false) : '—') + '</td><td class="num">' + (f ? pc(f.q25, 0) + '〜' + pc(f.q75, 0) : '—') + '</td></tr>'; };
   const WALL = /20日線|50日線|200日線|ボリンジャー上限|30日高値|90日高値|出来高|コール建玉|マックスペイン|前の安値/, SUP = /90日安値|30日安値|ボリンジャー下限|出来高|プット建玉|マックスペイン|20日線|50日線|200日線/;
@@ -2343,7 +2343,7 @@ function bottomCard() {
   ];
   const near = b.near.slice(0, 4).map(x => '<li><b class="num">' + usd(x.p) + '</b><span class="num dist">' + pc(x.p / S.price - 1) + '</span><span>' + esc(x.why) + '</span></li>').join('');
   const sg = stageOf(), gg = S.bg;
-  const gauge = gg ? '<h3>底らしさ <span class="num">' + Math.round(gg.g * 100) + '%</span></h3><p class="sub" style="margin-top:0">天井の日を0%、過去の底の水準を100%として、今どこまで来たか（5つの指標の加重平均）。</p><ul class="gauge">' + gg.parts.map(x => '<li><span>' + esc(x.nm) + '</span><span class="gbar"><b style="width:' + Math.round(x.p * 100) + '%"></b></span><span class="num">' + Math.round(x.p * 100) + '%</span><span class="sub2">今 ' + x.now + '／過去の底 ' + x.bots + '</span></li>').join('') + '</ul><details class="more-in"><summary>底らしさの説明</summary>' + gg.extra.map(x => '<p class="sub">' + esc(x) + '</p>').join('') + '<p class="sub">過去の検証では、この数字が高まるのは底の数か月前からで、「あと何日」を当てる力はありません。底値圏にいることの確認に使い、買う日は判定で決めます。</p></details>' : '';
+  const gauge = gg ? '<h3>底らしさ <span class="num">' + Math.round(gg.g * 100) + '%</span></h3><p class="sub" style="margin-top:0">天井の日を0%、今回の底の目安を100%として、今どこまで来たか（5つの指標の加重平均）。回を追って底が浅くなっている指標は、その傾向を延ばした値を目安にしています。</p><ul class="gauge">' + gg.parts.map(x => '<li><span>' + esc(x.nm) + '</span><span class="gbar"><b style="width:' + Math.round(x.p * 100) + '%"></b></span><span class="num">' + Math.round(x.p * 100) + '%</span><span class="sub2">今 ' + x.now + '／過去の底 ' + x.bots + '／今回の目安 ' + x.tgt + (x.trend ? '（浅くなる傾向を延ばした値）' : '') + '</span></li>').join('') + '</ul><details class="more-in"><summary>底らしさの説明</summary>' + gg.extra.map(x => '<p class="sub">' + esc(x) + '</p>').join('') + '<p class="sub">過去の検証では、この数字が高まるのは底の数か月前からで、「あと何日」を当てる力はありません。底値圏にいることの確認に使い、買う日は判定で決めます。</p></details>' : '';
   const P0 = S.plan || {}, c0 = S.cyc, ladn = (P0.lad || []).length, nb0 = P0.n || 0, f2 = t => { const d = new Date(t); return d.getFullYear() + '年' + (d.getMonth() + 1) + '月'; };
   const tmap = c0 ? '<h3>時間軸ごとの今</h3><table class="tbl sm tmap"><tbody>' +
     '<tr><th>今日〜数日</th><td>' + (S.rt && S.rt.broke ? '前の安値を割った' : S.rt && S.rt.retest ? '前の安値を試している（分かれ目 ' + usd(S.rt.level) + '）' : '特になし') + '</td></tr>' +
@@ -2352,7 +2352,7 @@ function bottomCard() {
     '<tr><th>数年</th><td>' + c0.name + '（半減期から' + c0.day + '日目）。売り始めの目安は ' + f2(c0.nextHalving + 400 * DAY) + '〜</td></tr></tbody></table>' : '';
   return '<section class="card" id="c-bottom"><div class="row"><h2>底と買い場の見込み</h2><b class="' + sg.cls + '">' + sg.name + '</b></div><p>' + esc(sg.text) + '</p>' + tmap + gauge +
     '<details class="more-in"><summary>底の値段のシナリオ・下値の目安・確認買いの時期</summary><p>今は天井から <b class="num">' + pc(b.dd, 0) + '</b>、' + b.daysTop + '日。半減期から' + b.day + '日目。200週線の' + pc(b.wr, 0) + '、長期成長線に対して過去の下位' + pc(b.valPct, 0, false) + 'の安さです。</p>' +
-    '<h3>底の値段のシナリオ</h3><table class="tbl"><tbody>' + scen.map(x => '<tr><th>' + x[0] + '</th><td class="num">' + x[1] + '</td></tr><tr><td colspan="2" class="sub" style="text-align:left;padding-top:0">' + esc(x[2]) + '</td></tr>').join('') + '</tbody></table>' +
+    '<p class="sub">底の値段の物差し（実現価格、200週線、天井からの下げの傾向など）は、判定タブの「今どこ？」に1か所にまとめています。</p>' +
     retestBlock() + (near ? '<h3>この先数週間の下値の目安</h3><ul class="clist">' + near + '</ul>' : '') +
     '<h3>確認買いが出るまでの見込み</h3>' + (b.eta ? '<p>中期の判定が今と同じくらい弱かった日から、過去3回の底値圏で買い判定が出るまでは、中央値で' + WAIT.med + '日、半分のケースが' + WAIT.q25 + '〜' + WAIT.q75 + '日でした。今日から数えると <b>' + f(b.eta.from) + '〜' + f(b.eta.to) + '</b>（中心は' + f(b.eta.med) + '）です。</p><p class="sub">その間にさらに下げた幅は中央値で' + pc(WAIT.dnMed, 0) + '、悪い方の4回に1回は' + pc(WAIT.dnQ25, 0) + '。買い判定が出た日の値段は、今日の値段と比べて中央値で' + pc(WAIT.pxMed, 0) + '（' + pc(WAIT.pxQ25, 0) + '〜' + pc(WAIT.pxQ75, 0) + '）でした。底で買うのではなく、底を打って上向いたのを確認した値段で買う、という見込みです。</p>' : '<p>中期の判定はすでに弱い水準を抜けています（今は' + Math.round(b.mNow) + '、買い好機は75以上）。買い判定は近いうちに出る可能性があります。上の「今日どうするか」と暫定の枠を毎日見てください。</p>') +
     '<p class="sub">準備の目安：買い下がりは、底値圏で90日ぶりの安値を付けた日に始まります（予定額の半分を4回）。確認買い（残り半分を2回）は、上の時期が目安です。</p>' +
@@ -2396,7 +2396,7 @@ function todayCard() {
     (rows ? '<details class="more-in"><summary>MSTR・COIN・MSTU・CONLの今の値段</summary>' + rows + '</details>' : '') +
     '<details class="more-in mb"><summary>金額の内訳と懸念材料</summary>' + moneyBox(p) + '</details>' +
     (ladChk ? '<details class="more-in"><summary>買い下がりの条件' + (p.a === 'ladder' ? '（今日の判定の根拠）' : '') + '</summary>' + ladChk + '<p class="sub">買い下がりには、中期の判定は使っていません。この4つがそろった日に始まります。</p></details>' : '') +
-    '<details class="more-in"><summary>確認買い（残り半分）の条件' + (p.a === 'buy' ? '（今日の判定の根拠）' : '') + '</summary>' + chk.replace('<p class="chk-h">確認買い（残り半分）の条件</p>', '') + '<p class="sub">確認買いは、上向きを確かめてから残り半分を使う買い方です。ここでだけ、中期の判定（30日先の見立て）を使います。</p>' + rec + '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul><p class="sub">買い方：予定額の半分は、底値圏で90日ぶりの安値から4回に分けて買い下がる（-10%ごと）。残り半分は、上向きを確認してから2回。過去に完了した5つのケースでは、どれも以前の買い方より最終額が上でした（+2〜+22%）。</p></details>' +
+    '<details class="more-in"><summary>確認買い（残り半分）の条件' + (p.a === 'buy' ? '（今日の判定の根拠）' : '') + '</summary>' + chk.replace('<p class="chk-h">確認買い（残り半分）の条件</p>', '') + '<p class="sub">確認買いは、上向きを確かめてから残り半分を使う買い方です。ここでだけ、中期の判定（30日先の見立て）を使います。</p>' + rec + '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul><p class="sub">買い方：予定額の半分は、底値圏で90日ぶりの安値から4本の指値で買い下がる（-10%ごと、弱い間は1倍）。残りは上向きを確認してから2回、2倍で買い切る。上向きを確認した日に1倍の玉も2倍へ。過去に完了した5つのケースでは、予定額100が出口で1,231〜59,415になりました（検証タブ）。</p></details>' +
     sessionStrip() + '</section>';
 }
 function viewJudge() {
@@ -2431,7 +2431,7 @@ function viewJudge() {
 }
 
 function ladderCard() {
-  const R = [['今までの方式（試し買い＋確認買い4回）', '5627', '781', '481', '1091', '544', '89', '85'], ['半分買い下がり＋半分確認買い（今の方式）', '6131', '842', '499', '1108', '666', '80', '78'], ['全部買い下がり', '6412', '888', '478', '1025', '750', '75', '76']];
+  const R = [['今までの方式（試し買い＋確認買い4回）', '5627', '781', '481', '1091', '544', '89', '85'], ['半分買い下がり＋半分確認買い（1倍で比べた場合）', '6131', '842', '499', '1108', '666', '80', '78'], ['全部買い下がり', '6412', '888', '478', '1025', '750', '75', '76']];
   return '<section class="card"><h2>買い下がりと確認買いの比較</h2><p>予定額100で、次の天井の出口まで持った場合の最終額です。</p><div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th></th><th>BTC 2015</th><th>BTC 2019</th><th>BTC 2023</th><th>MSTR 2023</th><th>COIN 2023</th><th>MSTR 今回</th><th>COIN 今回</th></tr></thead><tbody>' + R.map(x => '<tr><th>' + x[0] + '</th>' + x.slice(1).map(v => '<td class="num">' + v + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>' +
     '<p class="sub">「今までの方式」は、11月に変える前の買い方（試し買い＋確認買い4回）です。半分ずつにすると、完了した5つのケースすべてで今までの方式を上回りました（+2〜+22%）。一方、今回のサイクルでは今のところ下回っています（6月の安値から買い下がって、いまは含み損になる計算のため）。</p>' +
     '<p class="sub">買い下がりに損切り（最後の買い足しからさらに-15%）を付けると、BTCの2015年は底の直前で損切りになり、最終額が半分以下（6164→2722）になりました。損切りの位置を少し変えるだけで結果が大きく変わったため、買い下がりには損切りを置かず、1回目の買値の半分を割ったらアラームを出す形にしています。</p>' +
@@ -2459,10 +2459,10 @@ function slogCard() {
   return '<section class="card"><h2>毎日の判定の記録（自動）</h2><p>GitHubが毎日、確定した日足で判定を出して記録しています。アプリを開かなかった日も残り、後からその後の値動きと照らし合わせます。</p><div class="xscroll"><table class="tbl sm"><thead><tr><th>日付</th><th>合図</th><th>中期</th><th>底らしさ</th><th>7日後</th><th>30日後</th></tr></thead><tbody>' + rows + '</tbody></table></div><p class="sub">' + lg.length + '日分（' + lg[0].d + '〜）。この記録はBitstampの日足と、MVRVなどのオンチェーンで計算しているので、アプリの画面（Binanceの日足、資金調達率やオプションも使用）とスコアが少し違うことがあります。</p></section>';
 }
 function e2eCard() {
-  const rows = [['BTC', '6131／78', '842／83', '499／84', '95／95'], ['MSTR', '—', '—', '1108／89', '80／80'], ['COIN', '—', '—', '666／82', '78／78']];
-  return '<section class="card"><h2>通しの検証：今の買い方を全部やったら</h2><p>予定額を100として、買い下がり（半分を4回）と確認買い（半分を2回）を合図どおりに行い、天井の出口で売った場合です。数字は「最後の金額／途中でいちばん減ったときの金額」。</p>' +
+  const rows = [['BTC', '59415／75', '1974／85', '1231／85', '99／99'], ['MSTR系', '—', '—', '2426／95', '95／90'], ['COIN系', '—', '—', '1543／77', '74／74']];
+  return '<section class="card"><h2>通しの検証：今のルールを全部やったら</h2><p>予定額を100として、今のアプリのルールをすべて合図どおりに行い、天井の出口で売った場合です。数字は「最後の金額／途中でいちばん減ったときの金額」。</p>' +
     '<table class="tbl sm"><thead><tr><th></th><th>2015年</th><th>2019年</th><th>2023年</th><th>今回</th></tr></thead><tbody>' + rows.map(x => '<tr><th>' + x[0] + '</th>' + x.slice(1).map(v => '<td class="num">' + v + '</td>').join('') + '</tr>').join('') + '</tbody></table>' +
-    '<p class="sub">列は底の年。「今回」は2026年11月20日時点。株は合図の翌営業日の終値で売買し、使っていないお金は現金のまま。株で確かめられた完了済みのサイクルは1回だけです。2倍で持つ場合は、下の「守りのルール」を併用します。</p></section>';
+    '<p class="sub">入っているルール：買い下がり（予定額の半分、-10%ごとに4回、中期20未満の間は1倍）、確認買い（残りを2回、2倍で。約定していない買い下がりの分も回して買い切る）、守り（中期20未満で2倍を1倍に、75以上で1倍を2倍に）、天井の出口。列は底の年、「今回」は2026年11月20日時点。株は合図の翌営業日の終値で売買。2倍は元の株の日々の動きの2倍から経費を引いた計算です（実物のCONLは2024年1月まで1.5倍）。株で確かめられた完了済みのサイクルは1回だけです（research/fullrules.js）。</p></section>';
 }
 function wfCard() {
   return '<section class="card"><h2>確認買いの数字は、先の情報なしでも選べるか</h2><p>確認買いのルールの数字（何日目から、判定がいくつ以上、何日あけるか、底らしさは何%以上か）を540通り用意し、「それ以前のサイクルだけで一番良かった設定」を選んで、次のサイクルで試しました。</p>' +
@@ -2491,7 +2491,7 @@ function ruleCard() {
   return '<section class="card"><h2>今の買い方</h2><ul class="exit">' +
     '<li><b>買い下がり（予定額の半分）</b>：半減期から750日目以降の底値圏で、底らしさ50%以上のとき、BTCの終値が90日ぶりの安値を付けたら1回目。その後は1回目の買値の-10%・-20%・-30%で買い足す（4回まで）。損切りは置かず、BTCが1回目から-50%で想定外のアラーム</li>' +
     '<li><b>確認買い（残り半分）</b>：中期の判定が「買い好機」になった日に1回目、その後14日以上あけて「打診買い」以上なら2回目。その時点で約定していない買い下がりの指値は取り消し、そのお金も確認買いに回して買い切る（2026年11月から）。底らしさ50%以上が条件。重要イベントの48時間前と清算リスクが高い日は見送り</li>' +
-    '<li><b>銘柄</b>：その日の状況（BTCに対する割安・割高など）でMSTR系かCOIN系を選ぶ。判定が20未満の間は1倍、75以上で2倍</li>' +
+    '<li><b>銘柄</b>：5人の会議（時期・形・需給・検証・気持ち）の多数決でMSTR系かCOIN系を選ぶ。中期の判定が20未満の間は1倍、75以上（上がり始め）で1倍の玉も2倍へ替える</li>' +
     '<li><b>出口</b>：次の半減期から400〜550日目に分けて売り、200日線を2週間割ったら残りも売る</li></ul>' +
     '<h3>この買い方で過去に出ていた合図</h3><p class="sub" style="margin-top:0">下＝買い下がり、確＝確認買い。損益は、その日に買って90日後・1年後・天井の出口で売った場合です。</p>' + Object.keys(by).map(k => { const st = by[k].some(x => x.MSTR); return '<h3 class="h3s">' + nm[k] + '</h3><div class="xscroll"><table class="tbl sm"><thead><tr><th>合図</th><th>BTC</th><th>90日後</th><th>1年後</th><th>出口</th>' + (st ? '<th>MSTR</th><th>COIN</th>' : '') + '</tr></thead><tbody>' + by[k].map(x => '<tr><th>' + x.kind.replace('買い下がり', '下').replace('確認買い', '確') + '<br><small>' + x.date.slice(2).replace(/-/g, '/') + '</small></th><td class="num">$' + x.px.toLocaleString('en-US') + '</td><td class="num">' + x.d90 + '</td><td class="num">' + x.d365 + '</td><td class="num">' + x.top.replace('進行中 ', '') + '</td>' + (st ? '<td class="num">' + (x.MSTR || '—').replace('進行中 ', '') + '</td><td class="num">' + (x.COIN || '—').replace('進行中 ', '') + '</td>' : '') + '</tr>').join('') + '</tbody></table></div>'; }).join('') +
     '<p class="sub">「出口」は次の天井の出口ルールで売った場合で、今回の行は11/20時点の損益です。MSTR・COINの列は、同じ合図の翌営業日に買って出口（今回は11/20）まで持った場合。アプリでは買い下がりの指値は株価で置くので、2回目以降の日付は実際とずれることがあります。</p></section>';

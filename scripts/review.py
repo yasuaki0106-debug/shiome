@@ -23,13 +23,13 @@ r = subprocess.run(["python3", os.path.join(ROOT, "scripts", "selftest.py")], ca
 add("自動の点検", "ok" if r.returncode == 0 else "warn", "OK" if r.returncode == 0 else "失敗", "過去の検証の数字と、決めた日の判定が変わっていないか" + ("" if r.returncode == 0 else "：" + r.stdout.strip()[:200]))
 # 3) 今回のサイクルの通しの検証（予定額100）
 work = os.path.join(ROOT, "_rv"); os.makedirs(work, exist_ok=True)
-for f in ["research/final.js", "src/engine.js", "data/stocks.json", "data/onchain.json"]: shutil.copy(os.path.join(ROOT, f), work)
+for f in ["research/final.js", "research/fullrules.js", "src/engine.js", "data/stocks.json", "data/onchain.json"]: shutil.copy(os.path.join(ROOT, f), work)
 shutil.copy(os.path.join(D, "btc-usd-daily.csv"), os.path.join(work, "btc.csv"))
-out = subprocess.run(["node", "final.js"], cwd=work, capture_output=True, text=True).stdout; shutil.rmtree(work, ignore_errors=True)
-m = re.search(r"買い下がり50%＋確認買い50%\s+(.*)", out); cur = dict(re.findall(r"(\w)今回:(\d+)", m.group(1))) if m else {}
+out = subprocess.run(["node", "fullrules.js"], cwd=work, capture_output=True, text=True).stdout; shutil.rmtree(work, ignore_errors=True)
+m = re.search(r"今のアプリのルールすべて:\s+(.*)", out); cur = dict(re.findall(r"(\w)今回:(\d+)", m.group(1))) if m else {}
 if cur:
     worst = min(int(v) for v in cur.values())
-    add("今回のサイクルの通しの検証", "ok" if worst >= 70 else "warn", "BTC " + cur.get("B", "—") + "・MSTR " + cur.get("M", "—") + "・COIN " + cur.get("C", "—"), "予定額100が今いくらか。過去の完了サイクルでは途中の最低が78〜89。70を下回ったら、過去にない悪い展開として見直す")
+    add("今回のサイクルの通しの検証", "ok" if worst >= 70 else "warn", "BTC " + cur.get("B", "—") + "・MSTR " + cur.get("M", "—") + "・COIN " + cur.get("C", "—"), "今のルールすべてで、予定額100が今いくらか。過去の完了サイクルでは途中の最低が75〜95。70を下回ったら、過去にない悪い展開として見直す")
 # 4) 毎日の判定の記録（GitHubで自動）の答え合わせ
 try:
     log = json.load(open(os.path.join(D, "signal_log.json")))
