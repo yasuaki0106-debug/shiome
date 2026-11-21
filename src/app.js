@@ -624,10 +624,15 @@ function computeStocks() {
       if (z <= -1.5) { rel.lo.push(r); if (i >= m - 504 - 63) rel.lo2.push(r); } else if (z >= 1.5) { rel.hi.push(r); if (i >= m - 504 - 63) rel.hi2.push(r); }
     }
     Object.keys(rel).forEach(k => { rel[k] = E.summarize(rel[k]); });
+    // 換算の誤差：直近2年、その時点で分かっていたベータで「BTCの動き×ベータ」を当てはめたときの、実際の終値とのずれ（平均）
+    let errSum = 0, errN = 0;
+    { const R1 = [], B1 = []; for (let i = 1; i < m; i++) { R1.push(Math.log(sc[i] / sc[i - 1])); B1.push(Math.log(d.c[bi[i]] / d.c[bi[i - 1]])); }
+      for (let i = Math.max(90, R1.length - 504); i < R1.length; i++) { let a = 0, b = 0, ab = 0, bb = 0; for (let j = i - 90; j < i; j++) { a += R1[j]; b += B1[j]; } a /= 90; b /= 90; for (let j = i - 90; j < i; j++) { ab += (R1[j] - a) * (B1[j] - b); bb += (B1[j] - b) ** 2; } if (!(bb > 0)) continue; errSum += Math.abs(Math.exp(ab / bb * B1[i]) - Math.exp(R1[i])); errN++; } }
+    const estErr = errN >= 100 ? errSum / errN : NaN;
     // 株の終値が付いた時刻（米国東部16時、短縮日は13時）のBTC価格。1時間足があればそれを使い、なければ日足の終値で代用
     let btcAt = d.c[bi[m - 1]];
     { const base = Date.parse(v[m - 1][0] + 'T00:00:00Z'), off = nyDST(base + 15 * 36e5) ? 4 : 5, ct = base + ((US_HALF.includes(v[m - 1][0]) ? 13 : 16) + off) * 36e5, hv = S.hourly && S.hourly.get(ct - 36e5); if (ok(hv)) btcAt = hv; }
-    st.an = { rel, vmap: new Map(v), px: sc[m - 1], date: v[m - 1][0], chg: sc[m - 1] / sc[m - 2] - 1, beta, corr, rz, rsi: r14[m - 1], s50: s50[m - 1], s200: s200[m - 1], bt, btcAt };
+    st.an = { rel, vmap: new Map(v), px: sc[m - 1], date: v[m - 1][0], chg: sc[m - 1] / sc[m - 2] - 1, beta, corr, rz, rsi: r14[m - 1], s50: s50[m - 1], s200: s200[m - 1], bt, btcAt, estErr };
   });
 }
 
@@ -781,7 +786,7 @@ function todayCard() {
     const lines = [];
     const an = S.stocks[sym].an;
     lines.push(['終値（' + an.date.slice(5).replace('-', '/') + ' 通常取引）', usd2(an.px)]);
-    lines.push(['いまの目安（BTCから換算）', usd2(x.now)]);
+    lines.push(['いまの目安（BTCから換算）', usd2(x.now) + (ok(an.estErr) ? ' ±' + (an.estErr * 100).toFixed(1) + '%' : '')]);
     if (x.a === 'buy') { lines.push(['残り半分の指値', usd2(x.lim)]); lines.push(['撤退の目安', usd2(x.stop)]); }
     else if (x.a === 'limit') { lines.push(['指値', usd2(x.lim)]); lines.push(['撤退の目安', usd2(x.stop)]); }
     else if (ok(x.lim)) lines.push(['検討を始める水準', usd2(x.lim)]);
@@ -805,7 +810,7 @@ function todayCard() {
   return '<section class="today">' + sessionStrip() + cycleStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p><p class="today-why">理由：' + esc(p.why.join('。')) + '</p>' + provBox() +
     (rows || '<p class="sub">MSTR・COINの株価を読み込めていないため、BTCの価格で表示しています。</p>') +
     '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
-    '<p class="sub">今日1日の上げ下げは予想していません。過去の検証で1日先の方向の的中率は ' + pc(fd.ev.st.all.win, 0, false) + '前後とほぼ五分で、当てにならないためです。代わりに「どこで買うか」の値段と、1週間〜3か月の判定で決めています。株価は BTCとの連動（ベータ）から換算した目安です。</p></section>';
+    '<p class="sub">今日1日の上げ下げは予想していません。過去の検証で1日先の方向の的中率は ' + pc(fd.ev.st.all.win, 0, false) + '前後とほぼ五分で、当てにならないためです。代わりに「どこで買うか」の値段と、1週間〜3か月の判定で決めています。株価は BTCとの連動（ベータ）から換算した目安で、±の数字は過去2年の平均的なずれです。2倍ETFのずれはその約2倍になります。正確な値段はmoomooで確認してください。</p></section>';
 }
 function viewJudge() {
   if (!S.R) return '<section class="card"><p class="muted">データを読み込んでいます…</p></section>';
