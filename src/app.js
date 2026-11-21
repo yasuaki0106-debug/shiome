@@ -575,7 +575,7 @@ function etfAt(sym, btc) { // BTCがその値段のときのETFの目安
 const HOLD = { reinvest: ['1倍で買う', 'v-buy'], relevbuy: ['2倍で買い直す', 'v-buy'], cashwait: ['現金で待つ', 'v-wait'], hold: ['持ち続ける', 'v-buy'], add: ['買い足し可', 'v-buy'], trim: ['一部売る', 'v-wait'], sell: ['売る', 'v-avoid'], switch: ['1倍に乗り換える', 'v-wait'], relev: ['2倍に戻せる', 'v-buy'], na: ['判定できません', 'v-na'] };
 const LEV_OFF = 20, LEV_ON = 75;   // 守りのルール：中期20未満で2倍→元の株、75以上で元の株→2倍（research/protect.js）
 function buyTicker() { const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return t; return pickUnd() === 'COIN' ? 'CONL' : 'MSTU'; }
-function pickUnd() { const k = S.pick ? S.pick.final : null; if (k === 'COIN') return 'COIN'; if (k === 'MSTR') return 'MSTR'; return indexBlock('MSTR') ? 'COIN' : 'MSTR'; }   // その日の状況（BTCに対する割安・割高など）で選んだ元の株
+function pickUnd() { const k = S.pick ? S.pick.final : null; return k === 'COIN' ? 'COIN' : 'MSTR'; }   // その日の状況（BTCに対する割安・割高など）で選んだ元の株
 function prefUnd(fallback) { const t = (S.cfg && S.cfg.buy) || 'auto'; return t === 'auto' ? pickUnd() : (ETF[t] ? ETF[t].und : fallback); }
 function cashBal() { return +LS.get('cash', 0) || 0; }
 function setCash(v) { LS.set('cash', Math.max(0, Math.round(v * 100) / 100)); }
@@ -587,6 +587,19 @@ function budget() { // 今のサイクルで使う予定額＝現金＋このサ
   const c = S.cyc, from = c ? c.cur.h + 750 * DAY : 0;
   const used = lots().filter(p => (p.kind === 'buy' || p.kind === 'trial' || p.kind === 'ladder') && p.qty > 0 && lotTime(p) >= from).reduce((s, p) => s + p.cost * p.qty, 0);
   return { cash: cashBal(), used, total: cashBal() + used };
+}
+function usTradingDays(from, n) { // from（ミリ秒）から数えて n 営業日目（米国、土日と休場日を除く）の日付
+  let t = from, k = 0; while (k < n) { t += DAY; const d = new Date(t - 5 * 36e5), w = d.getUTCDay(), key = d.toISOString().slice(0, 10); if (w !== 0 && w !== 6 && US_CLOSED.indexOf(key) < 0) k++; } return t;
+}
+function ladderOrders(p) { // 買い下がりの指値：1回目はBTCの直近の終値の2%下に当たる株価、2〜4回目はその-10%・-20%・-30%
+  // 検証（research/limit.py）：底値圏でBTCが90日ぶりの安値を付けた日（33日）に、2%下へ指値を置いて3日待つと78%が約定し、翌日に成行で買うより中央値で1.8%安い（平均では差なし）
+  const t = planTicker(p), c = S.d.c, btcL = c[c.length - 1] * 0.98, first = etfAt(t, btcL); if (!ok(first)) return null;
+  const b = budget(), per = b.total * LAD_SHARE / LAD_N, now = Date.now(); let exp = usTradingDays(now, 3);
+  // 大きく動く日（重要な発表・指数の実施日）が期限のすぐ後にあれば、避けずに期限をその翌営業日まで延ばして下げを拾う
+  const evs = allEvents().filter(e => e.t > now && e.impact >= 2).map(e => ({ t: e.t, title: e.title })).concat(INDEX_EVENTS.filter(x => x.effT > now && (ETF[t] ? ETF[t].und : t) === x.sym).map(x => ({ t: x.effT, title: x.sym + 'の' + x.name })));
+  const ev = evs.filter(e => e.t < exp + (/指数/.test(e.title) ? 10 : 3) * DAY).sort((a, b2) => b2.t - a.t)[0]; if (ev && ev.t + DAY > exp) exp = usTradingDays(ev.t, 1);   // 指数の実施日は日付が決まっているので、10日先まで見て待ち構える
+  const rows = [first, first * 0.9, first * 0.8, first * 0.7].map((px, k) => ({ k: k + 1, px: Math.floor(px * 100) / 100, n: Math.floor(per / px) }));
+  return { t, rows, per, exp, ev, btcL };
 }
 function planTicker(p) { // 今日買う銘柄：判定が20未満のうちは1倍で（守りのルールと同じ）
   const t0 = buyTicker(), mm = S.R.hz.m.pct; return p && (p.a === 'trial' || p.a === 'ladder') && ETF[t0].L > 1 && ok(mm) && mm < LEV_OFF ? ETF[t0].und : t0;
@@ -625,7 +638,7 @@ function concernsFor(und) {
 }
 function concernList(und, max) {
   const cs = concernsFor(und).slice(0, max || 4); if (!cs.length) return '';
-  return '<div class="concern"><b>' + und + ' 系と相場全体の懸念材料</b><ul>' + cs.map(c => '<li class="c-' + c.lv + '">' + esc(c.text) + '<small>' + (c.link ? '<a href="' + esc(c.link) + '" target="_blank" rel="noopener">' + esc(c.src || '出典') + '</a>' : esc(c.src || '')) + (c.t ? '・' + md(c.t) : '') + '</small></li>').join('') + '</ul><p class="sub">指数からの除外は、銘柄選びに反映しています（実施の翌営業日まで、その銘柄は新しく買わない）。金利の発表は、確認買いを48時間前から見送ります。それ以外のニュースは、過去データで影響を確かめられないため、判定は変えずに並べて出しています。</p></div>';
+  return '<div class="concern"><b>' + und + ' 系と相場全体の懸念材料</b><ul>' + cs.map(c => '<li class="c-' + c.lv + '">' + esc(c.text) + '<small>' + (c.link ? '<a href="' + esc(c.link) + '" target="_blank" rel="noopener">' + esc(c.src || '出典') + '</a>' : esc(c.src || '')) + (c.t ? '・' + md(c.t) : '') + '</small></li>').join('') + '</ul><p class="sub">指数からの除外や決算など大きく動く日は、避けずに、指値の期限をその日の後まで延ばして下げを拾う形にしています。金利の発表は、確認買いを48時間前から見送ります。それ以外のニュースは、過去データで影響を確かめられないため、判定は変えずに並べて出しています。</p></div>';
 }
 function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
   const b = budget(), t0 = buyTicker(), t = planTicker(p);
@@ -634,15 +647,14 @@ function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
   let h = '<div class="money"><div class="row"><b>現金 <span class="num">' + usd(b.cash) + '</span></b><span class="sub" style="margin:0">予定額 ' + usd(b.total) + '（使った分 ' + usd(b.used) + '）</span></div>';
   if (per) {
     const amt = Math.min(per, b.cash), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
-    h += '<p class="money-do">' + (p.a === 'trial' ? '試し買い' : p.a === 'ladder' ? '買い下がり1回目' : '確認買い') + '：<b class="num">' + usd(amt) + '</b> で <b>' + t + '</b>' + (ok(n) ? ' 約<b class="num">' + n.toLocaleString('en-US') + '</b>株（目安 ' + usd2(px) + '）' : '') + '</p>';
+    if (p.a !== 'ladder') h += '<p class="money-do">' + (p.a === 'trial' ? '試し買い' : '確認買い') + '：<b class="num">' + usd(amt) + '</b> で <b>' + t + '</b>' + (ok(n) ? ' 約<b class="num">' + n.toLocaleString('en-US') + '</b>株（目安 ' + usd2(px) + '）' : '') + '</p>';
     if (t !== t0) h += '<p class="sub">中期の判定が' + LEV_OFF + '未満なので、' + t0 + ' ではなく1倍の ' + t + ' で入ります。判定が' + LEV_ON + '以上に戻ったら2倍に替えます。</p>';
-    if (p.a === 'ladder' && ok(px)) h += '<p class="sub">買ったら、同じ金額の指値を3本入れておきます：' + [1, 2, 3].map(k => usd2(px * (1 - LAD_STEP * k)) + '（-' + (LAD_STEP * 100 * k) + '%）').join('、') + '。実際の買値が決まったら、正確な指値を出し直します。</p>';
+    const lo = p.a === 'ladder' ? ladderOrders(p) : null;
+    if (lo) h += '<table class="tbl sm"><thead><tr><th>指値</th><th>' + lo.t + 'の値段</th><th>株数</th><th>期限</th></tr></thead><tbody>' + lo.rows.map(r => '<tr><th>' + r.k + '回目</th><td class="num">' + usd2(r.px) + '</td><td class="num">' + r.n + '</td><td>' + (r.k === 1 ? (new Date(lo.exp).getMonth() + 1) + '/' + new Date(lo.exp).getDate() + 'の引け' : 'なし') + '</td></tr>').join('') + '</tbody></table><p class="sub">1回目は、BTCの直近の終値の2%下（' + usd(lo.btcL) + '）に当たる株価です。過去の同じ場面では、3日以内に8割近くが約定し、翌日に成行で買うより中央値で約2%安く買えていました。2〜4回目は1回目から-10%ずつ。株価はBTCからの換算なので、moomooの気配と比べて大きくずれていたら教えてください。</p>';
     if (per > b.cash + 1) h += '<p class="sub" style="color:var(--avoid)">現金が足りません（予定 ' + usd(per) + '）。今ある ' + usd(b.cash) + ' の範囲で買ってください。</p>';
   } else h += '<p class="sub">今日は新しく使いません。使う額の目安：買い下がり1回 ' + usd(b.total * LAD_SHARE / LAD_N) + '（4回まで）、確認買い1回 ' + usd(b.total * (1 - LAD_SHARE) / MAXBUY) + '（2回まで）。</p>';
-  const und = ETF[t] ? ETF[t].und : t, ibm = indexBlock('MSTR');
-  if (ibm && und === 'COIN' && ((S.cfg && S.cfg.buy) || 'auto') === 'auto') h += '<p class="sub">MSTRは' + ibm.eff + 'に' + ibm.name + 'があるため、11/30の取引が始まるまではCOIN系で入ります。11/30はMSTRを引けで買う選択肢が出ます（下の説明）。</p>';
+  const und = ETF[t] ? ETF[t].und : t;
   const idd = indexDay('MSTR'); if (idd) h += '<div class="concern"><b>MSTRの指数除外の当日</b><ul><li class="c-info">指数に連動するファンドは、' + idd.eff + 'にまとめて売ります。引け成行（MOC）でMSTRを買うと、その売りの受け手になれます。研究では、除外の売り圧力は実施の後に一部戻り、40〜50日で消える傾向があります。買い下がりのMSTR分は、この引けからが狙い目です<small>McKinsey・Lynch & Mendenhall（1997）など</small></li></ul></div>';
-  const ib2 = indexBlock(und); if (ib2) h += '<p class="sub" style="color:var(--avoid)">' + und + 'は' + ib2.eff + 'に' + ib2.name + 'があります。買う銘柄を固定しているので' + und + 'のまま出していますが、実施の翌営業日までは避けるのが、研究で分かっている売り圧力の傾向に沿った動きです。</p>';
   h += concernList(und);
   return h + '</div>';
 }
@@ -704,8 +716,12 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : ''; items.push({ lv: 'warn', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + '：' + (h.a === 'switch' ? '売って、同じ金額で ' + und + ' を買う（2倍をやめて元の株へ）' : h.a === 'sell' ? '売る' : h.alarm) }); });
   if (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial') {
     const t = planTicker(p), per = { buy: b.total * (1 - LAD_SHARE) / MAXBUY, trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = etfAt(t, S.price), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
-    if (b.total > 0) { items.push({ lv: 'buy', t: (p.a === 'ladder' ? '買い下がり1回目' : p.a === 'buy' ? '確認買い' : '試し買い') + '：' + t + ' を ' + usd(amt) + ' 分' + (ok(n) ? '（約' + n + '株、目安 ' + usd2(px) + '）' : '') + '買う' });
-      if (p.a === 'ladder') items.push({ lv: 'buy', t: '買えたら、その買値の -10%・-20%・-30% に ' + usd(amt) + ' ずつ指値を置く' });
+    const lo = p.a === 'ladder' ? ladderOrders(p) : null;
+    if (b.total > 0 && lo) { const ex = new Date(lo.exp);
+      items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる：' + lo.rows.map(r => r.k + '回目 ' + usd2(r.px) + '×' + r.n + '株').join('、') });
+      items.push({ lv: 'info', t: '1回目は ' + (ex.getMonth() + 1) + '/' + ex.getDate() + ' の引けまでに届かなければ、その日の引けに成行で買う' + (lo.ev ? '（' + lo.ev.title + 'で動きやすいので、期限をその後まで延ばしています）' : '') + '。2〜4回目は期限なしで置いたまま' });
+      items.push({ lv: 'info', t: '約定したら「関連株」タブで記録する。1回目の実際の買値に合わせて、2〜4回目の値段を出し直します' }); }
+    else if (b.total > 0) { items.push({ lv: 'buy', t: (p.a === 'buy' ? '確認買い' : '試し買い') + '：' + t + ' を ' + usd(amt) + ' 分' + (ok(n) ? '（約' + n + '株、目安 ' + usd2(px) + '）' : '') + '、その取引時間のうちに買う（指値で待たない）' });
       items.push({ lv: 'info', t: '買ったら「関連株」タブで記録する（現金は自動で引かれます）' }); }
     else items.push({ lv: 'info', t: '「関連株」タブの「資金」に現金を入れる（金額と株数が出ます）' });
   }
@@ -771,7 +787,7 @@ function pickStock() {
   });
   if (ok(pz) && pz >= 1) { sc.COIN += 1; why.push({ s: 'COIN', t: 'MSTRがCOINに対して割高（+' + pz.toFixed(1) + 'σ）' }); }
   if (ok(pz) && pz <= -1) { sc.MSTR += 1; why.push({ s: 'MSTR', t: 'MSTRがCOINに対して割安（' + pz.toFixed(1) + 'σ）' }); }
-  ['MSTR', 'COIN'].forEach(k => { const ib = indexBlock(k); if (ib) { sc[k] -= 3; why.push({ s: k === 'MSTR' ? 'COIN' : 'MSTR', t: k + 'は' + ib.name + 'が' + ib.eff + 'に実施されます。それまでは指数に連動するファンドの売りが残るため、実施日の取引が始まるまでは新しく買いません' }); } });
+  // 指数からの除外は避けない。売りが集まる実施日は、指値で待ち構える（ladderOrders）
   if (ph === 'bottom' || ph === 'recover' || ph === 'up') { sc.MSTR += 1; why.push({ s: 'MSTR', t: 'サイクルの上昇局面では、MSTRの方が大きく動きます（前回の底からBTC天井まで MSTR +2188%、COIN +836%）' }); }
   ['MSTR', 'COIN'].forEach(k => { const an = k === 'MSTR' ? A : B, b = an.bt.l; if (b && b.sig.n >= 30 && ok(b.sig.mean) && ok(b.all.mean)) { if (b.sig.mean > b.all.mean) { sc[k] += 1; why.push({ s: k, t: k + 'は長期の買い判定が当たっている（買い判定の日の平均 ' + pc(b.sig.mean) + '、全日 ' + pc(b.all.mean) + '）' }); } } });
   // 手持ち
@@ -1274,7 +1290,7 @@ function todayCard() {
   const nb = p.n || 0;
   let lead = p.a === 'buy'
     ? (p.kind === 'add' ? '上向きの確認が続いています。予定額の4分の1で ' + buyTicker() + ' を買い足します（確認買い2回目／2回）。' : '上向きを確認しました。予定額の4分の1で ' + buyTicker() + ' を買います（確認買い1回目／2回）。もう1回は、14日以上あけて判定が続いていれば買います。')
-    : p.a === 'ladder' ? '買い下がりを始める合図です。予定額の半分を4回に分けて、今日1回目を買い、あとは1回目の買値から-10%・-20%・-30%に指値を置きます。残り半分は、上向きを確認してから使います。'
+    : p.a === 'ladder' ? '買い下がりを始める合図です。予定額の半分を4回に分けて、指値を4本まとめて置きます（値段と株数は下に出します）。残り半分は、上向きを確認してから使います。'
     : p.a === 'trial' ? '本格的な買い判定の前の、試し買いの合図です。入れるのは予定額の8分の1まで。撤退ラインは買値の10%下（BTCの終値）で、割ったら必ず降ります。'
     : p.a === 'exit' ? '試し買いの撤退ラインを割りました。試し分は売って、次の合図を待ちます。'
     : (p.lad || []).length ? '今日は新しく買いません。買い下がりの残りの指値はそのまま置いておき、確認買いは下の条件がそろった日に出ます。' : '今日は買いません。買い下がりは、底値圏でBTCの終値が90日ぶりの安値を付けた日に始まります。確認買いは、下の条件がすべてそろった日に出ます。';
