@@ -43,9 +43,9 @@ try {
   (Z.above || []).slice(0, 2).forEach(z => add(z.mid, '上値の壁', 'wall', [...new Set(z.items.map(x => x.label))].join('・')));
   (Z.below || []).slice(0, 2).forEach(z => add(z.mid, '下値の支え', 'support', [...new Set(z.items.map(x => x.label))].join('・')));
   // 短い時間の節目：前日の高値・安値、直近7日の高値・安値
-  add(d.h[last], '前日の高値', 'day', '前日の値幅を上に抜けると、短い上げが続きやすい'); add(d.l[last], '前日の安値', 'day', '前日の値幅を下に抜けると、短い下げが続きやすい');
+  add(d.h[last], '前日の高値', 'day', '上抜けの後7日で上がった割合56%'); add(d.l[last], '前日の安値', 'day', '割った後はむしろ戻しやすい（55〜57%）');
   let h7 = 0, l7 = Infinity; for (let j = last - 6; j <= last; j++) { h7 = Math.max(h7, d.h[j]); l7 = Math.min(l7, d.l[j]); }
-  add(h7, '直近7日の高値', 'week', '1週間の値幅を上に抜けた'); add(l7, '直近7日の安値', 'week', '1週間の値幅を下に抜けた');
+  add(h7, '直近7日の高値', 'week', '上抜けの後7日で上がった割合60%'); add(l7, '直近7日の安値', 'week', '割った後はむしろ戻しやすい（56〜59%）');
   // キリのいい値段は入れない（2020年以降の日足で、5千・1万ドル刻みの値段は半端な値段と比べて止まりやすくなかった）
   add(R.ind.s20[last], '20日線', 'ma', '短い流れの境目。上に戻ると戻りが本物になりやすい'); add(R.ind.s50[last], '50日線', 'ma', '中くらいの流れの境目'); add(R.ind.s200[last], '200日線', 'ma', '長い流れの境目');
   fs.writeFileSync(path.join(ROOT, 'data', 'lines.json'), JSON.stringify({ d: key, px: Math.round(price), lines: L0.sort((a, b) => b.p - a.p) }));
