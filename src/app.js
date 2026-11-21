@@ -900,6 +900,23 @@ function tilesCard() {
     tile('long', '4年サイクルの今', '<span class="cseg">' + [[400, 'up'], [200, 'top'], [150, 'down'], [250, 'bottom'], [span - 1000, 'recover']].map(x => '<i class="cs-' + x[1] + '" style="flex:' + x[0] + '"></i>').join('') + '<b style="left:' + (cyc * 100).toFixed(1) + '%"></b></span><span class="clab">' + [[400, '上昇'], [200, '天井'], [150, '下落'], [250, '底'], [span - 1000, '回復']].map(x => '<span style="flex:' + x[0] + '">' + x[1] + '</span>').join('') + '</span>', c ? c.name + '・半減期から' + c.day + '日目' : '—') +
     tile('concern', '懸念', '<b class="big ' + (cn ? 'v-avoid' : 'v-buy') + '">' + cn + '</b>', und + '系と相場全体') + '</section>' + miniGrid();
 }
+function whereCard() { // 今どこ？：いろいろな指標を、底値圏の「下げの途中／底固め／上がり始め」のどこかにまとめる
+  if (!S.R || !S.cyc || !S.d) return '';
+  const c = S.cyc, d = S.d, n = d.c.length, i = n - 1, rows = [];
+  const add = (nm, now, ok2, why) => rows.push({ nm, now, ok: ok2, why });
+  const lowDays = c.past.map(p => p.lowDay); add('時期（半減期から）', c.day + '日目', c.day >= Math.min(...lowDays), '過去の底は ' + lowDays.join('・') + ' 日目');
+  (S.bg ? S.bg.parts : []).forEach(x => add(x.nm, x.now, x.p >= 0.9, '過去の底は ' + x.bots));
+  const fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null; if (fg != null) add('恐怖指数', fg, fg <= 25, '参考（底以外でもよく出る）');
+  let last90 = -1; for (let k = n - 1; k >= n - 30; k--) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { last90 = k; break; } }
+  const since = last90 >= 0 ? i - last90 : 99; add('90日ぶりの安値から', since === 0 ? '今日' : since + '日', since >= 10, '新しい安値を付けているうちは、まだ下げの途中');
+  if (S.rt) add('前の安値の試し直し', S.rt.broke ? '割った' : S.rt.retest ? '試している' : '—', !S.rt.broke && !S.rt.retest, S.rt.broke ? '終値で割ると、過去は一段下げの形' : '分かれ目 ' + usd(S.rt.level));
+  const mm = S.R.hz.m.pct; add('中期の判定（上向きの確認）', Math.round(mm), mm >= 75, '75以上で「上がり始め」と判断（過去の検証で一番安定していた合図）');
+  const nOk = rows.filter(x => x.ok).length;
+  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : since < 10 || (S.rt && S.rt.broke) ? ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。'] : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
+  return '<section class="card" id="c-where"><div class="row"><h2>今どこ？</h2><b class="' + phase[1] + '">' + phase[0] + '</b></div><p>' + phase[2] + '</p><p class="sub" style="margin-top:0">底の水準に届いている指標：' + nOk + '／' + rows.length + '</p>' +
+    '<ul class="wh">' + rows.map(x => '<li class="' + (x.ok ? 'ok' : 'ng') + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>' +
+    '<details class="more-in"><summary>2倍にするのはいつか</summary><p class="sub">過去の検証では、「中期75以上（上がり始め）」で2倍に替えるのが一番安定していました。50や60で早めに替えると、2015年・2019年は少し良くなりましたが、2023年はBTC 1229→637、MSTR 3033→735、COIN 1826→294と大きく悪化しました（research/lad2x_on.js）。セリクラ（大きな下げ＋出来高の急増）や長い下ヒゲの日も、過去の底値圏では、その後90日で上がったのは23〜42%だけで、底の合図にはなっていません。</p></details></section>';
+}
 function miniGrid() { // 1か所で全部見えるように：大事な数字を小さな札で並べる（緑＝買いの材料、赤＝注意、灰＝参考）
   const R = []; const add = (go, name, val, tone, note) => R.push('<button class="mini m-' + tone + '" data-go="' + go + '"><span class="mn">' + name + '</span><b class="num">' + val + '</b><span class="mt">' + note + '</span></button>');
   const f1 = S.d && S.d.c.length > 30 ? fcAt(S.d.c.length - 1, 'd') : null, c0 = S.d ? S.d.c[S.d.c.length - 1] : NaN;
@@ -1597,7 +1614,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + tilesCard() + todayCard() + fl(warn) + holdCards() + dirCard() + soonCard() + next7Card() + intradayChart() + weekCard() + bottomCard() + longChart() + topCard() +
+  return todoCard() + tilesCard() + whereCard() + todayCard() + fl(warn) + holdCards() + dirCard() + soonCard() + next7Card() + intradayChart() + weekCard() + bottomCard() + longChart() + topCard() +
     '<details class="more"><summary>もっと詳しく（サイクルと出口・銘柄の選び方・スコア・価格チャート・データ）</summary>' + cycleCard() +
     (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + fl(info) + upsideCard(false) +
     '<h2 class="sec">時間軸ごとの判定（買い方の土台になるスコア）</h2>' + '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
