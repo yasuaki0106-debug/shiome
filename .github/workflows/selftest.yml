@@ -1,0 +1,18 @@
+name: 自動の点検
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "index.html", "research/final.js", "research/expected.json", "scripts/daily_signal.js", "scripts/selftest.py"]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: python scripts/selftest.py

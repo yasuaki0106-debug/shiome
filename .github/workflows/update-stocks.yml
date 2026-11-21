@@ -9,6 +9,11 @@ on:
     - cron: "40 12 * * *"     # 建玉の履歴の補充
     - cron: "40 16 * * *"
   workflow_dispatch:
+    inputs:
+      test:
+        description: "通知のテストを送る（1）"
+        required: false
+        default: ""
 permissions:
   contents: write
 concurrency:
@@ -32,6 +37,13 @@ jobs:
         continue-on-error: true
       - run: python scripts/fetch_news.py
         continue-on-error: true
+      - run: python scripts/fetch_mnav.py
+        continue-on-error: true
+      - run: node scripts/daily_signal.js
+        continue-on-error: true
+        env:
+          NTFY_TOPIC: shiome-b385e71038d6
+          NTFY_TEST: ${{ github.event.inputs.test }}
       - run: python scripts/update_premium.py
         continue-on-error: true
       - name: 変更があれば保存
