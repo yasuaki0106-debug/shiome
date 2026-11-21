@@ -1,0 +1,28 @@
+name: 株価のリアルタイム取得の確認（手動）
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: |
+          set +e
+          O="https://yasuaki0106-debug.github.io"; OUT=research/probe3.txt; : > $OUT
+          probe(){ echo "===== $1" >> $OUT; curl -s -m 25 -D /tmp/h -o /tmp/b -H "Origin: $O" -H "User-Agent: Mozilla/5.0" "$1"; head -1 /tmp/h >> $OUT; grep -i '^access-control-allow-origin' /tmp/h >> $OUT; head -c 400 /tmp/b >> $OUT; echo >> $OUT; }
+          probe "https://api.kraken.com/0/public/AssetPairs?pair=MSTRxUSD"
+          probe "https://api.kraken.com/0/public/Ticker?pair=MSTRxUSD,COINxUSD"
+          probe "https://api.kraken.com/0/public/AssetPairs?aclass_base=tokenized_asset"
+          probe "https://api.bybit.com/v5/market/tickers?category=spot&symbol=MSTRXUSDT"
+          probe "https://api.bitget.com/api/v2/spot/market/tickers?symbol=MSTRONUSDT"
+          probe "https://api.gateio.ws/api/v4/spot/tickers?currency_pair=MSTRX_USDT"
+          probe "https://www.okx.com/api/v5/market/ticker?instId=MSTRX-USDT"
+          probe "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d"
+          probe "https://api.nasdaq.com/api/quote/MSTR/info?assetclass=stocks"
+          probe "https://finnhub.io/api/v1/quote?symbol=MSTR&token=demo"
+          probe "https://api.twelvedata.com/price?symbol=MSTR&apikey=demo"
+          probe "https://stooq.com/q/l/?s=mstr.us&f=sd2t2ohlcv&h&e=csv"
+          git config user.name "shiome-bot"; git config user.email "shiome-bot@users.noreply.github.com"
+          git add $OUT; git commit -m "株価の取得先の確認"; git push || (git pull --rebase && git push)
