@@ -39,7 +39,7 @@ jobs:
         continue-on-error: true
       - run: python scripts/fetch_mnav.py
         continue-on-error: true
-      - run: node scripts/daily_signal.js
+      - run: node scripts/daily_signal.js | tee data/last_signal_run.txt
         continue-on-error: true
         env:
           NTFY_TOPIC: shiome-b385e71038d6
@@ -50,5 +50,5 @@ jobs:
         run: |
           git config user.name "shiome-bot"
           git config user.email "shiome-bot@users.noreply.github.com"
-          git add data/stocks.json data/btc-usd-daily.csv data/okx_oi.json data/cb-premium.csv
+          git add data/*.json data/*.csv data/*.txt
           git diff --cached --quiet || (git commit -m "データを更新" && git push)
