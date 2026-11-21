@@ -118,10 +118,13 @@ async def main():
         await pg.wait_for_timeout(600)
         print('prov normal:',await pg.evaluate("JSON.stringify(__S.prov&&{a:__S.prov.a,f:+__S.prov.frac.toFixed(2),pct:Object.values(__S.prov.pct).map(x=>Math.round(x))})"),'official:',await pg.evaluate("JSON.stringify({a:__S.plan.a,pct:['d','s','m','l'].map(k=>Math.round(__S.R.hz[k].pct))})"))
         # surge: BTC +14% intraday
+        print('range before:',await pg.evaluate("JSON.stringify(__S.plan.rng)"))
         old=(kl[-1][2],kl[-1][4],state['spot']); kl[-1][2]=str(spot*1.16); kl[-1][4]=str(spot*1.14); kl[-1][5]="5200"; state['spot']=spot*1.14
         t0=await pg.evaluate("performance.now()"); await pg.evaluate("__T.refreshAll()"); await pg.wait_for_function("!window.__S.loading",timeout=60000); await pg.wait_for_timeout(900)
         print('prov surge:',await pg.evaluate("JSON.stringify(__S.prov&&{a:__S.prov.a,f:+__S.prov.frac.toFixed(2),pct:Object.values(__S.prov.pct).map(x=>Math.round(x)),why:__S.prov.why})"),'official:',await pg.evaluate("__S.plan.a"),'price',await pg.evaluate("Math.round(__S.price)"))
         await pg.screenshot(path='shot_prov.png',full_page=False)
+        r1=await pg.evaluate("JSON.stringify(__S.plan.rng)")
+        print('range after surge (must equal before):',r1)
         print('pv in log:',await pg.evaluate("JSON.stringify(__T.LS.get('log',[]).map(x=>[x.k,x.pa,x.pv]))"))
         kl[-1][2],kl[-1][4],state['spot']=old; kl[-1][5]="400"
         await pg.evaluate("__T.refreshAll()"); await pg.wait_for_function("!window.__S.loading",timeout=60000); await pg.wait_for_timeout(600)
