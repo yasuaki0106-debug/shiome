@@ -782,6 +782,33 @@ function glossary() {
     ['引けに成行', 'その日の取引の最後の値段で、値段を指定せずに買うこと'], ['MVRV', 'ビットコイン全体の時価が、みんなが買った値段の合計の何倍か。1を割ると、平均で含み損'], ['mNAV', 'MSTRの株の価値が、持っているBTCの価値の何倍か'], ['σ（シグマ）', '値動きの大きさのものさし。1σの中に約7割、2σの中に約95%が収まる']];
   return '<details class="more"><summary>言葉の説明</summary><dl class="gl">' + G.map(x => '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>').join('') + '</dl></details>';
 }
+function weekCard() { // 直近7日に何が起きたか：値動き・建玉・ETF・線・ニュースから、1日ずつ理由を書く
+  const d = S.d; if (!d || !d.c.length) return '';
+  const n = d.c.length, hist = S.okx && S.okx.hist ? S.okx.hist.concat(ok(S.okx.oi) ? [[S.okx.t, S.okx.oi]] : []) : [];
+  const oiAt = t => { let best = null, bd = Infinity; hist.forEach(x => { const dd = Math.abs(x[0] - t); if (dd < bd) { bd = dd; best = x; } }); return best && bd <= 3 * 36e5 ? best[1] : NaN; };
+  const etf = {}; ((S.etff && S.etff.flows) || []).forEach(x => { etf[x[0]] = x[1]; });
+  const allNews = ['MSTR', 'COIN', 'REG'].flatMap(k => newsFor(k).map(x => Object.assign({ k }, x)));
+  const days = []; for (let i = Math.max(1, n - 7); i < n; i++) days.push({ t: d.t[i], o: d.o[i], h: d.h[i], l: d.l[i], c: d.c[i], ph: d.h[i - 1], pl: d.l[i - 1], h7: Math.max(...Array.from(d.h).slice(Math.max(0, i - 7), i)), l7: Math.min(...Array.from(d.l).slice(Math.max(0, i - 7), i)) });
+  const lr = S.liveRow; if (lr && lr[0] > d.t[n - 1]) days.push({ t: lr[0], o: lr[1], h: Math.max(lr[2], S.price), l: Math.min(lr[3], S.price), c: S.price, ph: d.h[n - 1], pl: d.l[n - 1], h7: Math.max(...Array.from(d.h).slice(n - 7)), l7: Math.min(...Array.from(d.l).slice(n - 7)), live: true });
+  const wd = ['日', '月', '火', '水', '木', '金', '土'];
+  const rows = days.reverse().map(x => {
+    const ch = x.c / x.o - 1, o0 = oiAt(x.t), o1 = oiAt(Math.min(Date.now(), x.t + DAY)), oc = ok(o0) && ok(o1) ? o1 / o0 - 1 : NaN, key = dkey(x.t), ef = etf[key];
+    const why = [];
+    if (ok(oc) && Math.abs(ch) >= 0.01) why.push(ch < 0 ? (oc > 0.02 ? '下げながら建玉が増えた＝新しい売りが積み上がった' : oc < -0.02 ? '下げながら建玉が減った＝買いの損切り・清算が出た' : '建玉はあまり動かず、現物の売りが中心') : (oc > 0.02 ? '上げながら建玉が増えた＝新しい買いが入った' : oc < -0.02 ? '上げながら建玉が減った＝売りの買い戻し（踏み上げ気味）' : '建玉はあまり動かず、現物の買いが中心'));
+    if (ok(ef) && Math.abs(ef) >= 300) why.push('ETFから' + (ef < 0 ? '大きな流出' : '大きな流入') + '（' + (ef < 0 ? '-' : '+') + '$' + Math.abs(Math.round(ef)) + 'M）');
+    const lines = [];
+    if (x.h > x.ph) lines.push(x.c > x.ph ? '前日の高値を終値で上抜け' : '前日の高値を一時上抜けたが押し戻された');
+    if (x.l < x.pl) lines.push(x.c < x.pl ? '前日の安値を終値で割った' : '前日の安値を一時割ったが戻した');
+    if (x.l < x.l7) lines.push(x.c < x.l7 ? '1週間の安値を終値で割った' : '1週間の安値を一時割ったが戻した');
+    if (x.h > x.h7) lines.push(x.c > x.h7 ? '1週間の高値を終値で上抜け' : '1週間の高値を一時上抜けたが押し戻された');
+    if (S.rt && (S.rt.retest || S.rt.broke)) { if (x.l < S.rt.level) lines.push(x.c < S.rt.level ? '分かれ目（' + kfmt(S.rt.level) + '）を割った' : '分かれ目（' + kfmt(S.rt.level) + '）を一時割ったが戻した'); }
+    const nw = allNews.filter(nn => nn.t >= x.t && nn.t < x.t + DAY).sort((a, b) => (b.concern ? 1 : 0) - (a.concern ? 1 : 0)).slice(0, 2);
+    if (ok(oc) && Math.abs(ch) < 0.01 && Math.abs(oc) >= 0.04) why.push('値動きは小さいが、建玉が大きく' + (oc < 0 ? '減った＝ポジションの整理（手じまい）が進んだ' : '増えた＝次の大きな動きに向けてポジションが積み上がった'));
+    if (!why.length) why.push(Math.abs(ch) < 0.01 ? '小さな動き' : (ch < 0 ? '下げ' : '上げ') + '（建玉の記録なし）');
+    return '<li><details><summary><div class="wk-h"><b>' + md(x.t) + '（' + wd[new Date(x.t).getUTCDay()] + '）' + (x.live ? ' 今日（途中）' : '') + '</b><b class="num ' + (ch >= 0 ? 'up' : 'dn') + '">' + pc(ch) + '</b></div><small class="num">' + kfmt(x.o) + '→' + kfmt(x.c) + '（安値 ' + kfmt(x.l) + '・高値 ' + kfmt(x.h) + '）' + (ok(oc) ? '　建玉 ' + pc(oc, 0) : '') + (ok(ef) ? '　ETF ' + (ef < 0 ? '-' : '+') + '$' + Math.abs(Math.round(ef)) + 'M' : '') + '</small><p class="wk-why">' + esc(why.join('。')) + '</p></summary><div class="story">' + (lines.length ? '<p><b>線：</b>' + esc(lines.join('、')) + '</p>' : '') + (nw.length ? nw.map(nn => '<p><b>ニュース：</b><a href="' + esc(nn.link) + '" target="_blank" rel="noopener">' + esc(nn.ja || nn.title) + '</a></p>').join('') : '<p class="muted">この日の目立ったニュースは取り込めていません</p>') + '</div></details></li>';
+  }).join('');
+  return '<section class="card" id="c-week"><h2>直近7日に何が起きたか</h2><ul class="wk">' + rows + '</ul><p class="sub">日の区切りは日本時間の朝9時。建玉はOKXの先物（4時間ごとの記録）で、取引所全体の清算の額ではありません。値動きと建玉の増減の組み合わせから、何が起きていたかを推し量っています。タップすると、その日に抜けた線とニュースが開きます。</p></section>';
+}
 function tilesCard() {
   if (!S.R) return '';
   const fs = S.R.hz.s.fc, fm = S.R.hz.m.fc, c = S.cyc, bg = S.bg, p = S.plan || {};
@@ -1471,7 +1498,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + tilesCard() + todayCard() + fl(warn) + holdCards() + dirCard() + intradayChart() + bottomCard() + longChart() + topCard() +
+  return todoCard() + tilesCard() + todayCard() + fl(warn) + holdCards() + dirCard() + intradayChart() + weekCard() + bottomCard() + longChart() + topCard() +
     '<details class="more"><summary>もっと詳しく（サイクルと出口・銘柄の選び方・スコア・価格チャート・データ）</summary>' + cycleCard() +
     (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + fl(info) + upsideCard(false) +
     '<h2 class="sec">時間軸ごとの判定（買い方の土台になるスコア）</h2>' + '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
