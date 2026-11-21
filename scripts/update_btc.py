@@ -53,7 +53,7 @@ def main():
     rows += [r for r in new if r[0] not in seen]
     rows.sort(key=lambda r: r[0])
     with open(OUT, "w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f); w.writerow(["date", "open", "high", "low", "close", "volume", "source"]); w.writerows(rows)
+        w = csv.writer(f, lineterminator="\n"); w.writerow(["date", "open", "high", "low", "close", "volume", "source"]); w.writerows(rows)
     print("last:", rows[-1])
 
 if __name__ == "__main__":
