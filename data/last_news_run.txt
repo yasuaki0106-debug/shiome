@@ -1,0 +1,5 @@
+warn translate HTTP Error 429: Too Many Requests
+warn translate HTTP Error 429: Too Many Requests
+warn translate HTTP Error 429: Too Many Requests
+warn translate HTTP Error 429: Too Many Requests
+{'MSTR': 25, 'COIN': 25, 'REG': 25} {}
