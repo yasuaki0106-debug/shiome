@@ -640,7 +640,8 @@ function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
     if (per > b.cash + 1) h += '<p class="sub" style="color:var(--avoid)">現金が足りません（予定 ' + usd(per) + '）。今ある ' + usd(b.cash) + ' の範囲で買ってください。</p>';
   } else h += '<p class="sub">今日は新しく使いません。使う額の目安：買い下がり1回 ' + usd(b.total * LAD_SHARE / LAD_N) + '（4回まで）、確認買い1回 ' + usd(b.total * (1 - LAD_SHARE) / MAXBUY) + '（2回まで）。</p>';
   const und = ETF[t] ? ETF[t].und : t, ibm = indexBlock('MSTR');
-  if (ibm && und === 'COIN' && ((S.cfg && S.cfg.buy) || 'auto') === 'auto') h += '<p class="sub">MSTRは' + ibm.eff + 'に' + ibm.name + 'があるため、それが終わるまではCOIN系で入ります（12/2以降は、その日の状況で選び直します）。</p>';
+  if (ibm && und === 'COIN' && ((S.cfg && S.cfg.buy) || 'auto') === 'auto') h += '<p class="sub">MSTRは' + ibm.eff + 'に' + ibm.name + 'があるため、11/30の取引が始まるまではCOIN系で入ります。11/30はMSTRを引けで買う選択肢が出ます（下の説明）。</p>';
+  const idd = indexDay('MSTR'); if (idd) h += '<div class="concern"><b>MSTRの指数除外の当日</b><ul><li class="c-info">指数に連動するファンドは、' + idd.eff + 'にまとめて売ります。引け成行（MOC）でMSTRを買うと、その売りの受け手になれます。研究では、除外の売り圧力は実施の後に一部戻り、40〜50日で消える傾向があります。買い下がりのMSTR分は、この引けからが狙い目です<small>McKinsey・Lynch & Mendenhall（1997）など</small></li></ul></div>';
   const ib2 = indexBlock(und); if (ib2) h += '<p class="sub" style="color:var(--avoid)">' + und + 'は' + ib2.eff + 'に' + ib2.name + 'があります。買う銘柄を固定しているので' + und + 'のまま出していますが、実施の翌営業日までは避けるのが、研究で分かっている売り圧力の傾向に沿った動きです。</p>';
   h += concernList(und);
   return h + '</div>';
@@ -749,7 +750,8 @@ function cycleCard() {
     '<p class="sub">時期の区切りは、半減期から400日目まで上昇期、600日目まで天井圏、750日目まで下落期、1000日目まで底値圏、その後が回復期です。過去3回のサイクルだけが根拠で、上昇幅は回を追うごとに小さくなっています。次も同じになる保証はありません。</p></section>';
 }
 // 指数からの除外：発表から実施日の翌営業日までは、その銘柄を新しく買わない（研究では、除外の売り圧力は一時的で、実施後に一部戻る。research/events.py）
-const INDEX_EVENTS = [{ sym: 'MSTR', name: 'MSCI USA指数からの除外', ann: Date.UTC(2026, 10, 11), until: Date.UTC(2026, 11, 1, 21), eff: '11/30の引け' }];
+const INDEX_EVENTS = [{ sym: 'MSTR', name: 'MSCI USA指数からの除外', ann: Date.UTC(2026, 10, 11), until: Date.UTC(2026, 10, 30, 14, 30), effT: Date.UTC(2026, 10, 30, 21), eff: '11/30の引け' }];
+function indexDay(und) { const now = Date.now(); return INDEX_EVENTS.find(x => x.sym === und && now >= x.until && now < x.effT + 3 * DAY) || null; }   // 実施日の取引時間〜その後3日：売りの受け手になれる時間
 function indexBlock(und) { const now = Date.now(); return INDEX_EVENTS.find(x => x.sym === und && now >= x.ann && now < x.until) || null; }
 function pickStock() {
   const A = S.stocks.MSTR && S.stocks.MSTR.an, B = S.stocks.COIN && S.stocks.COIN.an; if (!A || !B) return null;
@@ -769,7 +771,7 @@ function pickStock() {
   });
   if (ok(pz) && pz >= 1) { sc.COIN += 1; why.push({ s: 'COIN', t: 'MSTRがCOINに対して割高（+' + pz.toFixed(1) + 'σ）' }); }
   if (ok(pz) && pz <= -1) { sc.MSTR += 1; why.push({ s: 'MSTR', t: 'MSTRがCOINに対して割安（' + pz.toFixed(1) + 'σ）' }); }
-  ['MSTR', 'COIN'].forEach(k => { const ib = indexBlock(k); if (ib) { sc[k] -= 3; why.push({ s: k === 'MSTR' ? 'COIN' : 'MSTR', t: k + 'は' + ib.name + 'が' + ib.eff + 'に実施されます。指数に連動するファンドの売りがそこに集まるため、実施の翌営業日までは新しく買いません' }); } });
+  ['MSTR', 'COIN'].forEach(k => { const ib = indexBlock(k); if (ib) { sc[k] -= 3; why.push({ s: k === 'MSTR' ? 'COIN' : 'MSTR', t: k + 'は' + ib.name + 'が' + ib.eff + 'に実施されます。それまでは指数に連動するファンドの売りが残るため、実施日の取引が始まるまでは新しく買いません' }); } });
   if (ph === 'bottom' || ph === 'recover' || ph === 'up') { sc.MSTR += 1; why.push({ s: 'MSTR', t: 'サイクルの上昇局面では、MSTRの方が大きく動きます（前回の底からBTC天井まで MSTR +2188%、COIN +836%）' }); }
   ['MSTR', 'COIN'].forEach(k => { const an = k === 'MSTR' ? A : B, b = an.bt.l; if (b && b.sig.n >= 30 && ok(b.sig.mean) && ok(b.all.mean)) { if (b.sig.mean > b.all.mean) { sc[k] += 1; why.push({ s: k, t: k + 'は長期の買い判定が当たっている（買い判定の日の平均 ' + pc(b.sig.mean) + '、全日 ' + pc(b.all.mean) + '）' }); } } });
   // 手持ち
