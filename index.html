@@ -51,6 +51,8 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .lot{display:block!important}.lot-act{display:grid;grid-template-columns:1fr auto 1fr auto;gap:6px 8px;align-items:center;margin-top:8px}.lot-act .link{white-space:nowrap}.lot-act button[data-delpos]{grid-column:1/-1;justify-self:end}.lot-act input{width:100%;font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)}
 .xscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}.xscroll .tbl{min-width:100%}
 .prices{margin-top:10px;font-size:13px}.prices summary{cursor:pointer;color:var(--muted)}.prices .tbl{margin-top:6px}.tbl small{color:var(--muted);font-weight:400}.h3s{font-size:13px!important;color:var(--muted);margin:12px 0 4px!important}
+.concern{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}.concern>b{font-size:13px}.concern ul{margin:4px 0 0;font-size:13px}.concern li{padding:4px 0 4px 10px;border-left:3px solid var(--wait);margin-bottom:4px;line-height:1.5}.concern li.c-warn{border-left-color:var(--avoid)}.concern small{display:block;color:var(--muted);font-size:11.5px}.concern a,.news a{color:inherit}
+.news li{padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.5}.news li.nc a{font-weight:700}.news div{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px}.news small{color:var(--muted);font-size:11.5px;margin-left:auto}.tg{font-size:11px;padding:1px 6px;border-radius:3px;background:var(--soft);color:var(--muted)}.tg.tw{background:var(--avoid);color:var(--bg)}
 .money{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0;background:var(--surface)}.money .row b{font-size:15px}.money-do{font-size:15px;margin-top:6px}
 .alarm-top{border:2px solid var(--avoid);border-radius:6px;padding:10px 12px;margin:0 0 14px;background:var(--surface)}.alarm-top>b{color:var(--avoid);font-size:16px}.alarm-top ul{margin-top:4px;font-size:13.5px}.alarm-top li{padding:3px 0}
 .plan-stock.alarm{border-left-color:var(--avoid)}.alarm-t{color:var(--avoid);font-weight:700;font-size:13.5px;margin-top:4px}.plan-stock .sym small{font-size:11.5px;font-weight:400;color:var(--muted);margin-left:8px;letter-spacing:0}
@@ -851,6 +853,7 @@ async function loadOnchain() { // 恐怖と強欲指数・MVRV・ハッシュレ
   try { const f = await jget('https://api.alternative.me/fng/?limit=3'); (f.data || []).forEach(x => { const k = dkey(+x.timestamp * 1000); if (j.fng && !j.fng.some(r => r[0] === k)) j.fng.push([k, +x.value]); }); } catch (e) { /* 最新値なし */ }
   return j;
 }
+async function loadNews() { return await jget('data/news.json?t=' + Math.floor(Date.now() / 36e5), 20000); }
 async function loadCoinbase() {
   const [tk, cd] = await Promise.all([jget('https://api.exchange.coinbase.com/products/BTC-USD/ticker'), jget('https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=86400')]);
   const days = {}; (cd || []).forEach(x => { days[dkey(x[0] * 1000)] = +x[4]; });
@@ -887,6 +890,7 @@ const BUILTIN = [
   [U(2027, 7, 2, 12, 30), '米雇用統計（6月分）', 3], [U(2027, 7, 14, 12, 30), '米CPI（6月分）', 3], [U(2027, 7, 28, 18), 'FOMC 政策金利発表', 3],
   [U(2027, 9, 14, 12, 30), '米CPI（8月分）', 3], [U(2027, 9, 15, 18), 'FOMC 政策金利発表', 3], [U(2027, 11, 17, 19), 'FOMC 政策金利発表', 3],
   [U(2027, 12, 3, 13, 30), '米雇用統計（11月分）', 3], [U(2027, 12, 10, 13, 30), '米CPI（11月分）', 3]
+  , [Date.UTC(2026, 10, 30, 21), 'MSTR、MSCI USA指数から除外（引け）', 2]
 ].map(x => ({ t: x[0], title: x[1], impact: x[2], kind: 'macro' }));
 function allEvents() {
   const now = Date.now(), custom = LS.get('events', []).map((e, i) => Object.assign({ custom: true, idx: i }, e));
@@ -1266,6 +1270,22 @@ function budget() { // 今のサイクルで使う予定額＝現金＋このサ
 function planTicker(p) { // 今日買う銘柄：判定が20未満のうちは1倍で（守りのルールと同じ）
   const t0 = buyTicker(), mm = S.R.hz.m.pct; return p && (p.a === 'trial' || p.a === 'ladder') && ETF[t0].L > 1 && ok(mm) && mm < LEV_OFF ? ETF[t0].und : t0;
 }
+// 確かめた重要な材料（調べた日付と出どころつき）。期限を過ぎたら出さない
+const PINNED = [
+  { sym: 'MSTR', from: Date.UTC(2026, 10, 11), until: Date.UTC(2026, 11, 2), lv: 'warn', text: 'MSCI USA指数から外れます（11/30の引けで実施）。指数に連動するファンドの売りが、11/30の引けにかけて出やすくなります', src: 'The Block 11/11', link: 'https://www.theblock.co/news/markets/2026-11-11-strategy-metaplanet-lose-msci-index-membership-november-reshuffle-438437' },
+  { sym: 'COIN', from: Date.UTC(2026, 9, 30), until: Date.UTC(2026, 11, 31), lv: 'info', text: '7〜9月期の決算で売上が前年比35%減。その後、モルガン・スタンレーが売り推奨に下げ、目標株価を53%引き下げ', src: 'StockStory・Stock Analysis', link: 'https://stockanalysis.com/stocks/coin/' }
+];
+function concernsFor(und) {
+  const now = Date.now(), out = PINNED.filter(x => x.sym === und && now >= x.from && now < x.until).map(x => ({ lv: x.lv, text: x.text, src: x.src, link: x.link, t: x.from, pinned: true }));
+  const it = (S.news && S.news.items && S.news.items[und]) || [];
+  it.filter(x => x.concern && now - x.t < 10 * DAY).slice(0, 3).forEach(x => out.push({ lv: 'info', text: x.title, src: x.src, link: x.link, t: x.t, tags: x.tags }));
+  const ed = S.news && S.news.earn && S.news.earn[und]; if (ed) { const T = Date.parse(ed + 'T21:00:00Z'); if (T > now && T - now < 14 * DAY) out.unshift({ lv: 'warn', text: '決算発表が ' + md(T) + ' に予定されています。発表の前後は大きく動きます', src: 'Nasdaq', t: now }); }
+  return out;
+}
+function concernList(und, max) {
+  const cs = concernsFor(und).slice(0, max || 4); if (!cs.length) return '';
+  return '<div class="concern"><b>' + und + ' 系の懸念材料</b><ul>' + cs.map(c => '<li class="c-' + c.lv + '">' + esc(c.text) + '<small>' + (c.link ? '<a href="' + esc(c.link) + '" target="_blank" rel="noopener">' + esc(c.src || '出典') + '</a>' : esc(c.src || '')) + (c.t ? '・' + md(c.t) : '') + '</small></li>').join('') + '</ul><p class="sub">懸念があっても、買いの判定は変えていません（ニュースの影響は過去データで確かめられないため）。気になる場合は「関連株」タブで買う銘柄をもう一方に固定できます。</p></div>';
+}
 function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
   const b = budget(), t0 = buyTicker(), t = planTicker(p);
   const px = etfAt(t, S.price), per = { buy: b.total * (1 - LAD_SHARE) / MAXBUY, trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a];
@@ -1278,6 +1298,7 @@ function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
     if (p.a === 'ladder' && ok(px)) h += '<p class="sub">買ったら、同じ金額の指値を3本入れておきます：' + [1, 2, 3].map(k => usd2(px * (1 - LAD_STEP * k)) + '（-' + (LAD_STEP * 100 * k) + '%）').join('、') + '。実際の買値が決まったら、正確な指値を出し直します。</p>';
     if (per > b.cash + 1) h += '<p class="sub" style="color:var(--avoid)">現金が足りません（予定 ' + usd(per) + '）。今ある ' + usd(b.cash) + ' の範囲で買ってください。</p>';
   } else h += '<p class="sub">今日は新しく使いません。使う額の目安：買い下がり1回 ' + usd(b.total * LAD_SHARE / LAD_N) + '（4回まで）、確認買い1回 ' + usd(b.total * (1 - LAD_SHARE) / MAXBUY) + '（2回まで）。</p>';
+  const und = ETF[t] ? ETF[t].und : t; h += concernList(und);
   return h + '</div>';
 }
 const LEVOF = { MSTR: 'MSTU', COIN: 'CONL' };
@@ -1341,6 +1362,7 @@ function holdCards() {
   return '<h2 class="sec">買った玉（1つずつ判定します）</h2>' + hs.map(h => {
     if (h.p.kind === 'cash') { const [lb, cl] = HOLD[h.a]; return '<div class="plan-stock"><div class="row"><b class="sym">' + usd(h.cash) + '<small>' + esc(h.p.sym) + 'を売ったお金' + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cl + ' plan-v">' + lb + '</b></div><p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p>' + (h.a === 'reinvest' && ok(h.undNow) ? '<dl class="kv"><dt>' + h.und + ' の今の目安</dt><dd class="num">' + usd2(h.undNow) + '（約' + Math.floor(h.cash / h.undNow) + '株）</dd></dl>' : '') + '<p class="sub">買ったら、この記録を削除して、買った株を記録してください。</p></div>'; }
     const [lab, cls] = HOLD[h.a], e = ETF[h.p.sym], kv = [], kn = h.p.kind === 'ladder' ? '買い下がり' : h.p.kind === 'trial' ? '試し' : h.p.kind === 'buy' ? '確認買い' : '以前からの保有';
+    const cn = concernsFor(ETF[h.p.sym] ? ETF[h.p.sym].und : h.p.sym); if (cn.length) kv.push(['懸念材料', cn.length + '件（「関連株」タブのニュース）']);
     if (h.line && ok(h.line.px)) kv.push([h.line.label, usd2(h.line.px) + (ok(h.line.btc) ? '（BTC ' + usd(h.line.btc) + '）' : '')]);
     if (ok(h.now)) { kv.push(['いまの目安 / 買値', usd2(h.now) + ' / ' + usd2(h.p.cost)]); kv.push(['損益', pc(h.pl) + (h.plUsd != null ? '（' + (h.plUsd < 0 ? '-' : '+') + '$' + Math.abs(Math.round(h.plUsd)).toLocaleString('en-US') + '）' : '')]); }
     if (ok(h.lim)) kv.push(['買い足しの指値', usd2(h.lim)]);
@@ -1534,6 +1556,7 @@ async function refreshAll() {
     S.status.agg = { ok: !miss.length, name: '建玉の合算', note: got.join('・') + (miss.length ? '（' + miss.join('・') + ' は取得できず）' : '') };
   }));
   tasks.push(loadOnchain().then(v => { S.oc = v; S.status.oc = { ok: true, name: 'オンチェーン・恐怖指数', note: 'MVRV・マイナー収入・ハッシュレート・恐怖と強欲指数' }; }, () => { S.oc = null; S.status.oc = { ok: false, name: 'オンチェーン・恐怖指数', note: '取得できません。底らしさの一部が出ません' }; }));
+  tasks.push(loadNews().then(v => { S.news = v; S.status.news = { ok: true, name: 'ニュース', note: 'MSTR・COIN・規制の見出し（毎日更新）' }; }, () => { S.news = null; S.status.news = { ok: false, name: 'ニュース', note: '取得できません' }; }));
   tasks.push(loadCoinbase().then(v => { S.cb = v; S.status.cb = { ok: true, name: 'コインベース・プレミアム', note: 'Coinbase BTC-USD' }; }, () => { S.cb = null; S.status.cb = { ok: false, name: 'コインベース・プレミアム', note: '取得できません' }; }));
   tasks.push(loadHourly().then(m => { S.hourly = m; }, () => { S.hourly = null; }));
   tasks.push(mark('long', '長期の価格履歴（サイクル用）', loadLong(), v => 'Bitstamp、' + v.length + '日分', '取得できません。サイクルの表示と長期要因は使えません').then(v => { if (v) S.longRows = v; else { const c = LS.get('long', null); S.longRows = c ? c.rows : null; } }));
@@ -2098,6 +2121,12 @@ function viewStocks() {
       '<p class="sub">前日のBTC判定を見て、当日の終値で買ったと仮定。件数は ' + an.bt.m.all.n + ' 営業日（' + an.date + ' まで）。</p>' +
       '</section>';
   });
+  if (S.news && S.news.items) {
+    const nm = { MSTR: 'MSTR（Strategy）', COIN: 'COIN（Coinbase）', REG: '規制・法律（暗号資産全体）' };
+    h += '<h2 class="sec" style="margin-top:22px">ニュース</h2>' + ['MSTR', 'COIN', 'REG'].map(k => { const it = (S.news.items[k] || []).slice(0, 10); if (!it.length) return '';
+      return '<section class="card"><h2>' + nm[k] + '</h2>' + (k !== 'REG' ? concernList(k, 6) : '') + '<ul class="news">' + it.map(x => '<li' + (x.concern ? ' class="nc"' : '') + '><a href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.title) + '</a><div>' + (x.concern ? '<span class="tg tw">懸念</span>' : '') + (x.tags || []).map(g => '<span class="tg">' + esc(g) + '</span>').join('') + '<small>' + esc(x.src || '') + '・' + md(x.t) + '</small></div></li>').join('') + '</ul></section>'; }).join('') +
+      '<p class="sub">見出しはGoogleニュースから毎日取り込んでいます（英語のまま）。種類と「懸念」は、見出しの言葉から自動で付けた目安です。</p>';
+  }
   h += planRecord();
   if (!have.length && !['MSTR', 'COIN'].some(s => S.stocks[s])) h += '<section class="card"><p class="muted">株価を読み込んでいます…</p></section>';
   if (S.stkSrc) h += '<p class="sub">株価：' + esc(S.stkSrc) + '。米国市場の終値を、取引終了後に毎日取り込んでいます。</p>';
