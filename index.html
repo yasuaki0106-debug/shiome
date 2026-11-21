@@ -36,6 +36,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .lead{margin:6px 0 20px}
 .today{margin:4px 0 22px}.today-when{font-size:12.5px;color:var(--muted)}
+.sess{margin-bottom:10px}.sess-now{font-size:13px;font-weight:700}
+.sess ol{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:3px}
+.sess li{border-top:3px solid var(--line);padding:4px 2px 0;font-size:11px;color:var(--muted);line-height:1.4}
+.sess li b{display:block;font-size:12px;font-weight:500}.sess li.on{border-top-color:var(--brass);color:var(--ink)}.sess li.on b{font-weight:700}
 .today h1{font-size:34px;line-height:1.25;font-weight:700;letter-spacing:.04em;margin:2px 0 8px}
 .today-lead{font-size:15px}.today-why{font-size:13px;color:var(--muted);margin-top:6px}
 .plan-stock{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--ink);border-radius:6px;padding:12px 14px;margin-top:12px}
@@ -848,6 +852,25 @@ function usSession(now) {
   }
   return null;
 }
+function usSegments(now) {
+  // 米国株の取引時間（ET）：夜間 20:00-翌4:00（日〜木の夜）、プレ 4:00-9:30、通常 9:30-16:00、アフター 16:00-20:00（月〜金）
+  const segs = [], H = 36e5;
+  for (let k = -2; k <= 5; k++) {
+    const base = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate() + k);
+    const off = nyDST(base + 15 * H) ? 4 : 5, at = h => base + (h + off) * H, wd = new Date(base).getUTCDay();
+    if (wd >= 1 && wd <= 5) { segs.push({ k: 'pre', name: 'プレ', s: at(4), e: at(9.5) }, { k: 'reg', name: '通常取引', s: at(9.5), e: at(16) }, { k: 'aft', name: 'アフター', s: at(16), e: at(20) }); }
+    if (wd >= 0 && wd <= 4) segs.push({ k: 'ovn', name: '夜間', s: at(20), e: at(28) });
+  }
+  segs.sort((a, b) => a.s - b.s);
+  const i = segs.findIndex(x => now < x.e);
+  return segs.slice(i, i + 4).map(x => Object.assign(x, { live: now >= x.s }));
+}
+function sessionStrip() {
+  const now = Date.now(), sg = usSegments(now); if (!sg.length) return '';
+  const cur = sg[0].live ? sg[0] : null;
+  const lead = cur ? 'いま：' + cur.name + '（' + (cur.k === 'reg' ? '' : '指値のみで。') + 'あと' + Math.max(1, Math.round((cur.e - now) / 36e5)) + '時間）' : '米国株は休場中。次は ' + mdw(sg[0].s) + ' ' + hm(sg[0].s) + ' の' + sg[0].name + 'から';
+  return '<div class="sess"><p class="sess-now">' + lead + '</p><ol>' + sg.map(x => '<li class="' + (x.live ? 'on' : '') + '"><b>' + x.name + '</b><span class="num">' + hm(x.s) + '〜' + hm(x.e) + '</span></li>').join('') + '</ol></div>';
+}
 function todayRange() {
   const price = S.price, o = S.opt, f = S.R.hz.d.fc;
   if (o && ok(o.move1)) return { lo: price * (1 - o.move1), hi: price * (1 + o.move1), src: 'オプションが織り込む1日の値幅' };
@@ -1057,7 +1080,7 @@ const railHTML = h => {
 function todayCard() {
   const p = S.plan; if (!p) return '';
   const [lab, cls] = PLAN[p.a], t = p.target, ses = p.sess;
-  const when = !ses ? '' : ses.live ? '米国市場は取引中（' + hm(ses.close) + ' まで）' : '米国市場は ' + mdw(ses.open) + ' ' + hm(ses.open) + ' に開きます';
+
   let lead;
   if (p.a === 'buy') lead = '2回に分けて入るのが基本です。半分を今夜の取引で買い、残り半分を下の指値で待ちます。';
   else if (p.a === 'limit') lead = '今の値段では買わず、下の指値を置いて待ちます。届かなければ明日の判定で見直します。';
@@ -1066,7 +1089,9 @@ function todayCard() {
   const rows = syms.map(sym => {
     const x = p.stocks[sym], [sl, sc] = PLAN[x.a];
     const lines = [];
-    lines.push(['いまの目安', usd2(x.now)]);
+    const an = S.stocks[sym].an;
+    lines.push(['終値（' + an.date.slice(5).replace('-', '/') + ' 通常取引）', usd2(an.px)]);
+    lines.push(['いまの目安（BTCから換算）', usd2(x.now)]);
     if (x.a === 'buy') { lines.push(['残り半分の指値', usd2(x.lim)]); lines.push(['撤退の目安', usd2(x.stop)]); }
     else if (x.a === 'limit') { lines.push(['指値', usd2(x.lim)]); lines.push(['撤退の目安', usd2(x.stop)]); }
     else if (ok(x.lim)) lines.push(['検討を始める水準', usd2(x.lim)]);
@@ -1077,7 +1102,7 @@ function todayCard() {
   if (t) btc.push((p.a === 'skip' ? '検討を始めるBTCの価格帯 ' : 'BTCの指値の基準 ') + '<span class="num">' + usd(t.mid) + '（' + pc(t.dist) + '）</span>' + (p.a !== 'skip' && ok(p.reach) ? '。過去2年で、1日のうちにこの水準まで下げた日は ' + pc(p.reach, 0, false) : ''));
   if (p.rng) btc.push('今日のBTCの想定レンジ <span class="num">' + usd(p.rng.lo) + '〜' + usd(p.rng.hi) + '</span>（' + p.rng.src + '）');
   const fd = S.R.hz.d;
-  return '<section class="today"><p class="today-when">' + when + '</p><h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p><p class="today-why">理由：' + esc(p.why.join('。')) + '</p>' +
+  return '<section class="today">' + sessionStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p><p class="today-why">理由：' + esc(p.why.join('。')) + '</p>' +
     (rows || '<p class="sub">MSTR・COINの株価を読み込めていないため、BTCの価格で表示しています。</p>') +
     '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
     '<p class="sub">今日1日の上げ下げは予想していません。過去の検証で1日先の方向の的中率は ' + pc(fd.ev.st.all.win, 0, false) + '前後とほぼ五分で、当てにならないためです。代わりに「どこで買うか」の値段と、1週間〜3か月の判定で決めています。株価は BTCとの連動（ベータ）から換算した目安です。</p></section>';
