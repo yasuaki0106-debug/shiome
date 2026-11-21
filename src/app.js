@@ -928,7 +928,13 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   // 4. 値動きの形
   const g4 = G('値動きの形', '');
   let last90 = -1; for (let k = n - 1; k >= n - 30; k--) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { last90 = k; break; } }
-  const since = last90 >= 0 ? i - last90 : 99; row(g4, '終値で90日ぶりの安値から', since === 0 ? '今日' : since === 99 ? '30日以上' : since + '日', since >= 10 ? 'ok' : 'ng', '新しい安値を付けているうちは、まだ下げの途中');
+  const since = last90 >= 0 ? i - last90 : 99; row(g4, '終値で90日ぶりの安値から', since === 99 ? '30日以上' : md(d.t[last90]) + 'の終値' + (since === 0 ? '（直近の確定日）' : '・' + since + '日前'), since >= 10 ? 'ok' : 'ng', '確定した終値（朝9時）で見ています。新しい安値を付けているうちは、まだ下げの途中');
+  // 今日の足（まだ確定していない）
+  const lrw = S.liveRow && S.liveRow[0] > d.t[n - 1] ? S.liveRow : null;
+  if (lrw) { const o = lrw[1], h = Math.max(lrw[2], P), l = Math.min(lrw[3], P), chg = P / o - 1, wick = (Math.min(o, P) - l) / o, pos = h > l ? (P - l) / (h - l) : 0.5;
+    const shape = wick >= 0.04 && pos >= 0.7 ? '長い下ヒゲで戻している' : (h - Math.max(o, P)) / o >= 0.04 && pos <= 0.3 ? '長い上ヒゲで押し戻されている' : chg <= -0.03 ? '大きく下げている' : chg >= 0.03 ? '大きく上げている' : '小さな動き';
+    const flags2 = []; if (P > d.h[n - 1]) flags2.push('前日の高値（' + kfmt(d.h[n - 1]) + '）を上抜け中'); if (l < d.l[n - 1]) flags2.push('前日の安値（' + kfmt(d.l[n - 1]) + '）を一時割った'); if (S.rt && l < S.rt.level && P > S.rt.level) flags2.push('分かれ目（' + kfmt(S.rt.level) + '）を一時割って戻した');
+    row(g4, '今日の足（途中・朝9時に確定）', pc(chg) + '（安値 ' + kfmt(l) + '→今 ' + kfmt(P) + '）', 'ref', shape + (flags2.length ? '。' + flags2.join('、') : '') + '。過去の底値圏では、長い下ヒゲの日の後90日で上がったのは23%だけで、これだけで底とは言えません。確定した終値が分かれ目の上なら、二番底の見方が残ります'); }
   let wickNew = false;
   if (S.rt) {
     const lr = S.liveRow && S.liveRow[0] > d.t[n - 1] ? Math.min(S.liveRow[3], P) : Infinity; let l10 = lr; for (let j = n - 10; j < n; j++) l10 = Math.min(l10, d.l[j]);
