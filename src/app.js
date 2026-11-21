@@ -572,8 +572,8 @@ function etfAt(sym, btc) { // BTCがその値段のときのETFの目安
 }
 const HOLD = { reinvest: ['1倍で買う', 'v-buy'], relevbuy: ['2倍で買い直す', 'v-buy'], cashwait: ['現金で待つ', 'v-wait'], hold: ['持ち続ける', 'v-buy'], add: ['買い足し可', 'v-buy'], trim: ['一部売る', 'v-wait'], sell: ['売る', 'v-avoid'], switch: ['1倍に乗り換える', 'v-wait'], relev: ['2倍に戻せる', 'v-buy'], na: ['判定できません', 'v-na'] };
 const LEV_OFF = 20, LEV_ON = 75;   // 守りのルール：中期20未満で2倍→元の株、75以上で元の株→2倍（research/protect.js）
-function buyTicker() { const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return t; const k = S.pick ? S.pick.final : 'MSTR'; return k === 'COIN' ? 'CONL' : 'MSTU'; }
-function pickUnd() { const k = S.pick ? S.pick.final : null; return k === 'COIN' ? 'COIN' : 'MSTR'; }   // その日の状況（BTCに対する割安・割高など）で選んだ元の株
+function buyTicker() { const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return t; return pickUnd() === 'COIN' ? 'CONL' : 'MSTU'; }
+function pickUnd() { const k = S.pick ? S.pick.final : null; if (k === 'COIN') return 'COIN'; if (k === 'MSTR') return 'MSTR'; return indexBlock('MSTR') ? 'COIN' : 'MSTR'; }   // その日の状況（BTCに対する割安・割高など）で選んだ元の株
 function prefUnd(fallback) { const t = (S.cfg && S.cfg.buy) || 'auto'; return t === 'auto' ? pickUnd() : (ETF[t] ? ETF[t].und : fallback); }
 function cashBal() { return +LS.get('cash', 0) || 0; }
 function setCash(v) { LS.set('cash', Math.max(0, Math.round(v * 100) / 100)); }
@@ -604,7 +604,7 @@ function concernsFor(und) {
 }
 function concernList(und, max) {
   const cs = concernsFor(und).slice(0, max || 4); if (!cs.length) return '';
-  return '<div class="concern"><b>' + und + ' 系と相場全体の懸念材料</b><ul>' + cs.map(c => '<li class="c-' + c.lv + '">' + esc(c.text) + '<small>' + (c.link ? '<a href="' + esc(c.link) + '" target="_blank" rel="noopener">' + esc(c.src || '出典') + '</a>' : esc(c.src || '')) + (c.t ? '・' + md(c.t) : '') + '</small></li>').join('') + '</ul><p class="sub">懸念があっても、買いの判定は変えていません（ニュースの影響は過去データで確かめられないため）。気になる場合は「関連株」タブで買う銘柄をもう一方に固定できます。</p></div>';
+  return '<div class="concern"><b>' + und + ' 系と相場全体の懸念材料</b><ul>' + cs.map(c => '<li class="c-' + c.lv + '">' + esc(c.text) + '<small>' + (c.link ? '<a href="' + esc(c.link) + '" target="_blank" rel="noopener">' + esc(c.src || '出典') + '</a>' : esc(c.src || '')) + (c.t ? '・' + md(c.t) : '') + '</small></li>').join('') + '</ul><p class="sub">指数からの除外は、銘柄選びに反映しています（実施の翌営業日まで、その銘柄は新しく買わない）。金利の発表は、確認買いを48時間前から見送ります。それ以外のニュースは、過去データで影響を確かめられないため、判定は変えずに並べて出しています。</p></div>';
 }
 function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
   const b = budget(), t0 = buyTicker(), t = planTicker(p);
@@ -618,7 +618,10 @@ function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
     if (p.a === 'ladder' && ok(px)) h += '<p class="sub">買ったら、同じ金額の指値を3本入れておきます：' + [1, 2, 3].map(k => usd2(px * (1 - LAD_STEP * k)) + '（-' + (LAD_STEP * 100 * k) + '%）').join('、') + '。実際の買値が決まったら、正確な指値を出し直します。</p>';
     if (per > b.cash + 1) h += '<p class="sub" style="color:var(--avoid)">現金が足りません（予定 ' + usd(per) + '）。今ある ' + usd(b.cash) + ' の範囲で買ってください。</p>';
   } else h += '<p class="sub">今日は新しく使いません。使う額の目安：買い下がり1回 ' + usd(b.total * LAD_SHARE / LAD_N) + '（4回まで）、確認買い1回 ' + usd(b.total * (1 - LAD_SHARE) / MAXBUY) + '（2回まで）。</p>';
-  const und = ETF[t] ? ETF[t].und : t; h += concernList(und);
+  const und = ETF[t] ? ETF[t].und : t, ibm = indexBlock('MSTR');
+  if (ibm && und === 'COIN' && ((S.cfg && S.cfg.buy) || 'auto') === 'auto') h += '<p class="sub">MSTRは' + ibm.eff + 'に' + ibm.name + 'があるため、それが終わるまではCOIN系で入ります（12/2以降は、その日の状況で選び直します）。</p>';
+  const ib2 = indexBlock(und); if (ib2) h += '<p class="sub" style="color:var(--avoid)">' + und + 'は' + ib2.eff + 'に' + ib2.name + 'があります。買う銘柄を固定しているので' + und + 'のまま出していますが、実施の翌営業日までは避けるのが、研究で分かっている売り圧力の傾向に沿った動きです。</p>';
+  h += concernList(und);
   return h + '</div>';
 }
 const LEVOF = { MSTR: 'MSTU', COIN: 'CONL' };
@@ -707,6 +710,9 @@ function cycleCard() {
     '<p class="sub">日数は半減期から数えた日数。※は今のサイクルのここまでの安値で、まだ確定していません。</p><h3>出口の目安</h3><ul class="exit"><li>次の半減期（' + f(nh) + 'ごろの見込み）から400〜550日目、' + f(nh + 400 * DAY) + '〜' + f(nh + 550 * DAY) + 'ごろに分けて売る</li><li>その時期に入ってからBTCが200日線を2週間下回ったら、残りも売る</li><li>レバレッジETFは天井を過ぎて持たない。過去の検証では、売らなかった場合に利益の大半が消えました</li></ul>' +
     '<p class="sub">時期の区切りは、半減期から400日目まで上昇期、600日目まで天井圏、750日目まで下落期、1000日目まで底値圏、その後が回復期です。過去3回のサイクルだけが根拠で、上昇幅は回を追うごとに小さくなっています。次も同じになる保証はありません。</p></section>';
 }
+// 指数からの除外：発表から実施日の翌営業日までは、その銘柄を新しく買わない（研究では、除外の売り圧力は一時的で、実施後に一部戻る。research/events.py）
+const INDEX_EVENTS = [{ sym: 'MSTR', name: 'MSCI USA指数からの除外', ann: Date.UTC(2026, 10, 11), until: Date.UTC(2026, 11, 1, 21), eff: '11/30の引け' }];
+function indexBlock(und) { const now = Date.now(); return INDEX_EVENTS.find(x => x.sym === und && now >= x.ann && now < x.until) || null; }
 function pickStock() {
   const A = S.stocks.MSTR && S.stocks.MSTR.an, B = S.stocks.COIN && S.stocks.COIN.an; if (!A || !B) return null;
   const sc = { MSTR: 0, COIN: 0 }, why = [], pz = pairZ(), ph = S.cyc ? S.cyc.phase : null;
@@ -725,6 +731,7 @@ function pickStock() {
   });
   if (ok(pz) && pz >= 1) { sc.COIN += 1; why.push({ s: 'COIN', t: 'MSTRがCOINに対して割高（+' + pz.toFixed(1) + 'σ）' }); }
   if (ok(pz) && pz <= -1) { sc.MSTR += 1; why.push({ s: 'MSTR', t: 'MSTRがCOINに対して割安（' + pz.toFixed(1) + 'σ）' }); }
+  ['MSTR', 'COIN'].forEach(k => { const ib = indexBlock(k); if (ib) { sc[k] -= 3; why.push({ s: k === 'MSTR' ? 'COIN' : 'MSTR', t: k + 'は' + ib.name + 'が' + ib.eff + 'に実施されます。指数に連動するファンドの売りがそこに集まるため、実施の翌営業日までは新しく買いません' }); } });
   if (ph === 'bottom' || ph === 'recover' || ph === 'up') { sc.MSTR += 1; why.push({ s: 'MSTR', t: 'サイクルの上昇局面では、MSTRの方が大きく動きます（前回の底からBTC天井まで MSTR +2188%、COIN +836%）' }); }
   ['MSTR', 'COIN'].forEach(k => { const an = k === 'MSTR' ? A : B, b = an.bt.l; if (b && b.sig.n >= 30 && ok(b.sig.mean) && ok(b.all.mean)) { if (b.sig.mean > b.all.mean) { sc[k] += 1; why.push({ s: k, t: k + 'は長期の買い判定が当たっている（買い判定の日の平均 ' + pc(b.sig.mean) + '、全日 ' + pc(b.all.mean) + '）' }); } } });
   // 手持ち
