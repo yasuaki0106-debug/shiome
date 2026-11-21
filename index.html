@@ -48,6 +48,7 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .today-lead{font-size:15px}.today-why{font-size:13px;color:var(--muted);margin-top:6px}
 .plan-stock{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--ink);border-radius:6px;padding:12px 14px;margin-top:12px}
 .plan-stock .sym{font-size:17px;letter-spacing:.06em}.plan-v{font-size:17px}.plan-stock .kv{margin-top:4px}
+.sigs li{padding:9px 0;border-bottom:1px solid var(--line)}.sigs li>div{display:flex;gap:10px;align-items:baseline;font-size:14px}.sigs dl{display:grid;grid-template-columns:1fr auto;gap:1px 10px;font-size:12.5px;margin:4px 0 0;color:var(--muted)}.sigs dd{margin:0;text-align:right;color:var(--ink)}
 .gauge{margin:6px 0}.gauge li{display:grid;grid-template-columns:1fr 34% 2.6em;gap:4px 8px;align-items:center;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line)}.gauge .gbar{height:6px;background:var(--soft);border-radius:1px;overflow:hidden}.gauge .gbar b{display:block;height:100%;background:var(--brass)}.gauge .num{text-align:right}.gauge .sub2{grid-column:1/4;font-size:11.5px;color:var(--muted)}
 .chks{margin:8px 0 6px}.buyrec{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 0;margin-top:6px}
 .prov{font-size:13px;margin-top:10px;line-height:1.6}.prov.same{color:var(--muted)}
@@ -946,7 +947,18 @@ function actsFrom(R) { // スコアの判定に、検証結果・イベント・
   });
   return acts;
 }
-const MAXBUY = 4, ADD_GAP = 14;
+const MAXBUY = 4, ADD_GAP = 14, GTH = 0.50, TRIAL_STOP = 0.10;
+function trialSignal(R) { // 試し買いの合図：直近20日に90日ぶりの安値（終値）を付け、その後20日線を上抜いた。上抜きから3日以内で、まだ3%以上離れていない
+  const d = S.d, n = d.c.length, c = d.c, s20 = (R || S.R).ind.s20;
+  for (let i = n - 1; i >= n - 3 && i > 100; i--) {
+    if (!(c[i] > s20[i] && c[i - 1] <= s20[i - 1])) continue;
+    let m = Infinity; for (let j = i - 90; j <= i; j++) m = Math.min(m, c[j]);
+    let fresh = false; for (let j = i - 20; j <= i; j++) if (c[j] <= m * 1.001) fresh = true;
+    if (fresh && c[n - 1] > s20[n - 1] && c[n - 1] <= c[i] * 1.03) return { t: d.t[i], px: c[i] };
+  }
+  return null;
+}
+function trialPos() { const t = LS.get('trial', null); return t && t.btc > 0 ? Object.assign({ stop: t.btc * (1 - TRIAL_STOP) }, t) : null; }
 function cycleBuys() { // この端末に記録した「買った日」のうち、今のサイクルの底値圏以降のもの
   const c = S.cyc; if (!c) return [];
   const from = c.cur.h + 750 * DAY; return LS.get('buys', []).filter(b => b.t >= from).sort((a, b) => a.t - b.t);
@@ -967,13 +979,17 @@ function planDecision(acts) {
   chk.push({ ok: okM, text: '中期の判定が「' + (first ? '買い好機' : '打診買い') + '」以上（今は「' + E.VERDICT[acts.m.a] + '」' + (acts.m.why.length ? '、' + acts.m.why.join('・') + 'で引き下げ中' : '') + '）' });
   if (!first) chk.push({ ok: gap >= ADD_GAP, text: '前回の買いから14日以上（今は' + Math.floor(gap) + '日）' });
   chk.push({ ok: n < MAXBUY, text: '今のサイクルの買いが4回未満（今は' + n + '回）' });
-  const bg = S.bg; if (bg) chk.push({ ok: bg.g >= 0.55, text: '底らしさが55%以上（今は' + Math.round(bg.g * 100) + '%）。値段が底から離れすぎていないことの確認' });
+  const bg = S.bg; if (bg) chk.push({ ok: bg.g >= GTH, text: '底らしさが50%以上（今は' + Math.round(bg.g * 100) + '%）。値段が底から離れすぎていないことの確認' });
   const evOk = !(S.ev48 && S.bigEv); chk.push({ ok: evOk, text: evOk ? '48時間以内に重要イベントなし' : S.bigEv.title + 'が48時間以内' });
   const lqOk = !(liq.ok && liq.longRisk >= 65); chk.push({ ok: lqOk, text: lqOk ? 'ロングの清算リスクは警戒水準ではない' : 'ロングの清算リスクが警戒水準' });
-  const a = chk.every(x => x.ok) ? 'buy' : 'skip';
+  let a = chk.every(x => x.ok) ? 'buy' : 'skip';
   if (a === 'buy') why.push(first ? '底値圏で、中期の判定が買い好機になった' : '買い判定が続いている（' + (n + 1) + '回目）');
   else why.push(chk.filter(x => !x.ok).map(x => x.text).join('／'));
-  return { a, why, chk, n, kind: first ? 'first' : 'add' };
+  // 試し買いと撤退
+  const tp = trialPos(), lastClose = S.d.c[S.d.c.length - 1]; let trial = null;
+  if (tp && lastClose < tp.stop) { a = 'exit'; why.length = 0; why.push('試し買いの撤退ライン ' + usd(tp.stop) + ' を終値で割りました（' + md(S.d.t[S.d.c.length - 1]) + ' の終値 ' + usd(lastClose) + '）'); }
+  else if (a === 'skip' && !tp && first && inPhase && (!bg || bg.g >= GTH) && evOk && lqOk) { trial = trialSignal(); if (trial) { a = 'trial'; why.length = 0; why.push(md(trial.t) + ' に、安値を付けた後の20日線の上抜きが出ました'); } }
+  return { a, why, chk, n, kind: first ? 'first' : 'add', trial, tp };
 }
 function computeProv() { // 暫定：今の値段のまま今日の日足が確定した場合の判定
   S.prov = null;
@@ -1188,7 +1204,7 @@ function buildPlan() {
     if (sa === 'buy' && ok(an.rz) && an.rz >= 1.5) note.push('この銘柄はBTCに対して割高です。もう一方を優先する材料になります');
     stocks[sym] = { a: sa, now: stockAt(an, price), lim: target ? stockAt(an, target.mid) : NaN, stop: target ? stockAt(an, target.stop) : NaN, lo: rng ? stockAt(an, rng.lo) : NaN, hi: rng ? stockAt(an, rng.hi) : NaN, note };
   });
-  return { a, why, chk: dec.chk, n: dec.n, kind: dec.kind, target, rng, reach: target ? reachProb(target.mid) : NaN, stocks, sess: usSession(Date.now()) };
+  return { a, why, chk: dec.chk, n: dec.n, kind: dec.kind, trial: dec.trial, tp: dec.tp, target, rng, reach: target ? reachProb(target.mid) : NaN, stocks, sess: usSession(Date.now()) };
 }
 const ETF = { MSTU: { und: 'MSTR', L: 2 }, MSTZ: { und: 'MSTR', L: -2 }, CONL: { und: 'COIN', L: 2 }, MSTR: { und: 'MSTR', L: 1 }, COIN: { und: 'COIN', L: 1 } };
 function etfClose(sym, date) { // 元の株の終値と同じ日の終値を使う（日付がずれると2倍の計算が二重になる）
@@ -1302,7 +1318,7 @@ function pickCard() {
     '<ul class="why3">' + li + '</ul>' + (k.hold.length ? '<h3>手持ちを踏まえると</h3><ul class="why3">' + k.hold.map(x => '<li class="pn">' + esc(x) + '</li>').join('') + '</ul>' : '') +
     '<p class="sub">差が2点以上なら片方、それ未満なら半分ずつにしています。割安・割高は、株価とBTCの比率が直近90日の平均からどれだけ離れているかです。割安・割高を点数に入れるのは、過去の全期間と直近2年の両方で実際に効いていた場合だけで、開くたびに確かめ直しています。</p></section>';
 }
-const PLAN = { buy: ['買う', 'v-buy'], limit: ['指値で待つ', 'v-wait'], skip: ['買わない', 'v-avoid'] };
+const PLAN = { buy: ['買う', 'v-buy'], limit: ['指値で待つ', 'v-wait'], skip: ['買わない', 'v-avoid'], trial: ['試し買い', 'v-wait'], exit: ['試し分を撤退', 'v-avoid'] };
 function planLabel(a) {
   if (a !== 'buy') return PLAN[a][0];
   const v = S.plan && S.plan.kind === 'add' ? '買い足す' : '買う';
@@ -1540,14 +1556,14 @@ const railHTML = h => {
 };
 function provBox() {
   const v = S.prov, p = S.plan; if (!v || !p) return S.liveRow && S.freshDaily ? '<p class="prov same">暫定の判定は、今日の日足が15%進んでから出します（朝9時が0%）。</p>' : '';
-  const el = Math.round(v.frac * 100), nm = { buy: '買う', limit: '指値で待つ', skip: '買わない' };
+  const el = Math.round(v.frac * 100), nm = { buy: '買う', limit: '指値で待つ', skip: '買わない', trial: '試し買い', exit: '試し分を撤退' };
   const chg = E.HORIZONS.filter(h => h.k !== 'd' && v.acts[h.k].a !== S.act[h.k].a).map(h => h.name + 'が「' + E.VERDICT[S.act[h.k].a] + '」→「' + E.VERDICT[v.acts[h.k].a] + '」');
   if (v.a === p.a) return '<p class="prov same">暫定：今の値段のまま今日が終わっても、結論は同じです' + (chg.length ? '（' + chg.join('、') + '）' : '') + '。今日の日足は ' + el + '% 経過。</p>';
   const up = ORDERP.indexOf(v.a) > ORDERP.indexOf(p.a);
   return '<div class="prov chg ' + (up ? 'pu' : 'pd') + '"><b>暫定：このまま今日が終わると、明日朝9時の結論は「' + nm[v.a] + '」に変わります</b><p>' + (chg.length ? chg.join('、') + '。' : '') + '今日の日足は ' + el + '% 経過' + (el < 60 ? '。まだ変わりやすい時間帯です' : '。残りが少ないので、確定に近い値です') + '。</p><p>' +
     (up ? '置いていかれたくない場合は、確定を待たずに予定の一部だけ先に入れる方法があります。暫定は確定までに元に戻ることもあります。' : '買いを考えていた場合は、確定を待つか、量を減らす判断材料になります。') + '</p></div>';
 }
-const ORDERP = ['skip', 'limit', 'buy'];
+const ORDERP = ['exit', 'skip', 'trial', 'limit', 'buy'];
 /* ---------- 底と買い場の見込み ---------- */
 // 過去3回の底値圏（半減期から750〜1100日目）で、中期スコアが20以下だった日から「買い好機」が出るまで（research/wait.js）
 const WAIT = { med: 106, q25: 52, q75: 170, dnMed: -0.19, dnQ25: -0.49, pxMed: 0.0, pxQ25: -0.16, pxQ75: 0.29 };
@@ -1592,7 +1608,7 @@ function bottomGauge() {
   const wk = []; for (let i = n - 1; i >= 0; i -= 7) wk.unshift(i); const wr = E.rsi(Float64Array.from(wk.map(i => C[i])), 14), wrsi = mk(); wk.forEach((i, k) => { for (let j = i; j < Math.min(n, i + 7); j++) wrsi[j] = wr[k]; });
   let mx = 0; const dd = C.map(x => { mx = Math.max(mx, x); return x / mx - 1; });
   const w2 = Array.from(ls.w200, x => Math.exp(x));
-  const SER = [['MVRV（時価総額÷実現時価総額）', mvrv, 0.60, x => x.toFixed(2)], ['マイナー収入（1年平均比）', mr.map((x, i) => x / mr365[i]), 0.63, x => x.toFixed(2)], ['週足RSI', wrsi, 0.59, x => x.toFixed(0)], ['天井からの下落', dd, 0.56, x => pc(x, 0)], ['200週線比', w2, 0.47, x => x.toFixed(2)], ['200日線比', C.map((x, i) => x / m200[i]), 0.45, x => x.toFixed(2)]];
+  const SER = [['MVRV（時価総額÷実現時価総額）', mvrv, 0.60, x => x.toFixed(2)], ['マイナー収入（1年平均比）', mr.map((x, i) => x / mr365[i]), 0.63, x => x.toFixed(2)], ['週足RSI', wrsi, 0.59, x => x.toFixed(0)], ['天井からの下落', dd, 0.56, x => pc(x, 0)], ['200日線比', C.map((x, i) => x / m200[i]), 0.45, x => x.toFixed(2)]];
   const pk = at(c.cur.peakT), lows = c.past.map(p => at(p.lowT)).filter(i => i >= 0), i0 = n - 1, parts = []; let tot = 0, ws = 0;
   SER.forEach(([nm, a, w, fmt]) => {
     const bots = lows.map(i => a[i]).filter(ok), now = a[i0], top = a[pk]; if (!bots.length || !ok(now) || !ok(top)) return;
@@ -1601,6 +1617,7 @@ function bottomGauge() {
     parts.push({ nm, p, now: fmt(now), bots: bots.map(fmt).join('・') });
   });
   const extra = [];
+  if (ok(w2[i0])) extra.push('200週線比 ' + w2[i0].toFixed(2) + '。過去の底の目安として有名ですが、点いたのは2022年だけで、時点ごとの検証で安定しなかったため、底らしさから外しました');
   if (ok(fng[i0])) extra.push('恐怖と強欲指数 ' + fng[i0] + (ok(f30[i0]) ? '（30日平均 ' + Math.round(f30[i0]) + '）' : '') + '。極度の恐怖（25以下）は底の近く以外でもよく出るため、底らしさには入れていません');
   if (ok(h30[i0]) && ok(h60[i0])) extra.push('ハッシュレートの30日平均は60日平均の' + pc(h30[i0] / h60[i0] - 1, 1) + (h30[i0] < h60[i0] ? '（マイナーの撤退中。回復すると「ハッシュリボン」の買いの合図）' : ''));
   return ws ? { g: tot / ws, parts, extra } : null;
@@ -1608,6 +1625,8 @@ function bottomGauge() {
 function stageOf() { // まだ／準備／買い の3段階
   const p = S.plan, m = S.R.hz.m.pct, ph = S.cyc ? S.cyc.phase : null, inPhase = ph === 'bottom' || ph === 'recover';
   if (p && p.a === 'buy') return { k: 'buy', name: '買い', cls: 'v-buy', text: '買い判定が出ています。上の「今日どうするか」のとおりに買ってください。' };
+  if (p && p.a === 'trial') return { k: 'trial', name: '試し買い', cls: 'v-wait', text: '試し買いの合図が出ています。少額で、撤退ラインを決めて入る段階です。' };
+  if (p && p.a === 'exit') return { k: 'exit', name: '撤退', cls: 'v-avoid', text: '試し買いの撤退ラインを割りました。' };
   if (inPhase && ok(m) && m >= 40) return { k: 'ready', name: '準備', cls: 'v-wait', text: '中期の判定が持ち直してきました（今 ' + Math.round(m) + '、買い好機は75）。過去の底値圏では、この段階から半分くらいの確率で、1か月前後で買い判定が出ています（残りは、いったん弱まりました）。予定額を手元に用意して、毎日見てください。' };
   return { k: 'wait', name: 'まだ', cls: 'v-avoid', text: inPhase ? '中期の判定はまだ弱いままです（今 ' + (ok(m) ? Math.round(m) : '—') + '）。40を超えると「準備」に変わります。' : 'サイクルは' + (S.cyc ? S.cyc.name : '不明') + 'です。' };
 }
@@ -1640,7 +1659,7 @@ function bottomCard() {
   ];
   const near = b.near.slice(0, 4).map(x => '<li><b class="num">' + usd(x.p) + '</b><span class="num dist">' + pc(x.p / S.price - 1) + '</span><span>' + esc(x.why) + '</span></li>').join('');
   const sg = stageOf(), gg = S.bg;
-  const gauge = gg ? '<h3>底らしさ <span class="num">' + Math.round(gg.g * 100) + '%</span></h3><p class="sub" style="margin-top:0">天井の日を0%、過去の底の水準を100%として、今どこまで来たか（6つの指標の加重平均）。</p><ul class="gauge">' + gg.parts.map(x => '<li><span>' + esc(x.nm) + '</span><span class="gbar"><b style="width:' + Math.round(x.p * 100) + '%"></b></span><span class="num">' + Math.round(x.p * 100) + '%</span><span class="sub2">今 ' + x.now + '／過去の底 ' + x.bots + '</span></li>').join('') + '</ul>' + gg.extra.map(x => '<p class="sub">' + esc(x) + '</p>').join('') + '<p class="sub">過去の検証では、この数字が高まるのは底の数か月前からで、「あと何日」を当てる力はありません。底値圏にいることの確認に使い、買う日は下の判定で決めます。</p>' : '';
+  const gauge = gg ? '<h3>底らしさ <span class="num">' + Math.round(gg.g * 100) + '%</span></h3><p class="sub" style="margin-top:0">天井の日を0%、過去の底の水準を100%として、今どこまで来たか（5つの指標の加重平均）。</p><ul class="gauge">' + gg.parts.map(x => '<li><span>' + esc(x.nm) + '</span><span class="gbar"><b style="width:' + Math.round(x.p * 100) + '%"></b></span><span class="num">' + Math.round(x.p * 100) + '%</span><span class="sub2">今 ' + x.now + '／過去の底 ' + x.bots + '</span></li>').join('') + '</ul>' + gg.extra.map(x => '<p class="sub">' + esc(x) + '</p>').join('') + '<p class="sub">過去の検証では、この数字が高まるのは底の数か月前からで、「あと何日」を当てる力はありません。底値圏にいることの確認に使い、買う日は下の判定で決めます。</p>' : '';
   return '<section class="card"><div class="row"><h2>底と買い場の見込み</h2><b class="' + sg.cls + '">' + sg.name + '</b></div><p>' + esc(sg.text) + '</p>' + gauge +
     '<p>今は天井から <b class="num">' + pc(b.dd, 0) + '</b>、' + b.daysTop + '日。半減期から' + b.day + '日目。200週線の' + pc(b.wr, 0) + '、長期成長線に対して過去の下位' + pc(b.valPct, 0, false) + 'の安さです。</p>' +
     '<h3>底の値段のシナリオ</h3><table class="tbl"><tbody>' + scen.map(x => '<tr><th>' + x[0] + '</th><td class="num">' + x[1] + '</td></tr><tr><td colspan="2" class="sub" style="text-align:left;padding-top:0">' + esc(x[2]) + '</td></tr>').join('') + '</tbody></table>' +
@@ -1656,6 +1675,8 @@ function todayCard() {
   const nb = p.n || 0;
   let lead = p.a === 'buy'
     ? (p.kind === 'add' ? '買い判定が続いています。予定額の4分の1を買い足します（' + (nb + 1) + '回目／4回）。' : '買い判定が出ました。予定額の4分の1を買います（1回目／4回）。残りは、14日以上あけて判定が続いていれば買い足します。')
+    : p.a === 'trial' ? '本格的な買い判定の前の、試し買いの合図です。入れるのは予定額の8分の1まで。撤退ラインは買値の10%下（BTCの終値）で、割ったら必ず降ります。'
+    : p.a === 'exit' ? '試し買いの撤退ラインを割りました。試し分は売って、次の合図を待ちます。'
     : '今は買いません。下の条件がすべてそろった日に「買う」に変わります。';
   const syms = Object.keys(p.stocks);
   const rows = syms.map(sym => {
@@ -1677,8 +1698,11 @@ function todayCard() {
   if (u && u.type === 'lid' && p.a !== 'skip' && ok(u.lidLv)) btc.push('上は ' + '<span class="num">' + usd(u.lidLv) + '</span> 付近で蓋をされやすい形です。買った後はそこで一部の利益確定を考えます');
   if (u && u.type === 'squeeze' && ok(u.tgt)) btc.push('踏み上げ型です。上がり始めたら <span class="num">' + usd(u.tgt) + '</span> 付近まで走りやすく、指値が置いていかれることもあります');
   const chk = (p.chk || []).length ? '<ul class="why2 chks">' + p.chk.map(x => '<li class="' + (x.ok ? 'up' : 'dn') + ' chk">' + esc(x.text) + '</li>').join('') + '</ul>' : '';
+  const tp = p.tp, stopNow = tp ? tp.stop : (p.a === 'trial' ? S.price * (1 - TRIAL_STOP) : NaN);
+  const stocksStop = ok(stopNow) ? ['MSTR', 'COIN'].filter(x => S.stocks[x] && S.stocks[x].an).map(x => x + ' ' + usd2(stockAt(S.stocks[x].an, stopNow)) + '、' + (x === 'MSTR' ? 'MSTU' : 'CONL') + ' ' + usd2(etfAt(x === 'MSTR' ? 'MSTU' : 'CONL', stopNow))).join('／') : '';
+  const trialBox = (p.a === 'trial' || tp) ? '<div class="prov chg ' + (p.a === 'exit' ? 'pd' : 'pu') + '"><b>' + (tp ? '試し買い中：撤退ライン BTC ' + usd(tp.stop) + '（終値）' : '撤退ライン：BTCの終値で ' + usd(stopNow) + '（買値の10%下）') + '</b><p>' + (tp ? md(tp.t) + ' にBTC ' + usd(tp.btc) + ' で記録。' : '') + (stocksStop ? '株価の目安：' + stocksStop + '。' : '') + '過去4回のサイクルでこの合図は7回出て、4回はそのまま本格的な買い判定につながり（その時点で+8〜+34%）、3回は撤退（-10〜-19%）でした。</p><p>' + (tp ? '<button class="link" id="trial-clear">' + (p.a === 'exit' ? '撤退したので記録を消す' : '試し買いの記録を消す') + '</button>' : '<button class="link" id="trial-add">試し買いをしたので記録する</button>') + '</p></div>' : '';
   const buys = cycleBuys(), rec = '<div class="buyrec"><span>このサイクルで買った回数：<b class="num">' + buys.length + '</b>／4' + (buys.length ? '（最後は ' + md(buys[buys.length - 1].t) + '、BTC ' + usd(buys[buys.length - 1].btc) + '）' : '') + '</span><span><button class="link" id="buy-add">買ったので記録する</button>' + (buys.length ? '　<button class="link" id="buy-undo">最後の記録を取り消す</button>' : '') + '</span></div>';
-  return '<section class="today">' + sessionStrip() + cycleStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p>' + chk + rec + provBox() +
+  return '<section class="today">' + sessionStrip() + cycleStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p>' + trialBox + chk + rec + provBox() +
     (rows || '<p class="sub">MSTR・COINの株価を読み込めていないため、BTCの価格で表示しています。</p>') +
     '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
     '<p class="sub">この買い方を過去4回のサイクルに当てはめると、4回買い終えた後の含み損は最大で7〜25%（BTC）、過去3回は次の天井までに5.6〜74倍でした（今回のサイクルは進行中で、含み損25%の側にいます）。MSTR・COINの含み損はその1.5倍前後、MSTU・CONLはさらに大きくなります。詳しくは検証タブにあります。株価は BTCとの連動（ベータ）から換算した目安で、±の数字は過去2年の平均的なずれです。2倍ETFのずれはその約2倍になります。正確な値段はmoomooで確認してください。</p></section>';
@@ -1719,6 +1743,13 @@ function ruleSignals() { // 今のサイクルで、買いルールが実際に�
   const avg = out.length / out.reduce((a, b) => a + 1 / b.px, 0); let mn = Infinity; for (let i = 0; i < d.c.length; i++) if (d.t[i] >= out[out.length - 1].t) mn = Math.min(mn, d.c[i]);
   return { out, avg, dd: mn / avg - 1, now: S.price / avg - 1 };
 }
+const SIGNALS = [{"cyc":"2012","kind":"試し","date":"2015-01-24","px":249,"g":null,"stop":"撤退なし","d30":"-4%","d90":"-8%","d365":"+61%","top":"+5875%","mae":"-16%"},{"cyc":"2012","kind":"買い","date":"2015-01-26","px":275,"g":null,"stop":"","d30":"-13%","d90":"-20%","d365":"+43%","top":"+5318%","mae":"-24%"},{"cyc":"2012","kind":"買い","date":"2015-02-13","px":237,"g":null,"stop":"","d30":"+21%","d90":"+0%","d365":"+65%","top":"+6183%","mae":"-12%"},{"cyc":"2012","kind":"買い","date":"2015-02-27","px":253,"g":null,"stop":"","d30":"-4%","d90":"-6%","d365":"+71%","top":"+5791%","mae":"-17%"},{"cyc":"2012","kind":"買い","date":"2015-03-13","px":283,"g":null,"stop":"","d30":"-17%","d90":"-19%","d365":"+45%","top":"+5157%","mae":"-26%"},{"cyc":"2016","kind":"試し","date":"2018-12-18","px":3667,"g":97,"stop":"撤退なし","d30":"-1%","d90":"+8%","d365":"+99%","top":"+995%","mae":"-8%"},{"cyc":"2016","kind":"買い","date":"2019-04-02","px":4900,"g":86,"stop":"","d30":"+10%","d90":"+116%","d365":"+36%","top":"+720%","mae":"-1%"},{"cyc":"2016","kind":"買い","date":"2019-04-16","px":5202,"g":80,"stop":"","d30":"+51%","d90":"+109%","d365":"+27%","top":"+672%","mae":"-7%"},{"cyc":"2016","kind":"買い","date":"2019-05-03","px":5658,"g":76,"stop":"","d30":"+54%","d90":"+84%","d365":"+59%","top":"+610%","mae":"-14%"},{"cyc":"2016","kind":"買い","date":"2019-05-17","px":7352,"g":64,"stop":"","d30":"+22%","d90":"+40%","d365":"+28%","top":"+446%","mae":"-34%"},{"cyc":"2020","kind":"試し","date":"2022-06-02","px":30437,"g":79,"stop":"-13%（10日後）","d30":"-37%","d90":"-34%","d365":"-10%","top":"+253%","mae":"-48%"},{"cyc":"2020","kind":"試し","date":"2022-07-06","px":20547,"g":93,"stop":"-10%（77日後）","d30":"+14%","d90":"-1%","d365":"+46%","top":"+424%","mae":"-23%"},{"cyc":"2020","kind":"試し","date":"2022-10-03","px":19636,"g":88,"stop":"-19%（37日後）","d30":"+3%","d90":"-15%","d365":"+40%","top":"+448%","mae":"-20%"},{"cyc":"2020","kind":"試し","date":"2022-11-30","px":17170,"g":88,"stop":"撤退なし","d30":"-3%","d90":"+35%","d365":"+120%","top":"+527%","mae":"-4%"},{"cyc":"2020","kind":"買い","date":"2023-01-12","px":18853,"g":80,"stop":"","d30":"+16%","d90":"+59%","d365":"+127%","top":"+471%","mae":"0%"},{"cyc":"2020","kind":"買い","date":"2023-01-26","px":23010,"g":54,"stop":"","d30":"+1%","d90":"+24%","d365":"+82%","top":"+368%","mae":"-12%"},{"cyc":"2020","kind":"買い","date":"2023-02-15","px":24332,"g":52,"stop":"","d30":"+13%","d90":"+11%","d365":"+113%","top":"+342%","mae":"-17%"},{"cyc":"2020","kind":"買い","date":"2023-03-13","px":24209,"g":56,"stop":"","d30":"+24%","d90":"+7%","d365":"+195%","top":"+344%","mae":"0%"},{"cyc":"2024","kind":"試し","date":"2026-06-20","px":64246,"g":71,"stop":"撤退なし","d30":"+2%","d90":"+26%","d365":"—","top":"進行中 -8%","mae":"-9%"},{"cyc":"2024","kind":"買い","date":"2026-08-19","px":69298,"g":61,"stop":"","d30":"+17%","d90":"-6%","d365":"—","top":"進行中 -15%","mae":"-15%"}];
+function signalsCard() {
+  const by = {}; SIGNALS.forEach(x => { (by[x.cyc] = by[x.cyc] || []).push(x); });
+  const nm = { '2012': '2015年の底', '2016': '2018〜19年の底', '2020': '2022〜23年の底', '2024': '今回（11/20時点）' };
+  return '<section class="card"><h2>この判定で動いていたら（全記録）</h2><p>今のルールを過去に当てはめたときの、すべての合図と、その後の結果です（BTCの値段）。</p>' + Object.keys(by).map(k => '<h3>' + nm[k] + '</h3><ul class="sigs">' + by[k].map(x => '<li><div><b class="' + (x.kind === '買い' ? 'v-buy' : 'v-wait') + '">' + x.kind + '</b><span class="num">' + x.date.replace(/-/g, '/') + '</span><span class="num">$' + x.px.toLocaleString('en-US') + '</span></div><dl>' + (x.kind === '試し' ? '<dt>撤退ライン</dt><dd>' + (x.stop === '撤退なし' ? '割らず' : x.stop + 'で撤退') + '</dd>' : '') + '<dt>30日後に売ると</dt><dd class="num">' + x.d30 + '</dd><dt>90日後</dt><dd class="num">' + x.d90 + '</dd><dt>1年後</dt><dd class="num">' + x.d365 + '</dd><dt>天井の出口で売ると</dt><dd class="num">' + x.top + '</dd><dt>1年以内の最大の含み損</dt><dd class="num">' + x.mae + '</dd></dl></li>').join('') + '</ul>').join('') +
+    '<p class="sub">「天井の出口」は、次の半減期から400〜550日目に200日線を2週間割った日（なければ550日目）です。底らしさは、買いの日が52〜86%、今回見送りになった9〜10月の3日は18〜33%でした。MSTR・COINの動きはこの1.5倍前後、MSTU・CONLはさらに大きくなります。</p></section>';
+}
 function wfCard() {
   return '<section class="card"><h2>先の情報なしで選び直す検証</h2><p>買いルールの数字（何日目から、判定がいくつ以上、何日あけるか、底らしさは何%以上か）を540通り用意し、「それ以前のサイクルだけで一番良かった設定」を選んで、次のサイクルで試しました。</p>' +
     '<table class="tbl"><thead><tr><th>試したサイクル</th><th>過去だけで選んだ設定</th><th>今の設定</th><th>全候補の真ん中</th></tr></thead><tbody>' +
@@ -1743,7 +1774,7 @@ function ruleCard() {
   const r = ruleSignals();
   const rows = [['2015年', '1/26・2/13・2/27・3/13', '$261', '-21%', '74倍'], ['2019年', '4/2・4/16・5/3・5/17', '$5,641', '-14%', '12倍'], ['2023年', '1/12・1/26・2/15・3/13', '$22,358', '-7%', '5.6倍']];
   const cur0 = r && r.out.length ? '<tr><th>今回</th><td>' + r.out.map(x => md(x.t)).join('・') + '</td><td class="num">' + usd(r.avg) + '</td><td class="num">' + pc(r.dd, 0) + '</td><td>進行中</td></tr>' : '<tr><th>今回</th><td colspan="4">まだ買い判定は出ていません</td></tr>';
-  return '<section class="card"><h2>買い判定のルールと、過去の結果</h2><p>買い判定は次のルールで出しています。</p><ul class="exit"><li>1回目：半減期から750日目以降（底値圏〜回復期）で、中期の判定が「買い好機」になった日</li><li>買い足し：前回から14日以上たち、中期の判定が「打診買い」以上の日。合計4回まで</li><li>どの回も、底らしさが55%以上のときだけ（2026年11月に追加）</li><li>重要イベントの48時間前と、ロングの清算リスクが警戒水準の日は見送る</li></ul>' +
+  return '<section class="card"><h2>買い判定のルールと、過去の結果</h2><p>買い判定は次のルールで出しています。</p><ul class="exit"><li>1回目：半減期から750日目以降（底値圏〜回復期）で、中期の判定が「買い好機」になった日</li><li>買い足し：前回から14日以上たち、中期の判定が「打診買い」以上の日。合計4回まで</li><li>どの回も、底らしさが50%以上のときだけ（2026年11月に追加）</li><li>試し買い：1回目の買い判定より前に、「90日ぶりの安値を付けた後、20日以内に20日線を上抜いた日」。予定額の8分の1まで。撤退ラインは買値の10%下（終値）</li><li>重要イベントの48時間前と、ロングの清算リスクが警戒水準の日は見送る</li></ul>' +
     '<table class="tbl"><thead><tr><th>底の年</th><th>買い判定の日</th><th>平均の買値</th><th>最大の含み損</th><th>次の天井まで</th></tr></thead><tbody>' + rows.map(x => '<tr><th>' + x[0] + '</th><td>' + x[1] + '</td><td class="num">' + x[2] + '</td><td class="num">' + x[3] + '</td><td class="num">' + x[4] + '</td></tr>').join('') + '<tr><th>今回</th><td>8/19</td><td class="num">$69,298</td><td class="num">' + pc(S.price / 69298 - 1, 0) + '</td><td>進行中</td></tr></tbody></table>' +
     '<p class="sub">底らしさの条件は、今回のサイクルの失敗から加えました。追加前のルールでは8/19・9/2・9/18・10/4の4回買う判定になり、平均の買値は$77,987でした。2回目以降は、6月の安値から値段が大きく戻り、底らしさが40%・32%・27%まで下がっていた日です。過去3回の成功したサイクルでは、すべての買いの日で底らしさが59%以上でした。条件を加えると、今回は8/19の1回だけになり、残り3回分を今の安値圏に残せていた計算です。ただし、後から1つのサイクルを見て決めた条件で、次も効くとは限りません。</p>' +
     '<p class="sub">BTCの値段での結果です。含み損は4回買い終えた後、その持ち高全体で見た最大の値。MSTR・COINはこの1.5倍前後、MSTU・CONLはさらに大きく動きます。</p>' +
@@ -1774,7 +1805,7 @@ function viewVerify() {
     '<table class="tbl"><thead><tr><th></th><th>年率</th><th>最大下落</th><th>保有日の割合</th></tr></thead><tbody><tr><th>シグナルに従う</th><td class="num">' + pc(sim.cagr, 0) + '</td><td class="num">' + pc(sim.mdd, 0) + '</td><td class="num">' + pc(sim.exposure, 0, false) + '</td></tr><tr><th>持ち続ける</th><td class="num">' + pc(sim.bcagr, 0) + '</td><td class="num">' + pc(sim.bmdd, 0) + '</td><td class="num">100%</td></tr></tbody></table>' +
     '<p class="sub">スコア60以上で買い、40未満で売り、その間は維持。売買のたびに手数料0.1%を引いています。売買 ' + sim.trades + ' 回、' + sim.years.toFixed(1) + ' 年間。BTC現物での結果で、関連株の結果は「関連株」タブにあります。</p></section>' +
     '<section class="card"><div class="row"><h2>直近の答え合わせ</h2><span class="num muted">' + hits + '/' + judged.length + ' 的中</span></div><ul class="calls">' + pend + calls + '</ul><p class="sub">' + h.d + '日おきに1件ずつ。買い系は上昇で的中、見送りは下落で的中、様子見は対象外です。</p></section>' +
-    ruleCard() + wfCard() + protectCard() + fixedCard() + provRecord() + '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
+    ruleCard() + signalsCard() + wfCard() + protectCard() + fixedCard() + provRecord() + '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
     '<details class="card"><summary>計算のしかた</summary><p>テクニカル9種、出来高4種、オプション2種（Deribit DVOL、2021年以降）、資金調達率2種（Binance先物、2019年以降）、長期サイクル2種（長期成長線と200週線からの乖離。長期の判定だけに使用）の指標を毎日計算します。各指標が過去4年間で「' + h.d + '日後のリターン」とどれだけ連動していたかを相関で測り、それを重みにして合成したものがスコアです。スコアは過去4年の中での順位（0〜100）に直しています。</p><p>重みの計算にはその日より前に結果が確定していたデータしか使わないため、上の成績はすべて「当時知り得た情報だけで出した判定」の結果です。プット・コール比率、スキュー、建玉、清算の集中帯は長期の履歴が公開されていないのでスコアには入れず、警戒フラグとして判定を一段階下げる用途に限っています。</p></details>';
 }
 
@@ -1914,11 +1945,13 @@ document.addEventListener('click', e => {
     if (!(cost > 0)) { t.textContent = '買値を入力してください'; return; }
     const a = LS.get('pos', []); a.push({ sym: $('#pos-sym').value, cost, qty, date }); LS.set('pos', a); if (S.R) { S.hold = holdAll(); S.pick = pickStock(); writeLog(); } location.hash = 'judge';
   }
+  else if (t.id === 'trial-add') { LS.set('trial', { t: Date.now(), btc: Math.round(S.price) }); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
+  else if (t.id === 'trial-clear') { LS.del('trial'); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
   else if (t.id === 'buy-add') { const a = LS.get('buys', []); a.push({ t: Date.now(), btc: Math.round(S.price) }); LS.set('buys', a); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
   else if (t.id === 'buy-undo') { const a = LS.get('buys', []); a.pop(); LS.set('buys', a); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
   else if (t.id === 'cfg-save') { S.cfg = { tdKey: $('#td-key').value.trim(), src: $('#src').value }; LS.set('cfg', S.cfg); S.stocks = {}; refreshAll(); }
   else if (t.id === 'cfg-reset') {
-    if (t.dataset.sure) { ['daily', 'dvol', 'fund', 'log', 'events', 'cfg', 'stk.MSTR', 'stk.COIN', 'long', 'pos', 'buys', 'ranges'].forEach(LS.del); location.reload(); }
+    if (t.dataset.sure) { ['daily', 'dvol', 'fund', 'log', 'events', 'cfg', 'stk.MSTR', 'stk.COIN', 'long', 'pos', 'buys', 'ranges', 'trial'].forEach(LS.del); location.reload(); }
     else { t.dataset.sure = '1'; t.textContent = 'もう一度押すと、記録もすべて消えます'; }
   }
 });
