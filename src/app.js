@@ -621,7 +621,8 @@ function priceAtBtc(sym, btc) { // BTCがその値段になったときの株価
 function placedOrders() { const o = LS.get('orders', null); return o && o.rows && o.rows.length ? o : null; }
 function ladderOrders(p) { // 買い下がりの指値：1回目はBTCの直近の終値の2%下に当たる株価、2〜4回目はその-10%・-20%・-30%
   // 検証（research/limit.py）：底値圏でBTCが90日ぶりの安値を付けた日（33日）に、2%下へ指値を置いて3日待つと78%が約定し、翌日に成行で買うより中央値で1.8%安い（平均では差なし）
-  const t = planTicker(p), c = S.d.c, btcL = Math.min(c[c.length - 1], S.price) * 0.98, first = priceAtBtc(t, btcL); if (!ok(first)) return null;
+  // 指値はその日のあいだ変わらないように、朝9時に確定したBTCの終値と、株の前日の終値だけで決める（今の値段では動かさない）
+  const t = planTicker(p), c = S.d.c, btcL = c[c.length - 1] * 0.98, first = etfAt(t, btcL); if (!ok(first)) return null;
   const b = budget(), per = b.total * LAD_SHARE / LAD_N, now = Date.now(); let exp = usTradingDays(now, 3);
   // 大きく動く日（重要な発表・指数の実施日）が期限のすぐ後にあれば、避けずに期限をその翌営業日まで延ばして下げを拾う
   const evs = allEvents().filter(e => e.t > now && e.impact >= 2).map(e => ({ t: e.t, title: e.title })).concat(INDEX_EVENTS.filter(x => x.effT > now && (ETF[t] ? ETF[t].und : t) === x.sym).map(x => ({ t: x.effT, title: x.sym + 'の' + x.name })));
@@ -678,7 +679,7 @@ function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
     if (p.a !== 'ladder') h += '<p class="money-do">' + (p.a === 'trial' ? '試し買い' : '確認買い') + '：<b class="num">' + usd(amt) + '</b> で <b>' + t + '</b>' + (ok(n) ? ' 約<b class="num">' + n.toLocaleString('en-US') + '</b>株（目安 ' + usd2(px) + '）' : '') + '</p>';
     if (t !== t0) h += '<p class="sub">中期の判定が' + LEV_OFF + '未満なので、' + t0 + ' ではなく1倍の ' + t + ' で入ります。判定が' + LEV_ON + '以上に戻ったら2倍に替えます。</p>';
     const lo = p.a === 'ladder' ? ladderOrders(p) : null;
-    if (lo) h += '<table class="tbl sm"><thead><tr><th>指値</th><th>' + lo.t + 'の値段</th><th>株数</th><th>期限</th></tr></thead><tbody>' + lo.rows.map(r => '<tr><th>' + r.k + '回目</th><td class="num">' + usd2(r.px) + '</td><td class="num">' + r.n + '</td><td>' + (r.k === 1 ? mdUS(lo.exp) + 'の引け' : 'なし') + '</td></tr>').join('') + '</tbody></table><p class="sub">1回目は、BTCの直近の終値（今の方が安ければ今の値段）の2%下（' + usd(lo.btcL) + '）に当たる株価です。今の ' + lo.t + ' は ' + usd2(priceNow(lo.t)) + (liveOf(ETF[lo.t] ? ETF[lo.t].und : lo.t) ? '（リアルタイム）' : '（BTCからの換算）') + '。過去の同じ場面では、3日以内に8割近くが約定し、翌日に成行で買うより中央値で約2%安く買えていました。2〜4回目は1回目から-10%ずつ。株価はBTCからの換算なので、moomooの気配と比べて大きくずれていたら教えてください。</p>';
+    if (lo) h += '<table class="tbl sm"><thead><tr><th>指値</th><th>' + lo.t + 'の値段</th><th>株数</th><th>期限</th></tr></thead><tbody>' + lo.rows.map(r => '<tr><th>' + r.k + '回目</th><td class="num">' + usd2(r.px) + '</td><td class="num">' + r.n + '</td><td>' + (r.k === 1 ? mdUS(lo.exp) + 'の引け' : 'なし') + '</td></tr>').join('') + '</tbody></table><p class="sub">1回目は、今朝9時に確定したBTCの終値の2%下（' + usd(lo.btcL) + '）に当たる株価です。値段はその日のあいだ変わりません。明日の朝9時に計算し直すので、入れたら「4本入れた」を押して固定してください。今の ' + lo.t + ' は ' + usd2(priceNow(lo.t)) + (liveOf(ETF[lo.t] ? ETF[lo.t].und : lo.t) ? '（リアルタイム）' : '（BTCからの換算）') + '。過去の同じ場面では、3日以内に8割近くが約定し、翌日に成行で買うより中央値で約2%安く買えていました。2〜4回目は1回目から-10%ずつ。株価はBTCからの換算なので、moomooの気配と比べて大きくずれていたら教えてください。</p>';
     if (per > b.cash + 1) h += '<p class="sub" style="color:var(--avoid)">現金が足りません（予定 ' + usd(per) + '）。今ある ' + usd(b.cash) + ' の範囲で買ってください。</p>';
   } else h += '<p class="sub">今日は新しく使いません。使う額の目安：買い下がり1回 ' + usd(b.total * LAD_SHARE / LAD_N) + '（4回まで）、確認買い1回 ' + usd(b.total * (1 - LAD_SHARE) / MAXBUY) + '（2回まで）。</p>';
   const und = ETF[t] ? ETF[t].und : t;
@@ -749,7 +750,7 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
     const t = planTicker(p), per = { buy: b.total * (1 - LAD_SHARE) / MAXBUY, trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
     const po = placedOrders(), lo = p.a === 'ladder' && !po ? ladderOrders(p) : null;
     if (b.total > 0 && lo) { const ex = new Date(lo.exp);
-      items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる', sub: lo.rows.map(r => r.k + '本目　' + usd2(r.px) + '　' + r.n + '株' + (r.k === 1 ? '（期限 ' + mdUS(lo.exp) + '）' : '')) });
+      items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる（値段は今朝9時の確定値で決めていて、今日のあいだは変わりません）', sub: lo.rows.map(r => r.k + '本目　' + usd2(r.px) + '　' + r.n + '株' + (r.k === 1 ? '（期限 ' + mdUS(lo.exp) + '）' : '')) });
       items.push({ lv: 'info', t: '1本目が ' + mdUS(lo.exp) + ' の引けまでに届かなければ、引けに成行で買う' + (lo.ev ? '（' + lo.ev.title.replace(/（.*?）/g, '') + 'の後まで待つ）' : '') });
       items.push({ lv: 'info', t: '4本入れたら、下のボタンを押す（値段を覚えて、変える必要があるときだけ知らせます）', btn: 'ord-set' }); }
     else if (b.total > 0 && p.a !== 'ladder') { items.push({ lv: 'buy', t: (p.a === 'buy' ? '確認買い' : '試し買い') + '：' + t + ' を ' + usd(amt) + ' 分' + (ok(n) ? '（約' + n + '株、目安 ' + usd2(px) + '）' : '') + '、その取引時間のうちに買う（指値で待たない）' });
