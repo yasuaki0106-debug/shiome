@@ -1708,7 +1708,7 @@ async function refreshAll() {
   }));
   tasks.push(loadOnchain().then(v => { S.oc = v; S.status.oc = { ok: true, name: 'オンチェーン・恐怖指数', note: 'MVRV・マイナー収入・ハッシュレート・恐怖と強欲指数' }; }, () => { S.oc = null; S.status.oc = { ok: false, name: 'オンチェーン・恐怖指数', note: '取得できません。底らしさの一部が出ません' }; }));
   tasks.push(loadLiveStocks().then(v => { S.live = v; S.status.live = { ok: true, name: '株価（リアルタイム）', note: 'MSTR・COINのトークン化株式（Gate、24時間）。MSTU・CONLはその動きの2倍で換算' }; }, () => { S.live = null; S.status.live = { ok: false, name: '株価（リアルタイム）', note: '取得できません。BTCからの換算で表示します' }; }));
-  tasks.push(loadRepoJson('lines.json').then(v => { S.lines = v; }, () => { S.lines = null; }));
+  tasks.push(loadRepoJson('lines.json?v=' + Math.floor(Date.now() / 6e5)).then(v => { if (v && v.lines) v.lines = v.lines.filter(l => l.kind !== 'round'); S.lines = v; }, () => { S.lines = null; }));
   tasks.push(loadRepoJson('review.json').then(v => { S.review = v; }, () => { S.review = null; }));
   tasks.push(loadRepoJson('signal_log.json').then(v => { S.slog = v; }, () => { S.slog = null; }));
   tasks.push(loadRepoJson('etf_flows.json').then(v => { S.etff = v; S.status.etff = { ok: true, name: 'ETFの資金の出入り', note: '米国の現物ビットコインETF（Farside、毎日）' }; }, () => { S.etff = null; }));
