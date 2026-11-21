@@ -1046,7 +1046,8 @@ function priceChart() {
   if (fc) { lo = Math.min(lo, price * (1 + fc.q10)); hi = Math.max(hi, price * (1 + fc.q90)); }
   const dv = S.opt && ok(S.opt.dvol) ? S.opt.dvol / 100 : NaN, sgm = ok(dv) ? dv * Math.sqrt(H / 365) : NaN;   // オプションが織り込む変動幅（年率）をH日に直す
   if (ok(sgm)) { lo = Math.min(lo, price * Math.exp(-2 * sgm)); hi = Math.max(hi, price * Math.exp(2 * sgm)); }
-  const lvA = (S.zones && S.zones.above || []).slice(0, 2), lvB = (S.zones && S.zones.below || []).slice(0, 2);
+  const nz = z => { const it = z.items.filter(x => x.kind !== 'opt'); return it.length ? { mid: it.reduce((a, x) => a + x.p, 0) / it.length } : null; };
+  const lvA = (S.zones && S.zones.above || []).map(nz).filter(Boolean).slice(0, 2), lvB = (S.zones && S.zones.below || []).map(nz).filter(Boolean).slice(0, 2);
   // トレンドの通り道：直近60日の終値の対数に直線を当て、その上下2標準偏差
   const TN = Math.min(60, N - 1), xs = [], ys = []; for (let i = n - TN; i < n; i++) { xs.push(i); ys.push(Math.log(d.c[i])); }
   const mxs = xs.reduce((a, b) => a + b, 0) / TN, mys = ys.reduce((a, b) => a + b, 0) / TN; let sxy = 0, sxx = 0; xs.forEach((x, k) => { sxy += (x - mxs) * (ys[k] - mys); sxx += (x - mxs) ** 2; });
@@ -1354,10 +1355,11 @@ function dirCard() {
   const vd = f => !f ? ['—', 'v-na'] : f.up >= 0.56 ? ['上がりやすい', 'v-buy'] : f.up <= 0.44 ? ['下がりやすい', 'v-avoid'] : ['五分五分', 'v-wait'];
   const hzRow = (nm, f) => { const [v, cl] = vd(f); return '<tr><th>' + nm + '</th><td><b class="' + cl + '">' + v + '</b></td><td class="num">' + (f ? pc(f.up, 0, false) : '—') + '</td><td class="num">' + (f ? pc(f.q25, 0) + '〜' + pc(f.q75, 0) : '—') + '</td></tr>'; };
   const WALL = /20日線|50日線|200日線|ボリンジャー上限|30日高値|90日高値|出来高|コール建玉|マックスペイン|前の安値/, SUP = /90日安値|30日安値|ボリンジャー下限|出来高|プット建玉|マックスペイン|20日線|50日線|200日線/;
-  const ab = (S.zones.above || []).filter(z => z.mid < price * 1.25).slice(0, 4).map(z => ({ p: z.mid, labels: [...new Set(z.items.map(x => x.label))] }));
+  const noOpt = z => { const it = z.items.filter(x => x.kind !== 'opt'); return it.length ? { p: it.reduce((a, x) => a + x.p, 0) / it.length, labels: [...new Set(it.map(x => x.label))] } : null; };
+  const ab = (S.zones.above || []).map(noOpt).filter(z => z && z.p < price * 1.25).slice(0, 4);
   if (S.rt && S.rt.lo > price) ab.push({ p: S.rt.lo, labels: ['前の安値（割った後は上値になる）'] });
   ab.sort((a, b) => a.p - b.p);
-  const be = (S.zones.below || []).filter(z => z.mid > price * 0.75).slice(0, 4).map(z => ({ p: z.mid, labels: [...new Set(z.items.map(x => x.label))] }));
+  const be = (S.zones.below || []).map(noOpt).filter(z => z && z.p > price * 0.75).slice(0, 4);
   const kindUp = z => { const fuel = z.labels.some(l => /ショート清算/.test(l)), wall = z.labels.some(l => WALL.test(l)); return fuel && wall ? ['↑止まりやすいが、抜けると加速', '止められやすいが、抜けるとショートの損切りで加速しやすい', 'k-mix'] : fuel ? ['↑ここから上に加速', 'ショートの損切りの買いが出て、一気に抜けやすい', 'k-fuel'] : ['↑ここで上げが止まりやすい', '売りが出やすく、止められやすい', 'k-wall']; };
   const kindDn = z => { const acc = z.labels.some(l => /ロング清算/.test(l)), sup = z.labels.some(l => SUP.test(l)); return acc && sup ? ['↓止まりやすいが、割ると加速', '止まりやすいが、割るとロングの損切りで下げが速くなりやすい', 'k-mix'] : acc ? ['↓割ると下に加速', 'ここを割るとロングの損切りで下げが速くなりやすい', 'k-fuel'] : ['↓ここで下げが止まりやすい', '買いが入りやすく、止まりやすい', 'k-sup']; };
   const t1 = buyTicker(), u1 = ETF[t1] ? ETF[t1].und : t1, eq = p => [u1, t1].filter((x, i, a) => a.indexOf(x) === i).map(x => x + ' ' + usd2(priceAtBtc(x, p))).join('／');
@@ -1383,7 +1385,7 @@ function dirCard() {
     '<h3>▲ 上がったら（今より上の節目）</h3><ul class="lv">' + ab.slice(0, 4).map((z, i, a) => row(z, kindUp(z), true, a[i + 1])).join('') + '</ul>' +
     '<h3>▼ 下がったら（今より下の節目）</h3><ul class="lv">' + be.slice(0, 4).map((z, i, a) => row(z, kindDn(z), false, a[i + 1])).join('') + '</ul><p class="sub">それぞれタップすると、その値段で何が起きやすいか（ストーリー）が開きます。</p>' +
     (liqTxt ? '<p class="sub">' + esc(liqTxt) + '。</p>' : '') +
-    '<p class="sub">節目は、移動平均・高値と安値・出来高の厚い価格帯・オプションの建玉・清算の集中帯（推定）を重ねたものです。株価はBTCがその値段になったときの換算。清算とオプションは過去の履歴が取れないため、節目として効くかどうかは検証できていません。</p></details></section>';
+    '<p class="sub">節目は、移動平均・高値と安値・出来高の厚い価格帯・清算の集中帯（推定）を重ねたものです。オプションの建玉の壁は、行使価格がキリのいい値段に集まるうえ効き目を検証できないので、ここには入れていません（需給タブで見られます）。株価はBTCがその値段になったときの換算。</p></details></section>';
 }
 function bottomCard() {
   const b = S.bo; if (!b) return '';
