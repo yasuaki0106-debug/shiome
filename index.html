@@ -123,6 +123,8 @@ h2.sec{font-size:13px;color:var(--muted);font-weight:500;margin:0 0 6px}
 /* meters */
 .meter{margin-bottom:14px}.meter .row{font-size:13.5px}.mtrack{height:8px;background:var(--soft);margin-top:6px!important;border-radius:1px;overflow:hidden}.mtrack b{display:block;height:100%}
 .m-lo{background:var(--muted)}.m-mid{background:var(--wait)}.m-hi{background:var(--avoid)}.lvl-lo{color:var(--muted)}.lvl-mid{color:var(--wait)}.lvl-hi{color:var(--avoid)}
+.why2{margin:10px 0 4px;font-size:13px}.why2 li{padding:4px 0 4px 16px;position:relative;line-height:1.55}.why2 li::before{position:absolute;left:0;font-weight:700}.why2 li.up::before{content:'↑';color:var(--buy)}.why2 li.dn::before{content:'↓';color:var(--avoid)}
+.why2 li.up,.why2 li.dn{color:var(--ink)}
 .note.good{border-left:3px solid var(--buy);padding:6px 10px;font-size:13.5px;margin-bottom:8px}
 .clist li,.pair li{display:flex;gap:12px;align-items:baseline;font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--line)}.clist b{font-size:16px;font-weight:600}.clist li span:last-child{margin-left:auto;color:var(--muted)}.pair li{justify-content:space-between}
 .events li{padding:11px 0;border-bottom:1px solid var(--line)}.events li div:first-child{display:flex;justify-content:space-between;gap:10px}.events .sub{margin-top:0}
@@ -801,7 +803,7 @@ function compute() {
   S.liq = E.analyzeLiq({ oi: S.fut && S.fut.oi, fundDaily: ex.fund, fundNow: S.fut ? S.fut.fundNow : NaN, ls: S.fut && S.fut.ls, top: S.fut && S.fut.top }, d, S.price);
   S.zones = E.entryZones(d, S.R.ind, S.price, S.opt, S.liq);
   S.events = allEvents();
-  decide(); computeStocks(); S.plan = buildPlan(); writeLog();
+  decide(); computeStocks(); S.up = upside(); S.plan = buildPlan(); writeLog();
 }
 
 function decide() {
@@ -838,6 +840,64 @@ function decide() {
   });
   if (S.stale > 2.5) flags.unshift({ lv: 'warn', src: 'データ', text: '価格データが ' + Math.floor(S.stale) + ' 日前で止まっています。判定は最新ではありません。' });
   S.flags = flags; S.ev48 = ev48; S.bigEv = big;
+}
+
+/* ---------- 上値の見通し：踏み上げか、蓋か ---------- */
+function upside() {
+  const q = S.liq, o = S.opt, price = S.price; if (!q || !q.ok) return null;
+  const all = (q.clusters && q.clusters.all) || [];
+  const fuelS = all.filter(x => x.side === 'S' && x.p < price * 1.08).reduce((a, b) => a + b.w, 0);
+  const fuelL = all.filter(x => x.side === 'L' && x.p > price * 0.92).reduce((a, b) => a + b.w, 0);
+  const ratio = fuelS + fuelL > 0 ? fuelS / (fuelS + fuelL) : NaN;
+  const sc = (q.clusters && q.clusters.above) || [];
+  const nearS = sc.slice().sort((a, b) => a.p - b.p)[0], bigS = sc.filter(x => x.dist <= 0.10).sort((a, b) => b.share - a.share)[0];
+  const cw = o && o.callWall && o.callWall.K / price - 1 <= 0.08 ? o.callWall : null;
+  const za = (S.zones.above || []).find(z => z.strength >= 2 && z.dist <= 0.06);
+  const sq = [], lid = [];
+  if (q.shortRisk >= 55) sq.push('ショートが積み上がっている（踏み上げリスク ' + q.shortRisk + '）');
+  if (ok(q.fund7) && q.fund7 < 0) sq.push('資金調達率がマイナス（ショートが手数料を払ってでも売っている）');
+  if (ok(q.oi3) && ok(q.px1) && q.oi3 > 0.03 && q.px1 <= 0) sq.push('値下がり中に建玉が増えている（新しいショートが入っている）');
+  if (ok(ratio) && ratio >= 0.6) sq.push('上の清算の燃料が下より多い');
+  if (nearS && nearS.dist <= 0.04) sq.push('すぐ上 ' + pc(nearS.dist) + ' にショート清算の集中帯');
+  if (cw) lid.push('上 ' + pc(cw.K / price - 1) + ' の ' + usd(cw.K) + ' にコール建玉の壁');
+  if (q.longRisk >= 55) lid.push('ロングが積み上がっていて、上がると利益確定の売りが出やすい（清算リスク ' + q.longRisk + '）');
+  if (ok(q.fundPct) && q.fundPct >= 0.8) lid.push('資金調達率が過去1年の上位' + pc(1 - q.fundPct, 0, false) + '（買いが混んでいる）');
+  if (za) lid.push('上 ' + pc(za.dist) + ' に節目が重なる価格帯（' + [...new Set(za.items.map(i => i.label))].slice(0, 2).join('、') + '）');
+  if (ok(ratio) && ratio <= 0.35) lid.push('上に清算の燃料が少なく、上げても加速しにくい');
+  const sp = sq.length, lp = lid.length;
+  const type = sp >= 2 && sp > lp ? 'squeeze' : lp >= 2 && lp > sp ? 'lid' : 'neutral';
+  const lidLv = [cw && cw.K, za && za.lo].filter(ok).sort((a, b) => a - b)[0];
+  const tgt = bigS ? bigS.p : nearS ? nearS.p : NaN;
+  return { type, sq, lid, lidLv, tgt, ratio };
+}
+const UPS = { squeeze: ['踏み上げ型', '上がり始めたら、ショートの買い戻しで加速しやすい形です。', 'v-buy'], lid: ['蓋をされやすい', '上がっても、売りに押さえられて止まりやすい形です。', 'v-avoid'], neutral: ['どちらとも言えない', '踏み上げの材料と、蓋の材料が拮抗しているか、どちらも弱い状態です。', 'v-wait'] };
+function upsideCard(full) {
+  const u = S.up; if (!u) return '';
+  const [lab, txt, cls] = UPS[u.type];
+  const lv = [];
+  if (u.type !== 'lid' && ok(u.tgt)) lv.push(['踏み上げで走りやすい先', usd(u.tgt) + '（' + pc(u.tgt / S.price - 1) + '）']);
+  if (ok(u.lidLv)) lv.push(['蓋になりやすい水準', usd(u.lidLv) + '（' + pc(u.lidLv / S.price - 1) + '）']);
+  ['MSTR', 'COIN'].forEach(sym => { const an = S.stocks[sym] && S.stocks[sym].an; if (!an) return; const xs = []; if (u.type !== 'lid' && ok(u.tgt)) xs.push('走る先 ' + usd2(stockAt(an, u.tgt))); if (ok(u.lidLv)) xs.push('蓋 ' + usd2(stockAt(an, u.lidLv))); if (xs.length) lv.push([sym + ' 換算', xs.join('、')]); });
+  const li = (arr, c) => arr.map(x => '<li class="' + c + '">' + esc(x) + '</li>').join('');
+  return '<section class="card"><div class="row"><h2>上がったらどうなる？</h2><b class="' + cls + '">' + lab + '</b></div><p>' + txt + '</p>' +
+    (u.sq.length || u.lid.length ? '<ul class="why2">' + li(u.sq, 'up') + li(u.lid, 'dn') + '</ul>' : '') +
+    (lv.length ? '<dl class="kv">' + lv.map(x => '<dt>' + x[0] + '</dt><dd class="num">' + x[1] + '</dd>').join('') + '</dl>' : '') +
+    (full ? upRecord() : '') +
+    '<p class="sub">建玉・資金調達率・ロングショート比・清算の集中帯（推定）・オプションの建玉から判定しています。長い過去データがないため、バックテストではなく、日々の記録で答え合わせをしています。</p></section>';
+}
+function upRecord() {
+  const d = S.d, idx = new Map(); for (let i = 0; i < d.t.length; i++) idx.set(dkey(d.t[i]), i);
+  let n = 0, hit = 0, pend = 0; const rows = [];
+  LS.get('log', []).filter(x => x.up).forEach(x => {
+    const i = idx.get(x.k); if (i == null) return; if (i + 3 >= d.c.length) { pend++; return; }
+    let mx = 0; for (let j = i + 1; j <= i + 3; j++) mx = Math.max(mx, d.h[j]);
+    let r = null;
+    if (x.up.t === 'lid' && x.up.lid) r = mx < x.up.lid * 1.005;
+    else if (x.up.t === 'squeeze' && x.up.tg) r = mx >= x.up.tg * 0.995;
+    if (r === null) return; n++; if (r) hit++; rows.push(x.k.slice(5).replace('-', '/') + ' ' + UPS[x.up.t][0] + '：' + (r ? '的中' : '外れ'));
+  });
+  if (!n && !pend) return '';
+  return '<p class="sub">これまでの答え合わせ：' + (n ? n + '回中 ' + hit + '回的中' : 'まだ判定なし') + (pend ? '（' + pend + '回が判定待ち）' : '') + '。「蓋」は3日以内に蓋の水準を超えなければ的中、「踏み上げ」は3日以内に走る先へ届けば的中。' + (rows.length ? '直近：' + rows.slice(-3).join('、') : '') + '</p>';
 }
 
 /* ---------- 今日の行動プラン ---------- */
@@ -916,7 +976,8 @@ function writeLog() {
   const liq = S.liq || {}, opt = S.opt || {};
   const pct = {}, act = {}; E.HORIZONS.forEach(h => { pct[h.k] = Math.round(S.R.hz[h.k].pct); act[h.k] = S.act[h.k].a; });
   const pl = S.plan, sp = {}; if (pl) Object.keys(pl.stocks).forEach(sym => { const x = pl.stocks[sym]; sp[sym] = { a: x.a, px: +x.now.toFixed(2), lim: ok(x.lim) ? +x.lim.toFixed(2) : null }; });
-  log.push({ k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, ev: !!S.ev48 });
+  const up = S.up && S.up.type !== 'neutral' ? { t: S.up.type, lid: ok(S.up.lidLv) ? Math.round(S.up.lidLv) : null, tg: ok(S.up.tgt) ? Math.round(S.up.tgt) : null } : null;
+  log.push({ k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, ev: !!S.ev48 });
   LS.set('log', log.slice(-900));
 }
 function evalLog() {
@@ -1101,7 +1162,9 @@ function todayCard() {
   const btc = [];
   if (t) btc.push((p.a === 'skip' ? '検討を始めるBTCの価格帯 ' : 'BTCの指値の基準 ') + '<span class="num">' + usd(t.mid) + '（' + pc(t.dist) + '）</span>' + (p.a !== 'skip' && ok(p.reach) ? '。過去2年で、1日のうちにこの水準まで下げた日は ' + pc(p.reach, 0, false) : ''));
   if (p.rng) btc.push('今日のBTCの想定レンジ <span class="num">' + usd(p.rng.lo) + '〜' + usd(p.rng.hi) + '</span>（' + p.rng.src + '）');
-  const fd = S.R.hz.d;
+  const fd = S.R.hz.d, u = S.up;
+  if (u && u.type === 'lid' && p.a !== 'skip' && ok(u.lidLv)) btc.push('上は ' + '<span class="num">' + usd(u.lidLv) + '</span> 付近で蓋をされやすい形です。買った後はそこで一部の利益確定を考えます');
+  if (u && u.type === 'squeeze' && ok(u.tgt)) btc.push('踏み上げ型です。上がり始めたら <span class="num">' + usd(u.tgt) + '</span> 付近まで走りやすく、指値が置いていかれることもあります');
   return '<section class="today">' + sessionStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p><p class="today-why">理由：' + esc(p.why.join('。')) + '</p>' +
     (rows || '<p class="sub">MSTR・COINの株価を読み込めていないため、BTCの価格で表示しています。</p>') +
     '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
@@ -1125,7 +1188,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   return todayCard() + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
-    flags +
+    flags + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
     '<section class="card"><div class="row"><h2>価格と予測レンジ</h2><div class="seg" role="group" aria-label="表示期間">' + [[90, '3か月'], [365, '1年'], [1460, '4年']].map(r => '<button data-range="' + r[0] + '" aria-pressed="' + (S.range === r[0]) + '">' + r[1] + '</button>').join('') + '</div></div>' + priceChart() +
     '<p class="keys"><span><i class="k-px"></i>終値</span><span><i class="k-50"></i>50日線</span><span><i class="k-200"></i>200日線</span><span><i class="k-cone"></i>予測の幅（濃い帯は50%、薄い帯は80%）</span><span><i class="k-zone"></i>エントリー候補</span></p><p class="sub">チャート下の帯は、その日に出ていた' + H.name + '判定です。</p></section>' +
@@ -1162,6 +1225,7 @@ function meter(val, label, level) { return '<div class="meter"><div class="row">
 function viewFlow() {
   if (!S.R) return '';
   const q = S.liq, o = S.opt, price = S.price; let h = '<section class="lead"><h1>建玉とオプションの偏り</h1><p>レバレッジの積み上がりと、オプション市場の構えを見ます。</p></section>';
+  h += upsideCard(true);
   if (q && q.ok) {
     const kv = [];
     if (ok(q.fundNow)) kv.push(['資金調達率（直近）', pc(q.fundNow, 4) + ' / 8時間']);
