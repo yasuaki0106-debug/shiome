@@ -1426,7 +1426,7 @@ function holdOne(p) {
     // 守りのルール（天井圏・下落期の判断が優先）
     const mm = S.R.hz.m.pct, cyc2 = ph !== 'top' && ph !== 'down';
     if (cyc2 && e.L > 1 && ok(mm) && mm < LEV_OFF && (a === 'hold' || a === 'add')) { const tg = prefUnd(e.und); a = 'switch'; why.length = 0; why.push('底値圏でも、底を付けるまでは上下をくり返しながら下げることが多く、その間2倍は目減りします（過去の底値圏で、1倍の方が多く残ったのはMSTRで9回中8回）。中期の判定が' + Math.round(mm) + '（' + LEV_OFF + '未満）の今は ' + tg + ' で持ち、上向きがはっきりしたら（' + LEV_ON + '以上）' + LEVOF[tg] + ' に戻す合図を出します。売って降りるのではなく、2倍だけ外す形です'); }
-    if (cyc2 && e.L === 1 && ok(mm) && mm >= LEV_ON && (ph === 'bottom' || ph === 'recover' || ph === 'up') && a === 'hold') { a = 'relev'; why.push('中期の判定が' + Math.round(mm) + 'まで戻りました。2倍で持つ作戦なら、' + LEVOF[prefUnd(p.sym)] + ' に替える日です'); }
+    if (cyc2 && e.L === 1 && ok(mm) && mm >= LEV_ON && (ph === 'bottom' || ph === 'recover' || ph === 'up') && a === 'hold') { a = 'relev'; why.push('中期の判定が' + Math.round(mm) + 'まで戻って、上向きを確認しました。' + LEVOF[prefUnd(p.sym)] + ' に替える日です。買い下がりで1倍で買った分も、ここで2倍に替えると、過去のサイクルでは最終額が大きく増えました（BTC 2019年 888→2104、MSTR 2023年 1025→3033。research/lad2x.js）'); }
   } else {
     if (ph === 'down' && lvOf('m') === 0 && lvOf('s') === 0) { a = 'hold'; why.push('下落期で、判定も見送り。ただし逆2倍は目減りが大きいので短期で'); }
     else { a = 'sell'; why.push('このアプリは下げを予測できません。' + (ph ? 'サイクルは' + c.name + 'で、' : '') + '逆2倍は持つほど目減りします'); }
@@ -1470,6 +1470,7 @@ function doneSet() { const k = 'done.' + dkey(Date.now()); return new Set(LS.get
 function todoCard() { // 画面を開いて最初に見る場所：今日やることを番号で並べる
   const p = S.plan; if (!p) return '';
   const items = [], al = (S.hold || []).filter(h => h.alarm), b = budget();
+  (S.hold || []).filter(h => h.a === 'relev').forEach(h => items.push({ lv: 'buy', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → 売って ' + LEVOF[prefUnd(h.p.sym)] + ' に替える（上向きを確認したので2倍に戻す）' }));
   al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : ''; items.push({ lv: 'warn', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → ' + (h.a === 'switch' ? '売って ' + und + ' に替える（2倍をやめる）' : h.a === 'sell' ? '売る' : h.alarm) }); });
   if (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial') {
     const t = planTicker(p), per = { buy: b.cash / Math.max(1, MAXBUY - (p.n || 0)), trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;

@@ -25,8 +25,13 @@ L.lines.forEach(l => {
   msgs.push([head, '1時間足の終値 ' + usd(close) + '。' + why + (l.why ? '（' + l.why + '）' : ''), up ? 'chart_with_upwards_trend' : 'chart_with_downwards_trend']);
 });
 fs.writeFileSync(ST, JSON.stringify({ t: tkey, close, side }));
+// moomooの24時間取引で動ける時間か（米国東部時間 日曜20時〜金曜20時）と、MSTR・COINの今の値段（24時間取引のトークン化株式）
+function sessionNote() { const n = new Date(), et = new Date(n.getTime() - 5 * 36e5), w = et.getUTCDay(), h = et.getUTCHours();
+  const open = (w >= 1 && w <= 4) || (w === 0 && h >= 20) || (w === 5 && h < 20); return open ? '今はmoomooの24時間取引で注文が通る時間です。' : '今は週末で、米国株は動かせません（月曜の朝10時から）。'; }
+async function stockNote() { const out = []; for (const [s, pair] of [['MSTR', 'MSTRX_USDT'], ['COIN', 'COINX_USDT']]) { try { const j = await (await fetch('https://api.gateio.ws/api/v4/spot/tickers?currency_pair=' + pair)).json(); if (j && j[0] && +j[0].last > 0) out.push(s + ' $' + (+j[0].last).toFixed(2)); } catch (e) { /* なし */ } } return out.length ? '今の値段の目安：' + out.join('・') + '。' : ''; }
 (async () => {
   if (!st.side) { console.log('初回なので記録だけ'); return; }
+  if (msgs.length) { const extra = sessionNote() + await stockNote(); msgs.forEach(m => { m[1] += ' ' + extra; }); }
   if (!TOPIC || process.env.DRY) { msgs.forEach(m => console.log(m[0], '|', m[1])); return; }
   for (const [title, message, tag] of msgs) { const r = await fetch('https://ntfy.sh/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: TOPIC, title, message, tags: [tag], click: 'https://yasuaki0106-debug.github.io/shiome/', priority: 4 }) }); console.log('ntfy', r.status, title); }
 })();
