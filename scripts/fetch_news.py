@@ -37,6 +37,16 @@ def parse(q):
         if k in seen: continue
         seen.add(k); res.append(r)
     return res[:25]
+TR = {}
+def ja(text):
+    """見出しを日本語に（Googleの翻訳。失敗したら英語のまま）。同じ見出しは前回の訳を使う"""
+    if text in TR: return TR[text]
+    try:
+        u = "https://translate.googleapis.com/translate_a/single?" + urllib.parse.urlencode({"client": "gtx", "sl": "en", "tl": "ja", "dt": "t", "q": text})
+        j = json.loads(get(u, 15)); out = "".join(seg[0] for seg in j[0] if seg and seg[0])
+        TR[text] = out; time.sleep(0.3); return out
+    except Exception as e:
+        print("warn translate", e, file=sys.stderr); return None
 def earnings(sym):
     try:
         j = json.loads(get(f"https://api.nasdaq.com/api/analyst/{sym}/earnings-date"))
@@ -50,8 +60,13 @@ if os.path.exists(OUT):
     try: old = json.load(open(OUT))
     except Exception: old = {}
 out = {"updated": int(time.time()), "items": {}, "earn": old.get("earn", {})}
+for k, v in old.get("items", {}).items():
+    for r in v:
+        if r.get("ja"): TR[r["title"]] = r["ja"]
 for k, q in Q.items():
-    try: out["items"][k] = parse(q)
+    try:
+        out["items"][k] = parse(q)
+        for r in out["items"][k]: r["ja"] = ja(r["title"])
     except Exception as e:
         print("warn news", k, e, file=sys.stderr); out["items"][k] = old.get("items", {}).get(k, [])
 for s in ["MSTR", "COIN"]:
