@@ -8,7 +8,7 @@ const HORIZONS = [
 ];
 const W = 1460, MIN_Z = 250, MIN_IC = 365, IC_FLOOR = 0.03;
 const TH = { buy: 75, try_: 60, wait: 40 };
-const CATS = { tech: 'テクニカル', vol: '出来高', opt: 'オプション', lev: '建玉・資金調達' };
+const CATS = { tech: 'テクニカル', vol: '出来高', opt: 'オプション', lev: '建玉・資金調達', cyc: '長期サイクル' };
 
 /* ---------- basic series helpers ---------- */
 const nan = n => new Float64Array(n).fill(NaN);
@@ -90,6 +90,7 @@ function buildFactors(d, ex) {
   const svE = ema(sv, 5), capE = ema(cap, 10), obvS = sma(obv, 30), vSum30 = sma(v, 30);
   const dv = ex && ex.dvol ? ex.dvol : nan(n), fu = ex && ex.fund ? ex.fund : nan(n);
   const dv365 = sma(dv, 365), fu7 = sma(fu, 7), fu30 = sma(fu, 30);
+  const cpl = ex && ex.pl ? ex.pl : nan(n), cw2 = ex && ex.w200 ? ex.w200 : nan(n);
   const F = [
     { id: 't_ma200', cat: 'tech', label: '200日線からの乖離', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(1) + '%' },
     { id: 't_cross', cat: 'tech', label: '50日線と200日線の位置', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(1) + '%' },
@@ -107,7 +108,9 @@ function buildFactors(d, ex) {
     { id: 'o_dvol', cat: 'opt', label: 'インプライドボラ（DVOL）の水準', x: nan(n), fmt: x => (Math.expm1(x) * 100).toFixed(0) + '%（1年平均比）' },
     { id: 'o_vrp', cat: 'opt', label: 'IVと実現ボラの差', x: nan(n), fmt: x => (x >= 0 ? '+' : '') + x.toFixed(0) + 'pt' },
     { id: 'f_fund7', cat: 'lev', label: '資金調達率（7日平均）', x: fu7, fmt: x => (x * 100).toFixed(4) + '%' },
-    { id: 'f_fund30', cat: 'lev', label: '資金調達率（30日平均）', x: fu30, fmt: x => (x * 100).toFixed(4) + '%' }
+    { id: 'f_fund30', cat: 'lev', label: '資金調達率（30日平均）', x: fu30, fmt: x => (x * 100).toFixed(4) + '%' },
+    { id: 'c_pl', cat: 'cyc', label: '長期成長線からの乖離（レインボー）', x: cpl, fmt: x => (Math.expm1(x) * 100).toFixed(0) + '%' },
+    { id: 'c_w200', cat: 'cyc', label: '200週線からの乖離', x: cw2, fmt: x => (Math.expm1(x) * 100).toFixed(0) + '%' }
   ];
   const get = id => F.find(f => f.id === id).x;
   for (let i = 0; i < n; i++) {
@@ -161,7 +164,7 @@ function scoreHorizon(d, F, H) {
     let num = 0, den = 0; const cn = {}, cd = {}, det = [];
     for (let j = 0; j < F.length; j++) {
       let ic = b >= 0 ? corrRange(p2[j], a, b) : NaN;
-      const w = ic === ic && Math.abs(ic) >= IC_FLOOR ? ic : 0;
+      const w = ic === ic && Math.abs(ic) >= IC_FLOOR && !(F[j].cat === 'cyc' && H < 30) ? ic : 0;
       const x = F[j].x[t], q = p1[j], m = q.N[t + 1] - q.N[za];
       let z = NaN;
       if (x === x && m >= MIN_Z) {
@@ -439,6 +442,48 @@ function autoExpiries(now, months) {
   return o;
 }
 
+/* ---------- 長期サイクル ---------- */
+const HALVINGS = [Date.UTC(2012, 10, 28), Date.UTC(2016, 6, 9), Date.UTC(2020, 4, 11), Date.UTC(2024, 3, 20)];
+const GENESIS = Date.UTC(2009, 0, 3);
+function longSeries(L) { // L: { t:[], c:[] } 日足
+  const n = L.c.length, resid = nan(n); let sx = 0, sy = 0, sxx = 0, sxy = 0, m = 0;
+  for (let i = 0; i < n; i++) {
+    const X = Math.log((L.t[i] - GENESIS) / 864e5), Y = Math.log(L.c[i]);
+    if (m > 730) { const b = (m * sxy - sx * sy) / (m * sxx - sx * sx), a = (sy - b * sx) / m; resid[i] = Y - (a + b * X); }
+    sx += X; sy += Y; sxx += X * X; sxy += X * Y; m++;
+  }
+  const w = sma(Float64Array.from(L.c), 1400), w200 = nan(n);
+  for (let i = 0; i < n; i++) if (w[i] > 0) w200[i] = Math.log(L.c[i] / w[i]);
+  return { resid, w200 };
+}
+const PHASE = { up: '上昇期', top: '天井圏', down: '下落期', bottom: '底値圏', recover: '回復期' };
+function cycleInfo(L, ls, now, price) {
+  const n = L.c.length, DAYms = 864e5, cyc = [];
+  HALVINGS.forEach((h, k) => {
+    const nx = HALVINGS[k + 1] || Infinity; let pk = -1, lo = -1;
+    for (let i = 0; i < n; i++) { if (L.t[i] < h || L.t[i] >= nx) continue; if (L.t[i] <= h + 900 * DAYms && (pk < 0 || L.c[i] > L.c[pk])) pk = i; }
+    if (pk < 0) return;
+    for (let i = pk; i < n && L.t[i] < nx; i++) if (lo < 0 || L.c[i] < L.c[lo]) lo = i;
+    cyc.push({ h, peakT: L.t[pk], peak: L.c[pk], peakDay: Math.round((L.t[pk] - h) / DAYms), lowT: L.t[lo], low: L.c[lo], lowDay: Math.round((L.t[lo] - h) / DAYms), dd: L.c[lo] / L.c[pk] - 1, done: nx !== Infinity });
+  });
+  const cur = cyc[cyc.length - 1], past = cyc.filter(c => c.done), day = Math.floor((now - cur.h) / DAYms);
+  const phase = day < 400 ? 'up' : day < 600 ? 'top' : day < 750 ? 'down' : day < 1000 ? 'bottom' : 'recover';
+  const rs = Array.from(ls.resid).filter(x => x === x), rNow = ls.resid[n - 1];
+  const valPct = rs.length ? rs.filter(x => x < rNow).length / rs.length : NaN;
+  const ddNow = price / Math.max(cur.peak, price) - 1;
+  const checks = [];
+  if (phase === 'bottom' || phase === 'recover' || phase === 'down') {
+    checks.push({ ok: day >= 750 && day <= 1000, text: '時期：半減期から ' + day + ' 日目（過去の底は ' + past.map(c => c.lowDay).join('・') + ' 日目）' });
+    checks.push({ ok: ddNow <= -0.5, text: '下げ幅：天井から ' + (ddNow * 100).toFixed(0) + '%（過去の底は ' + past.map(c => (c.dd * 100).toFixed(0) + '%').join('・') + '）' });
+    checks.push({ ok: valPct <= 0.25, text: '割安さ：長期成長線に対して過去の下位 ' + (valPct * 100).toFixed(0) + '%' });
+  } else {
+    checks.push({ ok: day >= 400 && day <= 600, text: '時期：半減期から ' + day + ' 日目（過去の天井は ' + past.map(c => c.peakDay).join('・') + ' 日目）' });
+    checks.push({ ok: ddNow >= -0.15, text: '高値との距離：サイクル高値から ' + (ddNow * 100).toFixed(0) + '%' });
+    checks.push({ ok: valPct >= 0.75, text: '割高さ：長期成長線に対して過去の上位 ' + ((1 - valPct) * 100).toFixed(0) + '%' });
+  }
+  return { cyc, cur, past, day, phase, name: PHASE[phase], valPct, w200: ls.w200[n - 1], ddNow, checks, score: checks.filter(c => c.ok).length, nextHalving: Date.UTC(2028, 3, 15) };
+}
+
 /* ---------- top level ---------- */
 function run(d, ex) {
   const { F, ind } = buildFactors(d, ex);
@@ -450,5 +495,5 @@ function run(d, ex) {
   return res;
 }
 
-g.Engine = { HORIZONS, TH, CATS, VERDICT, verdictOf, run, entryZones, analyzeOptions, analyzeLiq, autoExpiries, volumeProfile, sma, ema, rsi, rollStd, rollExt, quantile, clamp, parseInstr, summarize };
+g.Engine = { HALVINGS, PHASE, longSeries, cycleInfo, HORIZONS, TH, CATS, VERDICT, verdictOf, run, entryZones, analyzeOptions, analyzeLiq, autoExpiries, volumeProfile, sma, ema, rsi, rollStd, rollExt, quantile, clamp, parseInstr, summarize };
 })(typeof window !== 'undefined' ? window : globalThis);
