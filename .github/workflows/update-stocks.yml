@@ -6,6 +6,8 @@ on:
     - cron: "15 3 * * 2-6"    # 翌朝に確定値で取り直し
     - cron: "20 0 * * *"      # BTCの日足が確定した直後（毎日）
     - cron: "15 6 * * *"      # 予備
+    - cron: "40 12 * * *"     # 建玉の履歴の補充
+    - cron: "40 16 * * *"
   workflow_dispatch:
 permissions:
   contents: write
@@ -24,11 +26,13 @@ jobs:
         continue-on-error: true
       - run: python scripts/update_btc.py
         continue-on-error: true
+      - run: python scripts/update_okx.py
+        continue-on-error: true
       - run: python scripts/update_premium.py
         continue-on-error: true
       - name: 変更があれば保存
         run: |
           git config user.name "shiome-bot"
           git config user.email "shiome-bot@users.noreply.github.com"
-          git add data/stocks.json data/btc-usd-daily.csv data/cb-premium.csv
+          git add data/stocks.json data/btc-usd-daily.csv data/okx_oi.json data/cb-premium.csv
           git diff --cached --quiet || (git commit -m "データを更新" && git push)

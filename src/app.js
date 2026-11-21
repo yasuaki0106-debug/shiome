@@ -152,6 +152,26 @@ async function loadFutures() {
   if (!out.oi && out.fundNow == null) throw new Error('empty');
   return out;
 }
+async function loadOkx() {
+  const [oi, fr] = await Promise.all([jget('https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=BTC-USDT-SWAP'), jget('https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP')]);
+  const o = oi.data && oi.data[0], f = fr.data && fr.data[0]; if (!o) throw new Error('empty');
+  let hist = null; try { const h = await jget('data/okx_oi.json?t=' + Math.floor(Date.now() / 6e5)); if (h && Array.isArray(h.rows)) hist = h.rows; } catch (e) { /* 履歴の控えなし */ }
+  return { oi: +o.oiCcy, oiUsd: +o.oiUsd, t: +o.ts, fund: f ? +f.fundingRate : NaN, hist };
+}
+async function loadBybit() {
+  const q = 'category=linear&symbol=BTCUSDT';
+  const [tk, oh, ar] = await Promise.allSettled([jget('https://api.bybit.com/v5/market/tickers?' + q), jget('https://api.bybit.com/v5/market/open-interest?' + q + '&intervalTime=4h&limit=200'), jget('https://api.bybit.com/v5/market/account-ratio?' + q + '&period=4h&limit=180')]);
+  const t = tk.status === 'fulfilled' && tk.value.result && tk.value.result.list && tk.value.result.list[0]; if (!t) throw new Error('empty');
+  const out = { oi: +t.openInterest, oiUsd: +t.openInterestValue, fund: +t.fundingRate };
+  if (oh.status === 'fulfilled' && oh.value.result) out.hist = oh.value.result.list.map(x => [+x.timestamp, +x.openInterest]);
+  if (ar.status === 'fulfilled' && ar.value.result) out.ls = ar.value.result.list.map(x => ({ t: +x.timestamp, r: +x.buyRatio / Math.max(1e-9, +x.sellRatio) }));
+  return out;
+}
+async function loadCoinbase() {
+  const [tk, cd] = await Promise.all([jget('https://api.exchange.coinbase.com/products/BTC-USD/ticker'), jget('https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=86400')]);
+  const days = {}; (cd || []).forEach(x => { days[dkey(x[0] * 1000)] = +x[4]; });
+  return { now: +tk.price, days };
+}
 async function loadDeribitPerp() {
   const j = await jget(DB + 'get_book_summary_by_currency?currency=BTC&kind=future');
   const p = (j.result || []).find(x => x.instrument_name === 'BTC-PERPETUAL'); if (!p) throw new Error('empty');
@@ -224,7 +244,10 @@ function compute() {
   if (S.opt && S.dvol) { const ks = Object.keys(S.dvol).sort(), last = ks[ks.length - 1]; S.opt.dvol = S.dvol[last]; const yr = ks.slice(-365).map(k => S.dvol[k]); S.opt.dvolPct = yr.filter(x => x < S.opt.dvol).length / yr.length; }
   if (S._L && S.longRows) { try { S.cyc = E.cycleInfo(S._L, S._ls, now, S.price); } catch (e) { S.cyc = null; } }
   { const m = S.R.ind.s200; let b = 0; for (let i = n - 14; i < n; i++) if (ok(m[i]) && d.c[i] < m[i]) b++; S.below200 = b >= 14; S.above200 = b === 0; }
-  S.liq = E.analyzeLiq({ oi: S.fut && S.fut.oi, fundDaily: ex.fund, fundNow: S.fut ? S.fut.fundNow : NaN, ls: S.fut && S.fut.ls, top: S.fut && S.fut.top }, d, S.price);
+  S.agg = aggregateFutures();
+  S.liq = E.analyzeLiq({ oi: S.agg.series || (S.fut && S.fut.oi), fundDaily: ex.fund, fundNow: S.fut ? S.fut.fundNow : NaN, ls: S.agg.ls || (S.fut && S.fut.ls), top: S.fut && S.fut.top }, d, S.price);
+  if (S.liq) { S.liq.agg = S.agg; }
+  S.cbp = coinbasePremium();
   S.zones = E.entryZones(d, S.R.ind, S.price, S.opt, S.liq);
   S.events = allEvents();
   S.prov = null;
@@ -271,6 +294,37 @@ function computeProv() { // 暫定：今の値段のまま今日の日足が確�
   E.HORIZONS.forEach(h => { pct[h.k] = R2.hz[h.k].pct; });
   S.prov = { frac, pct, acts, a: dec.a, why: dec.why, at: now };
 }
+function aggregateFutures() {
+  // Binance先物の4時間足の建玉に、OKX・Bybitの建玉（同じ時刻に最も近い値）を足す。期間の大半をカバーできる取引所だけを合算する
+  const bin = S.fut && S.fut.oi, out = { ex: [], series: null, fund: NaN, ls: null, total: NaN };
+  const cur = [];
+  if (S.fut && bin && bin.length) cur.push({ name: 'Binance', oi: bin[bin.length - 1].oi, fund: S.fut.fundNow });
+  if (S.okx) cur.push({ name: 'OKX', oi: S.okx.oi, fund: S.okx.fund });
+  if (S.bybit) cur.push({ name: 'Bybit', oi: S.bybit.oi, fund: S.bybit.fund });
+  const tot = cur.reduce((a, b) => a + (ok(b.oi) ? b.oi : 0), 0); out.total = tot; out.ex = cur.map(x => Object.assign({ share: tot > 0 ? x.oi / tot : NaN }, x));
+  const fw = cur.filter(x => ok(x.fund) && ok(x.oi)); if (fw.length) out.fund = fw.reduce((a, b) => a + b.fund * b.oi, 0) / fw.reduce((a, b) => a + b.oi, 0);
+  if (!bin || bin.length < 12) return out;
+  const near = (h, t) => { let best = null, bd = Infinity; for (const x of h) { const dd = Math.abs(x[0] - t); if (dd < bd) { bd = dd; best = x; } } return bd <= 3 * 36e5 ? best[1] : NaN; };
+  const extra = [];
+  if (S.okx && S.okx.hist && S.okx.hist.length) { const h = S.okx.hist.concat([[S.okx.t, S.okx.oi]]); extra.push({ name: 'OKX', h }); }
+  if (S.bybit && S.bybit.hist && S.bybit.hist.length) extra.push({ name: 'Bybit', h: S.bybit.hist });
+  const use = extra.filter(e => bin.filter(b => ok(near(e.h, b.t))).length >= bin.length * 0.9);
+  if (use.length) {
+    out.series = bin.map(b => { let v = b.oi; for (const e of use) { const x = near(e.h, b.t); if (!ok(x)) return null; v += x; } return { t: b.t, oi: v, px: b.px }; }).filter(Boolean);
+    out.seriesEx = ['Binance'].concat(use.map(e => e.name));
+  }
+  if (S.bybit && S.bybit.ls && S.fut && S.fut.ls) { const m = new Map(S.bybit.ls.map(x => [x.t, x.r])); out.ls = S.fut.ls.filter(x => m.has(x.t)).map(x => ({ t: x.t, r: (x.r + m.get(x.t)) / 2 })); if (out.ls.length < 20) out.ls = null; }
+  return out;
+}
+function coinbasePremium() { // コインベースとBinanceの価格差。7日平均と90日平均の差を見る（検証では7〜30日後のリターンと同じ向き）
+  const c = S.cb, d = S.d; if (!c || !d) return null;
+  const n = d.c.length, prem = [];
+  for (let i = Math.max(0, n - 120); i < n; i++) { const k = dkey(d.t[i]); if (ok(c.days[k])) prem.push(c.days[k] / d.c[i] - 1); }
+  if (prem.length < 90) return null;
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length, p7 = avg(prem.slice(-7)), p90 = avg(prem.slice(-90));
+  const live = ok(c.now) && S.liveRow ? c.now / S.price - 1 : NaN;
+  return { p7, p90, gap: p7 - p90, live };
+}
 function decide() {
   const now = Date.now(), flags = [], liq = S.liq, opt = S.opt, price = S.price;
   const big = S.events.find(e => e.impact >= 3 && e.t > now), hrs = big ? (big.t - now) / 36e5 : Infinity;
@@ -285,6 +339,8 @@ function decide() {
     const cb = liq.clusters && liq.clusters.below[0];
     if (cb && cb.dist > -0.06) flags.push({ lv: 'info', src: '清算', text: '下 ' + pc(cb.dist) + '（' + usd(cb.p) + ' 付近）にロング清算の集中帯（推定）。そこまで下ヒゲが伸びる展開に注意。' });
   }
+  const cp = S.cbp;
+  if (cp && ok(cp.gap) && Math.abs(cp.gap) >= 0.0008) flags.push({ lv: 'info', src: '米国の需給', text: cp.gap > 0 ? '米国の取引所（Coinbase）で買いが強まっています。過去は、この状態の後1週間〜1か月が上がりやすい傾向でした。' : '米国の取引所（Coinbase）で売りが優勢です。過去は、この状態の後1週間〜1か月が弱めの傾向でした。' });
   if (opt) {
     if (ok(opt.skew) && opt.skew >= 8) flags.push({ lv: 'info', src: 'オプション', text: 'プットが割高です（スキュー ' + opt.skew.toFixed(1) + 'pt）。オプション市場は下落への備えを強めています。' });
     if (ok(opt.skew) && opt.skew <= -5) flags.push({ lv: 'info', src: 'オプション', text: 'コールが割高です（スキュー ' + opt.skew.toFixed(1) + 'pt）。上昇期待が先行しています。' });
@@ -554,7 +610,7 @@ function writeLog() {
   const up = S.up && S.up.type !== 'neutral' ? { t: S.up.type, lid: ok(S.up.lidLv) ? Math.round(S.up.lidLv) : null, tg: ok(S.up.tgt) ? Math.round(S.up.tgt) : null } : null;
   const pk = S.pick ? S.pick.final : null;
   const hv = (S.hold || []).filter(h => ok(h.now)).map(h => ({ s: h.p.sym, a: h.a, px: +h.now.toFixed(2) }));
-  const rec = { k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, hv, pk, cy: S.cyc ? S.cyc.phase : null, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, ev: !!S.ev48 };
+  const rec = { k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, hv, pk, cy: S.cyc ? S.cyc.phase : null, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, ev: !!S.ev48, cbp: S.cbp && ok(S.cbp.gap) ? +S.cbp.gap.toFixed(5) : null };
   const pv = S.prov ? { a: S.prov.a, f: +S.prov.frac.toFixed(2), s: Math.round(S.prov.pct.s), m: Math.round(S.prov.pct.m), l: Math.round(S.prov.pct.l) } : null;
   if (pv) rec.pv = pv;
   if (!old) { log.push(rec); LS.set('log', log.slice(-900)); return; }
@@ -652,6 +708,12 @@ async function refreshAll() {
       catch (e) { S.fut = null; S.status.fut = { ok: false, name: '建玉・ロングショート比', note: '取得できません。清算の予兆は表示できません' }; }
     })
   ];
+  tasks.push(Promise.allSettled([loadOkx(), loadBybit()]).then(([a, b]) => {
+    S.okx = a.status === 'fulfilled' ? a.value : null; S.bybit = b.status === 'fulfilled' ? b.value : null;
+    const got = ['Binance先物'].concat(S.okx ? ['OKX'] : [], S.bybit ? ['Bybit'] : []), miss = [].concat(S.okx ? [] : ['OKX'], S.bybit ? [] : ['Bybit']);
+    S.status.agg = { ok: !miss.length, name: '建玉の合算', note: got.join('・') + (miss.length ? '（' + miss.join('・') + ' は取得できず）' : '') };
+  }));
+  tasks.push(loadCoinbase().then(v => { S.cb = v; S.status.cb = { ok: true, name: 'コインベース・プレミアム', note: 'Coinbase BTC-USD' }; }, () => { S.cb = null; S.status.cb = { ok: false, name: 'コインベース・プレミアム', note: '取得できません' }; }));
   tasks.push(loadHourly().then(m => { S.hourly = m; }, () => { S.hourly = null; }));
   tasks.push(mark('long', '長期の価格履歴（サイクル用）', loadLong(), v => 'Bitstamp、' + v.length + '日分', '取得できません。サイクルの表示と長期要因は使えません').then(v => { if (v) S.longRows = v; else { const c = LS.get('long', null); S.longRows = c ? c.rows : null; } }));
   tasks.push((async () => {
@@ -876,7 +938,9 @@ function viewFlow() {
   h += upsideCard(true);
   if (q && q.ok) {
     const kv = [];
-    if (ok(q.fundNow)) kv.push(['資金調達率（直近）', pc(q.fundNow, 4) + ' / 8時間']);
+    const ag = q.agg;
+    if (ag && ag.ex.length > 1) { kv.push(['建玉の合計（' + ag.ex.map(x => x.name).join('・') + '）', Math.round(ag.total).toLocaleString('en-US') + ' BTC']); kv.push(['取引所ごとの割合', ag.ex.map(x => x.name + ' ' + pc(x.share, 0, false)).join('、')]); if (ok(ag.fund)) kv.push(['資金調達率（建玉で加重した平均）', pc(ag.fund, 4) + ' / 8時間']); }
+    if (ok(q.fundNow)) kv.push(['資金調達率（Binance・直近）', pc(q.fundNow, 4) + ' / 8時間']);
     if (ok(q.fund7)) kv.push(['同 7日平均', pc(q.fund7, 4) + (ok(q.fundPct) ? '（1年の下位' + pc(q.fundPct, 0, false) + '）' : '')]);
     if (ok(q.oiNow)) { kv.push(['建玉（Binance USDT無期限）', Math.round(q.oiNow).toLocaleString('en-US') + ' BTC（約 $' + (q.oiVal / 1e9).toFixed(1) + 'B）']); kv.push(['建玉の増減', '24時間 ' + pc(q.oi1) + '、7日 ' + pc(q.oi7)]); kv.push(['同じ7日の価格', pc(q.px7)]); }
     if (ok(q.ls)) kv.push(['ロング/ショート口座比', q.ls.toFixed(2) + (ok(q.lsPct) ? '（30日の下位' + pc(q.lsPct, 0, false) + '）' : '')]);
@@ -890,7 +954,7 @@ function viewFlow() {
       const li = (x, lab) => '<li><b class="num">' + usd(x.p) + '</b><span class="num dist">' + pc(x.dist) + '</span><span>' + lab + '</span></li>';
       h += '<section class="card"><h2>清算が集中しそうな価格帯（推定）</h2>' + clusterChart() + '<p class="keys"><span><i class="k-p"></i>ロングの清算（下）</span><span><i class="k-c"></i>ショートの清算（上）</span></p>' +
         '<ul class="clist">' + q.clusters.above.slice(0, 2).sort((x, y) => y.p - x.p).map(x => li(x, 'ショート清算')).join('') + q.clusters.below.slice(0, 3).sort((x, y) => y.p - x.p).map(x => li(x, 'ロング清算')).join('') + '</ul>' +
-        '<p class="sub">直近30日で建玉が増えた価格を建値とみなし、10・25・50・100倍のレバレッジで清算される水準を積み上げた推定です。すでに価格が通過した水準は除いています。取引所の実際の清算注文ではありません。</p></section>';
+        (ag && ag.seriesEx ? '<p class="sub">清算の集中帯は ' + ag.seriesEx.join('・') + ' の建玉を合算して推定しています。</p>' : '<p class="sub">清算の集中帯は Binance の建玉だけで推定しています（他の取引所の履歴を取得できていません）。</p>') + '<p class="sub">直近30日で建玉が増えた価格を建値とみなし、10・25・50・100倍のレバレッジで清算される水準を積み上げた推定です。すでに価格が通過した水準は除いています。取引所の実際の清算注文ではありません。</p></section>';
     }
   } else h += '<section class="card"><h2>清算の予兆</h2><p class="muted">先物データを取得できないため表示できません。' + esc((S.status.fut && S.status.fut.note) || '') + '</p></section>';
   if (o) {
@@ -898,7 +962,8 @@ function viewFlow() {
       ['スキュー（下10%プット−上10%コール）', ok(o.skew) ? (o.skew > 0 ? '+' : '') + o.skew.toFixed(1) + 'pt' : '—'], ['DVOL', ok(o.dvol) ? o.dvol.toFixed(1) + (ok(o.dvolPct) ? '（1年の下位' + pc(o.dvolPct, 0, false) + '）' : '') : '—'],
       ['織り込む変動幅', ok(o.move7) ? '7日 ±' + pc(o.move7, 1, false) + '（' + usd(price * (1 - o.move7)) + '〜' + usd(price * (1 + o.move7)) + '）' : '—'],
       ['コール建玉の壁', o.callWall ? usd(o.callWall.K) + '（' + pc(o.callWall.K / price - 1) + '）' : '—'], ['プット建玉の壁', o.putWall ? usd(o.putWall.K) + '（' + pc(o.putWall.K / price - 1) + '）' : '—']];
-    h += '<section class="card"><h2>オプション市場</h2><dl class="kv">' + kv.map(x => '<dt>' + x[0] + '</dt><dd class="num">' + x[1] + '</dd>').join('') + '</dl></section>' +
+    h += (S.cbp ? '<section class="card"><h2>コインベース・プレミアム</h2><dl class="kv"><dt>直近7日の平均</dt><dd class="num">' + pc(S.cbp.p7, 3) + '</dd><dt>90日の平均</dt><dd class="num">' + pc(S.cbp.p90, 3) + '</dd><dt>その差</dt><dd class="num">' + pc(S.cbp.gap, 3) + '</dd>' + (ok(S.cbp.live) ? '<dt>いま</dt><dd class="num">' + pc(S.cbp.live, 3) + '</dd>' : '') + '</dl><p class="sub">米国の取引所Coinbaseの価格が、Binanceよりどれだけ高いかです。プラスなら米国の買いが強い状態です。2017年以降の検証では、7日平均が90日平均を上回るほど、その後1週間〜1か月のBTCが上がりやすい傾向でした。ただし今の判定にすでに含まれる情報と重なりが大きく、スコアに加えても成績は改善しなかったため、参考表示と注意喚起だけに使っています。</p></section>' : '') +
+      '<section class="card"><h2>オプション市場</h2><dl class="kv">' + kv.map(x => '<dt>' + x[0] + '</dt><dd class="num">' + x[1] + '</dd>').join('') + '</dl></section>' +
       '<section class="card"><h2>' + ymd(o.main.exp) + ' 満期の建玉（最大の満期）</h2>' + strikeChart() + '<p class="keys"><span><i class="k-c"></i>コール（上）</span><span><i class="k-p"></i>プット（下）</span></p>' +
       '<dl class="kv"><dt>マックスペイン</dt><dd class="num">' + usd(o.main.maxPain) + '（' + pc(o.main.maxPain / price - 1) + '）</dd><dt>満期まで</dt><dd class="num">' + o.main.days.toFixed(1) + ' 日</dd><dt>この満期のP/C比</dt><dd class="num">' + (ok(o.main.pcr) ? o.main.pcr.toFixed(2) : '—') + '</dd>' +
       (o.near.exp !== o.main.exp ? '<dt>直近満期（' + md(o.near.exp) + '）のマックスペイン</dt><dd class="num">' + usd(o.near.maxPain) + '</dd>' : '') + '</dl>' +

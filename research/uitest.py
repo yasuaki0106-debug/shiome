@@ -55,6 +55,27 @@ def stock(sym):
         i=kl.index(k); r=math.log(float(kl[i][4])/float(kl[i-1][4])) if i else 0
         p*=math.exp(1.6*r+random.gauss(0,0.02)); vals.append(dict(datetime=d.strftime('%Y-%m-%d'),open=str(p),high=str(p),low=str(p),close=str(round(p,2)),volume="1"))
     return dict(meta=dict(symbol=sym),values=vals[::-1],status='ok')
+
+def okx_oi_mock():
+    return {"code":"0","data":[{"instId":"BTC-USDT-SWAP","oiCcy":"33588.4","oiUsd":str(33588.4*spot),"ts":str(NOW)}]}
+def okx_fr_mock():
+    return {"code":"0","data":[{"fundingRate":"-0.0000551"}]}
+def okx_hist_file():
+    return {"rows":[[NOW-(179-i)*4*3600000, 30000+i*20] for i in range(180)]}
+def bybit_tk():
+    return {"retCode":0,"result":{"list":[{"openInterest":"52000","openInterestValue":str(52000*spot),"fundingRate":"0.00008"}]}}
+def bybit_oi():
+    return {"retCode":0,"result":{"list":[{"openInterest":str(50000+i*10),"timestamp":str(NOW-(i)*4*3600000)} for i in range(200)]}}
+def bybit_ar():
+    return {"retCode":0,"result":{"list":[{"buyRatio":"0.58","sellRatio":"0.42","timestamp":str(NOW-(179-i)*4*3600000)} for i in range(180)]}}
+def cb_tk():
+    return {"price":str(spot*1.0008)}
+def cb_cd():
+    out=[]
+    for k in kl[-300:]:
+        out.append([k[0]//1000,0,0,0,float(k[4])*(1+0.0004),1])
+    return out[::-1]
+
 async def main():
     async with async_playwright() as p:
         b=await p.chromium.launch()
@@ -78,14 +99,22 @@ async def main():
                 if 'premiumIndex' in u: return await js(dict(symbol='BTCUSDT',markPrice=str(spot),lastFundingRate="0.00031",nextFundingTime=0))
                 if 'openInterestHist' in u: return await js(oihist())
                 if 'LongShort' in u: return await js(lsr())
+                if 'okx.com' in u and 'open-interest' in u: return await js(okx_oi_mock())
+                if 'okx.com' in u and 'funding-rate' in u: return await js(okx_fr_mock())
+                if 'okx_oi.json' in u: return await js(okx_hist_file())
+                if 'bybit.com' in u and 'tickers' in u: return await js(bybit_tk())
+                if 'bybit.com' in u and 'open-interest' in u: return await js(bybit_oi())
+                if 'bybit.com' in u and 'account-ratio' in u: return await js(bybit_ar())
+                if 'coinbase.com' in u and 'ticker' in u: return await js(cb_tk())
+                if 'coinbase.com' in u and 'candles' in u: return await js(cb_cd())
                 if 'twelvedata' in u: return await js(stock('X'))
                 return await route.abort()
-            await pg.route(lambda u: not u.startswith('http://localhost'),handle)
+            await pg.route(lambda u: not u.startswith('http://localhost') or 'okx_oi.json' in u,handle)
             if MODE=='full' : await pg.add_init_script("try{localStorage.setItem('shiome.pos',JSON.stringify([{sym:'MSTU',cost:38.5,qty:120,date:'2026-08-03'},{sym:'CONL',cost:4.2,qty:500,date:null},{sym:'MSTZ',cost:9.1,qty:50,date:'2026-10-01'}]))}catch(e){}")
             await pg.goto('http://localhost:8765/index.html')
             await pg.wait_for_function("window.__S && window.__S.at && !window.__S.loading",timeout=60000)
             await pg.wait_for_timeout(300)
-            st=await pg.evaluate("JSON.stringify({cyc:__S.cyc&&{p:__S.cyc.phase,d:__S.cyc.day,s:__S.cyc.score},plan:__S.plan&&{a:__S.plan.a,why:__S.plan.why},hold:(__S.hold||[]).map(h=>[h.p.sym,h.a,h.now,h.pl,h.decay,h.need]),pcts:[__S.R.hz.s.pct,__S.R.hz.m.pct,__S.R.hz.l.pct],status:__S.status,act:__S.act,flags:__S.flags,price:__S.price,liq:{lr:__S.liq.longRisk,sr:__S.liq.shortRisk,oi7:__S.liq.oi7,fp:__S.liq.fundPct,cl:__S.liq.clusters&&__S.liq.clusters.below},opt:__S.opt&&{pcr:__S.opt.pcrOI,skew:__S.opt.skew,atm:__S.opt.atmIV,mp:__S.opt.main.maxPain,cw:__S.opt.callWall,pw:__S.opt.putWall},n:__S.d.c.length,fac:__S.R.hz.m.sc.factors.filter(f=>f.w).map(f=>f.id+':'+f.ic.toFixed(2)),stk:__S.stocks.MSTR&&__S.stocks.MSTR.an&&{b:__S.stocks.MSTR.an.beta,c:__S.stocks.MSTR.an.corr,bt:__S.stocks.MSTR.an.bt.m}})")
+            st=await pg.evaluate("JSON.stringify({agg:__S.agg&&{ex:__S.agg.ex.map(x=>[x.name,Math.round(x.oi),+(x.share||0).toFixed(2)]),fund:__S.agg.fund,sx:__S.agg.seriesEx,n:__S.agg.series&&__S.agg.series.length,ls:__S.agg.ls&&__S.agg.ls.length},cbp:__S.cbp,cyc:__S.cyc&&{p:__S.cyc.phase,d:__S.cyc.day,s:__S.cyc.score},plan:__S.plan&&{a:__S.plan.a,why:__S.plan.why},hold:(__S.hold||[]).map(h=>[h.p.sym,h.a,h.now,h.pl,h.decay,h.need]),pcts:[__S.R.hz.s.pct,__S.R.hz.m.pct,__S.R.hz.l.pct],status:__S.status,act:__S.act,flags:__S.flags,price:__S.price,liq:{lr:__S.liq.longRisk,sr:__S.liq.shortRisk,oi7:__S.liq.oi7,fp:__S.liq.fundPct,cl:__S.liq.clusters&&__S.liq.clusters.below},opt:__S.opt&&{pcr:__S.opt.pcrOI,skew:__S.opt.skew,atm:__S.opt.atmIV,mp:__S.opt.main.maxPain,cw:__S.opt.callWall,pw:__S.opt.putWall},n:__S.d.c.length,fac:__S.R.hz.m.sc.factors.filter(f=>f.w).map(f=>f.id+':'+f.ic.toFixed(2)),stk:__S.stocks.MSTR&&__S.stocks.MSTR.an&&{b:__S.stocks.MSTR.an.beta,c:__S.stocks.MSTR.an.corr,bt:__S.stocks.MSTR.an.bt.m}})")
             if scheme=='dark': print(json.dumps(json.loads(st),ensure_ascii=False,indent=1)[:5000])
             for tab in ['judge','verify','flow','events','stocks']:
                 await pg.evaluate(f"location.hash='{tab}'"); await pg.wait_for_timeout(250)

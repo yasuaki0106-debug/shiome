@@ -70,9 +70,38 @@ def make_handler(state):
         if 'fundingRate' in u: return await js(funding(u))
         if 'premiumIndex' in u: return await js(dict(symbol='BTCUSDT',markPrice=str(state['spot']),lastFundingRate="0.00031",nextFundingTime=0))
         if 'openInterestHist' in u: return await js(oihist())
+        if 'okx.com' in u and 'open-interest' in u: return await js(okx_oi_mock())
+        if 'okx.com' in u and 'funding-rate' in u: return await js(okx_fr_mock())
+        if 'okx_oi.json' in u: return await js(okx_hist_file())
+        if 'bybit.com' in u and 'tickers' in u: return await js(bybit_tk())
+        if 'bybit.com' in u and 'open-interest' in u: return await js(bybit_oi())
+        if 'bybit.com' in u and 'account-ratio' in u: return await js(bybit_ar())
+        if 'coinbase.com' in u and 'ticker' in u: return await js(cb_tk())
+        if 'coinbase.com' in u and 'candles' in u: return await js(cb_cd())
         if 'LongShort' in u: return await js(lsr())
         return await route.abort()
     return handle
+
+def okx_oi_mock():
+    return {"code":"0","data":[{"instId":"BTC-USDT-SWAP","oiCcy":"33588.4","oiUsd":str(33588.4*spot),"ts":str(NOW)}]}
+def okx_fr_mock():
+    return {"code":"0","data":[{"fundingRate":"-0.0000551"}]}
+def okx_hist_file():
+    return {"rows":[[NOW-(179-i)*4*3600000, 30000+i*20] for i in range(180)]}
+def bybit_tk():
+    return {"retCode":0,"result":{"list":[{"openInterest":"52000","openInterestValue":str(52000*spot),"fundingRate":"0.00008"}]}}
+def bybit_oi():
+    return {"retCode":0,"result":{"list":[{"openInterest":str(50000+i*10),"timestamp":str(NOW-(i)*4*3600000)} for i in range(200)]}}
+def bybit_ar():
+    return {"retCode":0,"result":{"list":[{"buyRatio":"0.58","sellRatio":"0.42","timestamp":str(NOW-(179-i)*4*3600000)} for i in range(180)]}}
+def cb_tk():
+    return {"price":str(spot*1.0008)}
+def cb_cd():
+    out=[]
+    for k in kl[-300:]:
+        out.append([k[0]//1000,0,0,0,float(k[4])*(1+0.0004),1])
+    return out[::-1]
+
 async def main():
     async with async_playwright() as p:
         b=await p.chromium.launch(); ctx=await b.new_context(viewport=dict(width=390,height=844),locale='ja-JP',timezone_id='Asia/Tokyo')
@@ -81,7 +110,7 @@ async def main():
             pg=await ctx.new_page()
             await pg.add_init_script(f"const _N={now};const _D=Date;Date=class extends _D{{constructor(...a){{if(a.length)super(...a);else super(_N)}}static now(){{return _N}}}};")
             errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
-            await pg.route(lambda u: not u.startswith('http://localhost'),make_handler(state))
+            await pg.route(lambda u: not u.startswith('http://localhost') or 'okx_oi.json' in u,make_handler(state))
             return pg,errs
         # ---- day 1
         pg,errs=await newpage(NOW); await pg.goto('http://localhost:8765/index.html')
