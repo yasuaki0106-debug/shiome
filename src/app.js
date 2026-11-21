@@ -929,6 +929,9 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   // 4. 値動きの形
   const g4 = G('値動きの形', '');
   let last90 = -1; for (let k = n - 1; k >= n - 30; k--) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { last90 = k; break; } }
+  let pkI = -1; for (let j = 0; j < n; j++) if (d.t[j] <= c.cur.peakT) pkI = j; let cycLo = Infinity, cycLoI = -1; for (let j = Math.max(0, pkI); j < n - 1; j++) if (d.c[j] < cycLo) { cycLo = d.c[j]; cycLoI = j; }
+  const newCyc = d.c[n - 1] < cycLo;   // 確定した終値が、天井の後の最安（それまでの終値）を割ったか
+  row(g4, '天井の後の安値（終値）の更新', newCyc ? md(d.t[n - 1]) + 'に更新' : 'していない', newCyc ? 'ng' : 'ok', '天井の後の終値の最安は ' + (newCyc ? md(d.t[n - 1]) + ' ' + usd(d.c[n - 1]) : md(d.t[cycLoI]) + ' ' + usd(cycLo)) + '。' + (newCyc ? '底を割り込んでいる最中' : '直近の終値 ' + usd(d.c[n - 1]) + ' はその ' + pc(d.c[n - 1] / cycLo - 1) + '。' + md(d.t[cycLoI]) + 'が底だった可能性は残っている'));
   const since = last90 >= 0 ? i - last90 : 99; row(g4, '終値で90日ぶりの安値から', since === 99 ? '30日以上' : md(d.t[last90]) + 'の終値' + (since === 0 ? '（直近の確定日）' : '・' + since + '日前'), since >= 10 ? 'ok' : 'ng', '確定した終値（朝9時）で見ています。新しい安値を付けているうちは、まだ下げの途中');
   // 今日の足（まだ確定していない）
   const lrw = S.liveRow && S.liveRow[0] > d.t[n - 1] ? S.liveRow : null;
@@ -946,10 +949,10 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   }
   const mm = S.R.hz.m.pct;
   // 底の出口：兆し（30日間 終値の新安値なし＋終値が直近1週間の高値を上抜け）と、確認（中期75以上）
-  let q30 = true; for (let k = n - 30; k < n; k++) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { q30 = false; break; } }
+  let q30 = true; for (let k = n - 30; k < n; k++) { let m = Infinity; for (let j = Math.max(0, pkI); j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] < m) { q30 = false; break; } }   // 30日間、天井の後の安値（終値）を更新していない
   let h7 = 0; for (let j = n - 8; j < n - 1; j++) h7 = Math.max(h7, d.h[j]); const exit1 = q30 && d.c[n - 1] > h7;
   const g7 = G('底の出口（ここが「底の90日前」の見分け）', '底の近さが高くても、底の前後90日には「底の前」も入ります。底を抜けたかは、この2段階で見ます');
-  row(g7, '兆し：30日間新安値なし＋1週間の高値を終値で上抜け', exit1 ? '点いた' : q30 ? '新安値は止まっている' : 'まだ', exit1 ? 'ok' : 'ng', '過去3回の本物は、底から30〜55日後（底値の+7〜38%）。ただし底値圏で7回のだまし（点いた後60日で-10%以上）があった。2倍にはまだしない');
+  row(g7, '兆し：30日間 天井の後の安値の更新なし＋1週間の高値を終値で上抜け', exit1 ? '点いた' : q30 ? '安値の更新は止まっている（1週間の高値の上抜け待ち）' : 'まだ', exit1 ? 'ok' : 'ng', '過去3回の本物は、底から30〜55日後（底値の+7〜38%）。ただし底値圏で7回のだまし（点いた後60日で-10%以上）があった。2倍にはまだしない');
   row(g7, '確認：中期の判定75以上', Math.round(mm), mm >= 75 ? 'ok' : 'ng', '過去3回の本物は、底から52〜152日後（底値の+20〜54%）。だましは2回と少ない。ここで1倍の玉を2倍へ');
   // 5. 需給（ETFの時代の構造）
   const g5 = G('需給（ETFの時代の構造）', '現物ETFは2024年から。過去のサイクルにはなかった買い手と売り手なので、効き目は検証できていません');
@@ -965,8 +968,9 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   const clamp = x => Math.max(0, Math.min(1, x)), rsiNow = rsi ? +rsi.now : NaN, growR = L.c[nL - 1] / fr, th = Math.min(...lowDays);
   const parts = [[3.0, ok(rsiNow) ? clamp((50 - rsiNow) / (50 - 34)) : 0], [1.2, clamp((1 - growR) / 0.5)], [0.9, S.bg ? S.bg.g : 0], [0.4, clamp((c.day - 600) / (th - 600))]];
   const near = parts.reduce((a, p) => a + p[0] * p[1], 0) / parts.reduce((a, p) => a + p[0], 0);
-  const stillFalling = since < 10 || (S.rt && S.rt.broke) || wickNew;
-  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : exit1 && !stillFalling ? ['底の出口の兆し', 'v-wait', '新しい安値が30日止まって、1週間の高値を上に抜けました。底を抜けた可能性が出てきましたが、過去は底値圏でだましも多かったので、2倍への切り替えは確認（中期75）を待ちます。'] : stillFalling ? (near >= 0.8 ? ['底の近く（まだ安値を更新中）', 'v-wait', '底の近くにいる可能性は高い（底の近さ ' + Math.round(near * 100) + '%）一方で、まだ新しい安値を付けています。底を付けたかどうかは、新しい安値が止まるまで分かりません。'] : ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。']) : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
+  const stillFalling = newCyc || (S.rt && S.rt.broke);   // 6月のような前の底を、終値で割り込んだときだけ「下げの途中」。90日ぶりの安値やヒゲだけでは決めつけない
+  const retesting = !stillFalling && (since < 10 || wickNew || (S.rt && S.rt.retest));
+  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : exit1 && !stillFalling ? ['底の出口の兆し', 'v-wait', '新しい安値が30日止まって、1週間の高値を上に抜けました。底を抜けた可能性が出てきましたが、過去は底値圏でだましも多かったので、2倍への切り替えは確認（中期75）を待ちます。'] : retesting ? ['前の底の試し直し（' + md(d.t[cycLoI]) + 'が底だった可能性も残る）', 'v-wait', '終値では、まだ ' + md(d.t[cycLoI]) + ' の底（' + usd(cycLo) + '）を割っていません。ここで止まれば二番底で、' + md(d.t[cycLoI]) + 'が今回の底だったことになります。終値で ' + (S.rt ? usd(S.rt.level) + '（分かれ目）' : 'その底') + 'を割ると、過去は一段下げの形です。どちらになるかは、まだ分かりません。'] : stillFalling ? (near >= 0.8 ? ['底の近く（まだ安値を更新中）', 'v-wait', '底の近くにいる可能性は高い（底の近さ ' + Math.round(near * 100) + '%）一方で、まだ新しい安値を付けています。底を付けたかどうかは、新しい安値が止まるまで分かりません。'] : ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。']) : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
   // 底の値段の物差し
   const scen = [];
   if (S.rt) scen.push(['今回の直近の安値（日中）', groups[3].rows[1] ? Math.min(...[d.l[n - 1], d.l[n - 2], S.liveRow ? S.liveRow[3] : Infinity].filter(ok)) : NaN]);
@@ -986,7 +990,8 @@ function councilCard() { // 大事な判断は、いつも5人（奇数）で意
   const c = S.cyc, d = S.d, n = d.c.length, P = S.price, mm = S.R.hz.m.pct, ef = etfState(), bg = S.bg;
   const lowDays = c.past.map(p => p.lowDay), late = c.day >= Math.min(...lowDays);
   let last90 = -1; for (let k = n - 1; k >= n - 30; k--) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { last90 = k; break; } }
-  const falling = (last90 >= 0 && n - 1 - last90 < 10) || (S.rt && S.rt.broke);
+  let pkI2 = -1; for (let j = 0; j < n; j++) if (d.t[j] <= c.cur.peakT) pkI2 = j; let cl2 = Infinity; for (let j = Math.max(0, pkI2); j < n - 1; j++) cl2 = Math.min(cl2, d.c[j]);
+  const falling = d.c[n - 1] < cl2 || (S.rt && S.rt.broke), retestNow = !falling && last90 >= 0 && n - 1 - last90 < 10;
   const rsi = bg && bg.parts.find(x => /週足RSI/.test(x.nm)), fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null, fear = (rsi && rsi.p >= 0.9) || (fg != null && fg <= 25);
   const outflow = ef && ef.s20 < 0 && ef.rank <= 0.2, p = S.plan || {}, ladOn = p.a === 'ladder' || (p.lad || []).length > 0;
   const pk = S.pick || {}, scM = pk.sc ? pk.sc.MSTR : 0, scC = pk.sc ? pk.sc.COIN : 0, cnM = concernsFor('MSTR').length, cnC = concernsFor('COIN').length;
@@ -994,7 +999,7 @@ function councilCard() { // 大事な判断は、いつも5人（奇数）で意
   const D = [
     { q: '今、買い始めるか', A: '指値で買い始める', B: '底固めまで待つ', v: [
       V('時期の人（サイクル）', late ? 'A' : 'B', late ? '半減期から' + c.day + '日目で、過去の底（' + lowDays.join('・') + '日目）を過ぎている。底値圏の終わり際' : 'まだ過去の底の時期の前'),
-      V('形の人（値動き）', falling ? 'B' : 'A', falling ? 'まだ終値で新しい安値を付けている。前の底を試し直した過去5回は、すべてもう一度割った' : '新しい安値が止まっている'),
+      V('形の人（値動き）', falling || retestNow ? 'B' : 'A', falling ? 'まだ終値で前の底を割り込んでいる' : retestNow ? '前の底を試し直している最中。過去に同じ形だった5回は、すべてもう一度割っていた（2015年8月のように底を切り上げた回は、試し直しの値段が前の底より2割以上上だった）' : '新しい安値が止まっている'),
       V('需給の人（ETF・資金）', outflow ? 'B' : 'A', outflow ? 'ETFからの流出が大きく（2024年以降で下から' + pc(ef.rank, 0, false) + '）、ETFの買い手の多くが含み損' : 'ETFの流出は落ち着いている'),
       V('検証の人（過去のルール）', ladOn ? 'A' : 'B', ladOn ? '買い下がりの合図が出ている。「もっと弱いときまで待つ」条件を足すと、2019年は2割悪化した' : 'ルール上はまだ買い下がりの合図が出ていない'),
       V('気持ちの人（売られすぎ）', fear ? 'A' : 'B', fear ? '週足RSI ' + (rsi ? rsi.now : '—') + '・恐怖指数 ' + (fg != null ? fg : '—') + '。みんなが投げているときに少しずつ拾う' : 'まだ悲観が足りない')] },
