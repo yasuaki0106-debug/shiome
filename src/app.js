@@ -587,7 +587,7 @@ function etfAt(sym, btc) { // BTCがその値段のときのETFの目安
 const HOLD = { reinvest: ['1倍で買う', 'v-buy'], relevbuy: ['2倍で買い直す', 'v-buy'], cashwait: ['現金で待つ', 'v-wait'], hold: ['持ち続ける', 'v-buy'], add: ['買い足し可', 'v-buy'], trim: ['一部売る', 'v-wait'], sell: ['売る', 'v-avoid'], switch: ['1倍に乗り換える', 'v-wait'], relev: ['2倍に戻せる', 'v-buy'], na: ['判定できません', 'v-na'] };
 const LEV_OFF = 20, LEV_ON = 75;   // 守りのルール：中期20未満で2倍→元の株、75以上で元の株→2倍（research/protect.js）
 function buyTicker() { const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return t; return pickUnd() === 'COIN' ? 'CONL' : 'MSTU'; }
-function pickUnd() { const k = S.pick ? S.pick.final : null; return k === 'COIN' ? 'COIN' : 'MSTR'; }   // その日の状況（BTCに対する割安・割高など）で選んだ元の株
+function pickUnd() { if (S.council) return S.council; const k = S.pick ? S.pick.final : null; return k === 'COIN' ? 'COIN' : 'MSTR'; }   // その日の状況（BTCに対する割安・割高など）で選んだ元の株
 function prefUnd(fallback) { // 持っている玉の乗り換え先。点数がはっきり差をつけた日（2点以上）だけ別の銘柄へ、互角なら同じ元の株のまま
   const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return ETF[t] ? ETF[t].und : fallback;
   const k = S.pick ? S.pick.final : null; return k === 'MSTR' || k === 'COIN' ? k : fallback;
@@ -967,6 +967,42 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
     groups.map(g => '<h3 class="wh-g">' + esc(g.title) + '</h3>' + (g.note ? '<p class="sub" style="margin:0 0 4px">' + esc(g.note) + '</p>' : '') + '<ul class="wh">' + g.rows.map(x => '<li class="' + x.st + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>').join('') +
     (sc2.length ? '<h3 class="wh-g">底の値段の物差し</h3><ul class="wh">' + sc2.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><span class="num">' + usd(x[1]) + '</span><small>今から ' + pc(x[1] / P - 1, 0) + '</small></li>').join('') + '</ul><p class="sub">どれが当たるかは分かりません。ETFが入ってからは値動きが穏やかになっていて、浅い方で止まる可能性もあれば、ETFの買い手の含み損が売りを呼んで深くなる可能性もあります。買い下がりの指値（-10%ずつ）は、この幅に備えるためのものです。</p>' : '') +
     '<details class="more-in"><summary>2倍にするのはいつか</summary><p class="sub">過去の検証では、「中期75以上（上がり始め）」で2倍に替えるのが一番安定していました。50や60で早めに替えると、2023年はBTC 1229→637、MSTR 3033→735、COIN 1826→294と大きく悪化しました。セリクラ（大きな下げ＋出来高の急増）や長い下ヒゲの日も、過去の底値圏では、その後90日で上がったのは23〜42%だけで、底の合図にはなっていません。</p></details></section>';
+}
+function councilCard() { // 大事な判断は、いつも5人（奇数）で意見を出し合い、多い方に決める。5人は、それぞれ別の物差しだけを見る
+  if (!S.R || !S.cyc || !S.d) return '';
+  const c = S.cyc, d = S.d, n = d.c.length, P = S.price, mm = S.R.hz.m.pct, ef = etfState(), bg = S.bg;
+  const lowDays = c.past.map(p => p.lowDay), late = c.day >= Math.min(...lowDays);
+  let last90 = -1; for (let k = n - 1; k >= n - 30; k--) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { last90 = k; break; } }
+  const falling = (last90 >= 0 && n - 1 - last90 < 10) || (S.rt && S.rt.broke);
+  const rsi = bg && bg.parts.find(x => /週足RSI/.test(x.nm)), fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null, fear = (rsi && rsi.p >= 0.9) || (fg != null && fg <= 25);
+  const outflow = ef && ef.s20 < 0 && ef.rank <= 0.2, p = S.plan || {}, ladOn = p.a === 'ladder' || (p.lad || []).length > 0;
+  const pk = S.pick || {}, scM = pk.sc ? pk.sc.MSTR : 0, scC = pk.sc ? pk.sc.COIN : 0, cnM = concernsFor('MSTR').length, cnC = concernsFor('COIN').length;
+  const V = (who, side, why) => ({ who, side, why });
+  const D = [
+    { q: '今、買い始めるか', A: '指値で買い始める', B: '底固めまで待つ', v: [
+      V('時期の人（サイクル）', late ? 'A' : 'B', late ? '半減期から' + c.day + '日目で、過去の底（' + lowDays.join('・') + '日目）を過ぎている。底値圏の終わり際' : 'まだ過去の底の時期の前'),
+      V('形の人（値動き）', falling ? 'B' : 'A', falling ? 'まだ終値で新しい安値を付けている。前の底を試し直した過去5回は、すべてもう一度割った' : '新しい安値が止まっている'),
+      V('需給の人（ETF・資金）', outflow ? 'B' : 'A', outflow ? 'ETFからの流出が大きく（2024年以降で下から' + pc(ef.rank, 0, false) + '）、ETFの買い手の多くが含み損' : 'ETFの流出は落ち着いている'),
+      V('検証の人（過去のルール）', ladOn ? 'A' : 'B', ladOn ? '買い下がりの合図が出ている。「もっと弱いときまで待つ」条件を足すと、2019年は2割悪化した' : 'ルール上はまだ買い下がりの合図が出ていない'),
+      V('気持ちの人（売られすぎ）', fear ? 'A' : 'B', fear ? '週足RSI ' + (rsi ? rsi.now : '—') + '・恐怖指数 ' + (fg != null ? fg : '—') + '。みんなが投げているときに少しずつ拾う' : 'まだ悲観が足りない')] },
+    { q: '1倍か2倍か', A: '1倍（MSTR・COIN）', B: '2倍（MSTU・CONL）', v: [
+      V('時期の人（サイクル）', c.day >= 900 ? 'B' : 'A', c.day >= 900 ? '底値圏の終わり際。この時期から始めた過去の例では、2倍で持つ方が1倍で持ち続けるより良かった' : 'まだ底値圏の途中'),
+      V('形の人（値動き）', mm >= 75 ? 'B' : 'A', mm >= 75 ? '上がり始めを確認した' : '底値圏は行ったり来たり（方向のはっきりさ0.05〜0.11）。この間、2倍は1倍より3〜5割多く削られた'),
+      V('需給の人（ETF・資金）', outflow ? 'A' : 'B', outflow ? '売りの流れが止まっていないうちは、揺れが大きい' : '流れが買いに変わっている'),
+      V('検証の人（過去のルール）', mm >= 75 ? 'B' : 'A', mm >= 75 ? '中期75以上。2倍に替える日' : '上がり始めの前から2倍にすると、完了した5ケースの平均で約3割少なく終わった'),
+      V('気持ちの人（売られすぎ）', fear ? 'B' : 'A', fear ? '極度の悲観の後は大きく戻ることが多い。逆張りで2倍' : '悲観が足りない')] },
+    { q: 'MSTR系かCOIN系か', A: 'MSTR系', B: 'COIN系', v: [
+      V('時期の人（サイクル）', 'A', '前回のサイクルでは、底値圏のどの日から買っても、天井までの伸びはMSTRが上だった'),
+      V('形の人（値動き）', scC > scM ? 'B' : 'A', 'その日の点数：MSTR ' + scM + '・COIN ' + scC + (scC > scM ? '。COINの方が割安' : '')),
+      V('需給の人（ETF・資金）', cnM > cnC ? 'B' : 'A', '懸念材料：MSTR ' + cnM + '件・COIN ' + cnC + '件' + (cnM > cnC ? '（指数除外・増資・利上げはMSTRに逆風）' : '')),
+      V('検証の人（過去のルール）', 'A', '迷ったらMSTR。2021年以降、6か月後にMSTRがCOINを上回った割合63%'),
+      (() => { const dd60 = sym => { const v = S.stocks[sym] && S.stocks[sym].vals; if (!v || v.length < 60) return NaN; const a = v.slice(-60).map(x => x[1]); return a[a.length - 1] / Math.max(...a) - 1; }; const m = dd60('MSTR'), cc = dd60('COIN'); const side = ok(m) && ok(cc) ? (m < cc ? 'A' : 'B') : 'A';
+        return V('気持ちの人（売られすぎ）', side, '直近60営業日の高値からの下げ：MSTR ' + pc(m, 0) + '・COIN ' + pc(cc, 0) + '。より投げられている方を拾う'); })()] }];
+  const out = D.map(x => { const a = x.v.filter(v => v.side === 'A').length, b = x.v.length - a, win = a > b ? 'A' : 'B'; return Object.assign(x, { a, b, win }); });
+  const newC = out[2].win === 'A' ? 'MSTR' : 'COIN'; if (S.council !== newC) { S.council = newC; setTimeout(() => { S.plan = buildPlan(); S.hold = holdAll(); render(); }, 0); }
+  return '<section class="card" id="c-council"><h2>5人の会議</h2><p class="sub" style="margin-top:0">大事な判断は、見る物差しの違う5人に意見を出させて、多い方に決めます（奇数なので必ず決まる）。</p>' +
+    out.map(x => '<div class="cq"><div class="row"><b>' + esc(x.q) + '</b><b class="' + (x.win === 'A' ? 'v-buy' : 'v-wait') + '">' + esc(x.win === 'A' ? x.A : x.B) + '（' + Math.max(x.a, x.b) + '対' + Math.min(x.a, x.b) + '）</b></div><details class="more-in"><summary>5人の意見</summary><ul class="cv">' + x.v.map(v => '<li class="' + (v.side === x.win ? 'win' : 'lose') + '"><b>' + esc(v.who) + '</b><span>' + esc(v.side === 'A' ? x.A : x.B) + '</span><small>' + esc(v.why) + '</small></li>').join('') + '</ul></details></div>').join('') +
+    '<p class="sub">3対2のように差が小さいときは、負けた側の心配も残っているということです。「状況で選ぶ」設定のとき、新しく買う銘柄はこの会議の結果に従います（今日やることの指値も同じ銘柄）。会議の結果は毎朝9時の確定データで出し直します。</p></section>';
 }
 function miniGrid() { // 1か所で全部見えるように：大事な数字を小さな札で並べる（緑＝買いの材料、赤＝注意、灰＝参考）
   const R = []; const add = (go, name, val, tone, note) => R.push('<button class="mini m-' + tone + '" data-go="' + go + '"><span class="mn">' + name + '</span><b class="num">' + val + '</b><span class="mt">' + note + '</span></button>');
@@ -1668,7 +1704,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + tilesCard() + whereCard() + todayCard() + fl(warn) + holdCards() + dirCard() + soonCard() + next7Card() + intradayChart() + weekCard() + bottomCard() + longChart() + topCard() +
+  return todoCard() + tilesCard() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + soonCard() + next7Card() + intradayChart() + weekCard() + bottomCard() + longChart() + topCard() +
     '<details class="more"><summary>もっと詳しく（サイクルと出口・銘柄の選び方・スコア・価格チャート・データ）</summary>' + cycleCard() +
     (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + fl(info) + upsideCard(false) +
     '<h2 class="sec">時間軸ごとの判定（買い方の土台になるスコア）</h2>' + '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
