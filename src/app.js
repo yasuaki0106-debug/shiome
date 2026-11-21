@@ -955,7 +955,12 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   const mr = bgp('マイナー収入'); if (mr) row(g6, 'マイナー収入（1年平均比）', mr.now, 'ref', '過去の底は ' + mr.bots + '。マイナーがAI向けのデータセンターに収入を広げていて、昔ほど売りに追い込まれにくい可能性');
   // 段階
   const all = groups.flatMap(g => g.rows), nOk = all.filter(x => x.st === 'ok').length, nAll = all.filter(x => x.st !== 'ref').length;
-  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : since < 10 || (S.rt && S.rt.broke) || wickNew ? ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。'] : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
+  // 底の近さ（重みづけ）：過去に底の前後90日を言い当てた強さで重みをつける。週足RSI 3.0、長期成長線 1.2、底らしさ 0.9、時期 0.4（research/whereweights2.js）
+  const clamp = x => Math.max(0, Math.min(1, x)), rsiNow = rsi ? +rsi.now : NaN, growR = L.c[nL - 1] / fr, th = Math.min(...lowDays);
+  const parts = [[3.0, ok(rsiNow) ? clamp((50 - rsiNow) / (50 - 34)) : 0], [1.2, clamp((1 - growR) / 0.5)], [0.9, S.bg ? S.bg.g : 0], [0.4, clamp((c.day - 600) / (th - 600))]];
+  const near = parts.reduce((a, p) => a + p[0] * p[1], 0) / parts.reduce((a, p) => a + p[0], 0);
+  const stillFalling = since < 10 || (S.rt && S.rt.broke) || wickNew;
+  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : stillFalling ? (near >= 0.8 ? ['底の近く（まだ安値を更新中）', 'v-wait', '底の近くにいる可能性は高い（底の近さ ' + Math.round(near * 100) + '%）一方で、まだ新しい安値を付けています。底を付けたかどうかは、新しい安値が止まるまで分かりません。'] : ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。']) : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
   // 底の値段の物差し
   const scen = [];
   if (S.rt) scen.push(['今回の直近の安値（日中）', groups[3].rows[1] ? Math.min(...[d.l[n - 1], d.l[n - 2], S.liveRow ? S.liveRow[3] : Infinity].filter(ok)) : NaN]);
@@ -964,7 +969,8 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   if (dd) { const pk = c.cur.peak; scen.push(['天井から' + dd.tgt + '（浅くなる傾向を延ばす）', pk * (1 + parseFloat(dd.tgt) / 100)]); }
   const sc2 = scen.filter(x => ok(x[1])).sort((a, b) => b[1] - a[1]);
   return '<section class="card" id="c-where"><div class="row"><h2>今どこ？</h2><b class="' + phase[1] + '">' + phase[0] + '</b></div><p>' + phase[2] + '</p>' +
-    '<p class="sub" style="margin-top:0">底の水準に届いている物差し：' + nOk + '／' + nAll + '。底の時期の目安は、過去の傾向を延ばすと ' + md(nextLowT) + 'ごろ（今から約' + Math.max(0, Math.round((nextLowT - Date.now()) / DAY)) + '日）。</p>' +
+    '<div class="near"><span>底の近さ（重みづけ）</span><b class="num">' + Math.round(near * 100) + '%</b><small>過去の底の日は 84%・100%・99%。この点数が80%以上だった日の71%は、底の前後90日以内でした。全部の物差しがそろうのを待つ必要はありません（過去の底の日も、そろっていない物差しがありました）</small></div>' +
+    '<p class="sub">底の近さは「底の前後にいるか」を見る点数で、底を付けたかどうかは値動きの形（新しい安値が止まったか）で確かめます。底の時期の目安は、過去の傾向を延ばすと ' + md(nextLowT) + 'ごろ（今から約' + Math.max(0, Math.round((nextLowT - Date.now()) / DAY)) + '日）。重みは過去3回のサイクルから決めたので、当てはめすぎの心配はあります。</p>' +
     groups.map(g => '<h3 class="wh-g">' + esc(g.title) + '</h3>' + (g.note ? '<p class="sub" style="margin:0 0 4px">' + esc(g.note) + '</p>' : '') + '<ul class="wh">' + g.rows.map(x => '<li class="' + x.st + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>').join('') +
     (sc2.length ? '<h3 class="wh-g">底の値段の物差し</h3><ul class="wh">' + sc2.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><span class="num">' + usd(x[1]) + '</span><small>今から ' + pc(x[1] / P - 1, 0) + '</small></li>').join('') + '</ul><p class="sub">どれが当たるかは分かりません。ETFが入ってからは値動きが穏やかになっていて、浅い方で止まる可能性もあれば、ETFの買い手の含み損が売りを呼んで深くなる可能性もあります。買い下がりの指値（-10%ずつ）は、この幅に備えるためのものです。</p>' : '') +
     '<details class="more-in"><summary>2倍にするのはいつか</summary><p class="sub">過去の検証では、「中期75以上（上がり始め）」で2倍に替えるのが一番安定していました。50や60で早めに替えると、2023年はBTC 1229→637、MSTR 3033→735、COIN 1826→294と大きく悪化しました。セリクラ（大きな下げ＋出来高の急増）や長い下ヒゲの日も、過去の底値圏では、その後90日で上がったのは23〜42%だけで、底の合図にはなっていません。</p></details></section>';
