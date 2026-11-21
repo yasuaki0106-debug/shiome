@@ -1552,7 +1552,7 @@ function todayCard() {
     return '<div class="plan-stock"><div class="row"><b class="sym">' + sym + '</b><b class="' + sc + ' plan-v">' + sl + '</b></div><dl class="kv">' + lines.map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl>' + (x.note.length ? '<p class="sub">' + x.note.join('。') + '</p>' : '') + '</div>';
   }).join('');
   const btc = [];
-  if (p.a === 'buy' && t) btc.push('少しでも安く買うなら、指値の目安はBTC <span class="num">' + usd(t.mid) + '（' + pc(t.dist) + '）</span>' + (ok(p.reach) ? '。1日のうちにここまで下げた日は過去2年で ' + pc(p.reach, 0, false) + '。届かなければ、その日の終わりに買います' : ''));
+  if (p.a === 'buy') btc.push('下に指値を置いて待たず、この取引時間のうちに買ってください。過去の買い判定の日に4%下へ指値を置いて2週間待つと、届いたのは3回に1回で、届かずに上で買い直した分、平均で約7%高い買値になりました');
   if (p.rng) { const rr = rangeRecord(); btc.push('今日（朝9時〜翌朝9時）のBTCの予測値幅 <span class="num">' + usd(p.rng.lo) + '〜' + usd(p.rng.hi) + '</span>。今日の始値 ' + usd(p.rng.open) + ' を中心に、' + p.rng.src + 'で ' + hm(p.rng.at) + ' に決めた値で、翌朝9時まで変えません' + (rr.n >= 5 ? '。これまで終値がこの幅に収まったのは ' + rr.n + '日中 ' + rr.inC + '日' : '')); }
   const fd = S.R.hz.d, u = S.up;
   if (u && u.type === 'lid' && p.a !== 'skip' && ok(u.lidLv)) btc.push('上は ' + '<span class="num">' + usd(u.lidLv) + '</span> 付近で蓋をされやすい形です。買った後はそこで一部の利益確定を考えます');
