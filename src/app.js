@@ -788,6 +788,32 @@ function fcAt(i, k) { // i日目の朝の時点で、その時点までのデー
   if (!rs.length) return null; rs.sort((a, b) => a - b); const q = x => rs[Math.floor((rs.length - 1) * x)];
   return { up: rs.filter(x => x > 0).length / rs.length, q10: q(0.1), q25: q(0.25), q50: q(0.5), q75: q(0.75), q90: q(0.9) };
 }
+function fcPath(i) { // i日目の朝の時点で、似た状況（短期スコアが近い日）の過去から、1〜7日後の値動きの分布
+  const d = S.d, pct = S.R.hz.s.sc.pct, now = pct[i]; if (!(now === now)) return null;
+  let band = 12.5, idx = []; for (let r = 0; r < 3 && idx.length < 60; r++, band *= 1.6) { idx = []; for (let t = 0; t + 7 <= i; t++) { const p = pct[t]; if (p === p && Math.abs(p - now) <= band) idx.push(t); } }
+  if (!idx.length) return null;
+  return [1, 2, 3, 4, 5, 6, 7].map(k => { const rs = idx.map(t => d.c[t + k] / d.c[t] - 1).sort((a, b) => a - b), q = x => rs[Math.floor((rs.length - 1) * x)]; return { k, up: rs.filter(x => x > 0).length / rs.length, q10: q(0.1), q25: q(0.25), q50: q(0.5), q75: q(0.75), q90: q(0.9) }; });
+}
+function next7Card() {
+  const d = S.d; if (!d || d.c.length < 60) return '';
+  const n = d.c.length, i = n - 1, base = d.c[i], P = fcPath(i); if (!P) return '';
+  const wd = ['日', '月', '火', '水', '木', '金', '土'], evs = allEvents().concat(INDEX_EVENTS.map(x => ({ t: x.effT, title: x.sym + 'の' + x.name, impact: 2 })));
+  const rows = P.map(p => { const t0 = d.t[i] + p.k * DAY, t1 = t0 + DAY, dt = new Date(t0), ev = evs.filter(e => e.t >= t0 && e.t < t1 && e.impact >= 2).map(e => e.title.replace(/（.*?）/g, ''));
+    const usKey = new Date(t0 + 15 * 36e5).toISOString().slice(0, 10), closed = US_CLOSED.indexOf(usKey) >= 0 || [0, 6].includes(new Date(t0 + 15 * 36e5).getUTCDay());
+    return '<tr><th>' + md(t0) + '<small>（' + wd[dt.getUTCDay()] + '）</small></th><td class="num">' + kfmt(base * (1 + p.q25)) + '〜' + kfmt(base * (1 + p.q75)) + '</td><td class="num sub2">' + kfmt(base * (1 + p.q10)) + '〜' + kfmt(base * (1 + p.q90)) + '</td><td class="num">' + Math.round(p.up * 100) + '%</td></tr>' + (ev.length || closed ? '<tr class="evrow"><td colspan="4">' + (ev.length ? '📅 ' + esc(ev.join('・')) : '') + (closed ? (ev.length ? '　' : '') + '米国株は休み' : '') + '</td></tr>' : ''); }).join('');
+  // 小さな図：直近7日のローソク足と、この先7日の見込みの幅
+  const past = []; for (let k = n - 7; k < n; k++) past.push([d.t[k], d.o[k], d.h[k], d.l[k], d.c[k]]);
+  let lo = Math.min(...past.map(x => x[3]), ...P.map(p => base * (1 + p.q10))) * 0.99, hi = Math.max(...past.map(x => x[2]), ...P.map(p => base * (1 + p.q90))) * 1.01;
+  const Wd = 340, Hh = 170, pl = 6, pr = 40, pt = 8, pb = 18, N = 14, step = (Wd - pl - pr) / N, sx = k => pl + step * (k + 0.5), sy = v => pt + (Math.log(hi) - Math.log(v)) / (Math.log(hi) - Math.log(lo)) * (Hh - pt - pb);
+  let g = candles(past, k => sx(k), sy, step * 0.6);
+  const cone = (a, b, cls) => '<polygon points="' + [[sx(6), sy(base)]].concat(P.map(p => [sx(6 + p.k), sy(base * (1 + p[a]))]), P.slice().reverse().map(p => [sx(6 + p.k), sy(base * (1 + p[b]))])).map(x => x[0].toFixed(1) + ',' + x[1].toFixed(1)).join(' ') + '" class="' + cls + '"/>';
+  g += cone('q90', 'q10', 'cone1') + cone('q75', 'q25', 'cone2') + '<polyline points="' + [[sx(6), sy(base)]].concat(P.map(p => [sx(6 + p.k), sy(base * (1 + p.q50))])).map(x => x[0].toFixed(1) + ',' + x[1].toFixed(1)).join(' ') + '" class="med" fill="none"/>';
+  g += '<line x1="' + (sx(6) + step / 2).toFixed(1) + '" x2="' + (sx(6) + step / 2).toFixed(1) + '" y1="' + pt + '" y2="' + (Hh - pb) + '" class="nowl"/><text x="' + sx(3).toFixed(1) + '" y="' + (Hh - 4) + '" class="ax" text-anchor="middle">直近7日</text><text x="' + sx(10).toFixed(1) + '" y="' + (Hh - 4) + '" class="ax" text-anchor="middle">この先7日</text>';
+  [lo * 1.01, base, hi / 1.01].forEach(v => { g += '<text x="' + (Wd - pr + 4) + '" y="' + (sy(v) + 3).toFixed(1) + '" class="ax">' + kfmt(v) + '</text>'; });
+  return '<section class="card" id="c-next7"><h2>この先7日の見込み</h2><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="直近7日のローソク足と、この先7日の見込みの幅">' + g + '</svg>' +
+    '<div class="xscroll"><table class="tbl sm n7"><thead><tr><th>日</th><th>半分のケース</th><th>10回に8回</th><th>今より上</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<p class="sub">今と似た状況だった過去の日の、その後1〜7日の値動きから出した幅です（日の区切りは日本時間の朝9時）。「今より上」は、その日の終わりに今朝の終値（' + kfmt(base) + '）より上だった割合。直近7日の答え合わせでは、1日の幅に収まったのは7日中5日で、急落の日は外れています。</p></section>';
+}
 function soonCard() { // この先数日で起きやすいこと（検証済みのことだけ確率つき、未検証は参考と明記）
   const d = S.d; if (!d || d.c.length < 30) return '';
   const n = d.c.length, i = n - 1, c = d.c, h = d.h, l = d.l, items = [];
@@ -1548,7 +1574,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + tilesCard() + todayCard() + fl(warn) + holdCards() + dirCard() + soonCard() + intradayChart() + weekCard() + bottomCard() + longChart() + topCard() +
+  return todoCard() + tilesCard() + todayCard() + fl(warn) + holdCards() + dirCard() + soonCard() + next7Card() + intradayChart() + weekCard() + bottomCard() + longChart() + topCard() +
     '<details class="more"><summary>もっと詳しく（サイクルと出口・銘柄の選び方・スコア・価格チャート・データ）</summary>' + cycleCard() +
     (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + fl(info) + upsideCard(false) +
     '<h2 class="sec">時間軸ごとの判定（買い方の土台になるスコア）</h2>' + '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
