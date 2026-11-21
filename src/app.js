@@ -704,7 +704,7 @@ function holdOne(p) {
     else { a = 'hold'; why.push(ph ? 'サイクルは' + c.name + '。売る合図は出ていません' : '売る合図は出ていません'); if ((ph === 'bottom' || ph === 'recover') && plan && plan.a === 'skip') why.push('買い足しは、買い判定が出るまで待ちます'); }
     // 守りのルール（天井圏・下落期の判断が優先）
     const mm = S.R.hz.m.pct, cyc2 = ph !== 'top' && ph !== 'down';
-    if (cyc2 && e.L > 1 && ok(mm) && mm < LEV_OFF && (a === 'hold' || a === 'add')) { const tg = prefUnd(e.und); a = 'switch'; why.length = 0; why.push('中期の判定が' + Math.round(mm) + 'まで崩れました（' + LEV_OFF + '未満）。2倍の分は ' + tg + ' に乗り換えて、判定が' + LEV_ON + '以上に戻ったら ' + LEVOF[tg] + ' に戻します。サイクルの作戦自体は続けます'); }
+    if (cyc2 && e.L > 1 && ok(mm) && mm < LEV_OFF && (a === 'hold' || a === 'add')) { const tg = prefUnd(e.und); a = 'switch'; why.length = 0; why.push('底値圏でも、底を付けるまでは上下をくり返しながら下げることが多く、その間2倍は目減りします（過去の底値圏で、1倍の方が多く残ったのはMSTRで9回中8回）。中期の判定が' + Math.round(mm) + '（' + LEV_OFF + '未満）の今は ' + tg + ' で持ち、上向きがはっきりしたら（' + LEV_ON + '以上）' + LEVOF[tg] + ' に戻す合図を出します。売って降りるのではなく、2倍だけ外す形です'); }
     if (cyc2 && e.L === 1 && ok(mm) && mm >= LEV_ON && (ph === 'bottom' || ph === 'recover' || ph === 'up') && a === 'hold') { a = 'relev'; why.push('中期の判定が' + Math.round(mm) + 'まで戻りました。2倍で持つ作戦なら、' + LEVOF[prefUnd(p.sym)] + ' に替える日です'); }
   } else {
     if (ph === 'down' && lvOf('m') === 0 && lvOf('s') === 0) { a = 'hold'; why.push('下落期で、判定も見送り。ただし逆2倍は目減りが大きいので短期で'); }
@@ -763,12 +763,12 @@ function tilesCard() {
   const arrow = f => !f ? ['—', 'v-na'] : f.up >= 0.56 ? ['↗', 'v-buy'] : f.up <= 0.44 ? ['↘', 'v-avoid'] : ['→', 'v-wait'];
   const [a7, c7] = arrow(fs), [a30, c30] = arrow(fm);
   const g = bg ? Math.round(bg.g * 100) : null, ring = v => '<svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" class="rg-bg"/><circle cx="18" cy="18" r="15" class="rg-fg" stroke-dasharray="' + (v * 0.942).toFixed(1) + ' 94.2" transform="rotate(-90 18 18)"/></svg>';
-  const cyc = c ? Math.min(1, c.day / 1460) : 0, t = planTicker(p), und = ETF[t] ? ETF[t].und : t, cn = concernsFor(und).length;
+  const span = c ? Math.max(1460, Math.round((c.nextHalving - c.cur.h) / DAY)) : 1460, cyc = c ? Math.min(1, c.day / span) : 0, t = planTicker(p), und = ETF[t] ? ETF[t].und : t, cn = concernsFor(und).length;
   const tile = (go, head, body, foot) => '<button class="tile" data-go="' + go + '"><span class="t-h">' + head + '</span><span class="t-b">' + body + '</span><span class="t-f">' + foot + '</span></button>';
   return '<section class="tiles">' +
     tile('dir', '方向', '<b class="' + c7 + ' big">' + a7 + '</b><b class="' + c30 + ' big">' + a30 + '</b>', '1週間 ' + (fs ? Math.round(fs.up * 100) + '%' : '—') + '・1か月 ' + (fm ? Math.round(fm.up * 100) + '%' : '—')) +
     tile('bottom', '底らしさ', (g != null ? ring(g) + '<b class="ringv num">' + g + '%</b>' : '—'), g == null ? '' : g >= 50 ? '底値圏の水準' : 'まだ高い') +
-    tile('long', 'サイクル', '<span class="cbar"><i style="width:' + Math.round(cyc * 100) + '%"></i></span>', c ? c.name + '・' + c.day + '日目' : '—') +
+    tile('long', '4年サイクルの今', '<span class="cseg">' + [[400, 'up'], [200, 'top'], [150, 'down'], [250, 'bottom'], [span - 1000, 'recover']].map(x => '<i class="cs-' + x[1] + '" style="flex:' + x[0] + '"></i>').join('') + '<b style="left:' + (cyc * 100).toFixed(1) + '%"></b></span><span class="clab">' + [[400, '上昇'], [200, '天井'], [150, '下落'], [250, '底'], [span - 1000, '回復']].map(x => '<span style="flex:' + x[0] + '">' + x[1] + '</span>').join('') + '</span>', c ? c.name + '・半減期から' + c.day + '日目' : '—') +
     tile('concern', '懸念', '<b class="big ' + (cn ? 'v-avoid' : 'v-buy') + '">' + cn + '</b>', und + '系と相場全体') + '</section>';
 }
 function alarmBanner() { // 買った玉のどれかにアラームが出ていたら、画面の一番上に出す
