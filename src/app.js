@@ -900,30 +900,67 @@ function tilesCard() {
     tile('long', '4年サイクルの今', '<span class="cseg">' + [[400, 'up'], [200, 'top'], [150, 'down'], [250, 'bottom'], [span - 1000, 'recover']].map(x => '<i class="cs-' + x[1] + '" style="flex:' + x[0] + '"></i>').join('') + '<b style="left:' + (cyc * 100).toFixed(1) + '%"></b></span><span class="clab">' + [[400, '上昇'], [200, '天井'], [150, '下落'], [250, '底'], [span - 1000, '回復']].map(x => '<span style="flex:' + x[0] + '">' + x[1] + '</span>').join('') + '</span>', c ? c.name + '・半減期から' + c.day + '日目' : '—') +
     tile('concern', '懸念', '<b class="big ' + (cn ? 'v-avoid' : 'v-buy') + '">' + cn + '</b>', und + '系と相場全体') + '</section>' + miniGrid();
 }
-function whereCard() { // 今どこ？：いろいろな指標を、底値圏の「下げの途中／底固め／上がり始め」のどこかにまとめる
-  if (!S.R || !S.cyc || !S.d) return '';
-  const c = S.cyc, d = S.d, n = d.c.length, i = n - 1, rows = [];
-  const add = (nm, now, ok2, why) => rows.push({ nm, now, ok: ok2, why });
-  const lowDays = c.past.map(p => p.lowDay); add('時期（半減期から）', c.day + '日目', c.day >= Math.min(...lowDays), '過去の底は ' + lowDays.join('・') + ' 日目');
-  (S.bg ? S.bg.parts : []).forEach(x => add(x.nm + (/マイナー/.test(x.nm) ? '（参考）' : ''), x.now, x.p >= 0.9, '過去の底は ' + x.bots + (x.trend ? '。回を追って浅くなっているので、今回の目安は ' + x.tgt : '。今回の目安は ' + x.tgt) + (/マイナー/.test(x.nm) ? '。マイナーがAI向けデータセンターなどに収入源を広げていて、昔ほど売りに追い込まれにくい可能性がある' : '')));
-  const fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null; if (fg != null) add('恐怖指数', fg, fg <= 25, '参考（底以外でもよく出る）');
+function whereCard() { // 今どこ？：底値圏で一番大事な判断。いくつもの物差しを、6つのまとまりに分けて並べ、段階と「底までの見込み」を出す
+  if (!S.R || !S.cyc || !S.d || !S._L || !S._ls) return '';
+  const c = S.cyc, d = S.d, n = d.c.length, i = n - 1, L = S._L, ls = S._ls, nL = L.c.length, P = S.price;
+  const groups = [];
+  const G = (title, note) => { const g = { title, note, rows: [] }; groups.push(g); return g; };
+  const row = (g, nm, now, st, why) => g.rows.push({ nm, now, st, why });   // st: 'ok'（底の水準）, 'ng'（まだ）, 'ref'（参考）
+  const trendNext = a => { const k = a.length, mx = (k - 1) / 2, my = a.reduce((x, y) => x + y, 0) / k; let sxy = 0, sxx = 0; a.forEach((v, j) => { sxy += (j - mx) * (v - my); sxx += (j - mx) ** 2; }); return my + sxy / sxx * (k - mx); };
+  // 1. 時期
+  const g1 = G('時期（サイクル）', '');
+  const lowDays = c.past.map(p => p.lowDay), nextLow = Math.round(trendNext(lowDays)), nextLowT = c.cur.h + nextLow * DAY;
+  row(g1, '半減期から', c.day + '日目', c.day >= Math.min(...lowDays) ? 'ok' : 'ng', '過去の底は ' + lowDays.join('・') + ' 日目と、回を追って遅くなっている。延ばすと今回は ' + nextLow + ' 日目ごろ（' + md(nextLowT) + 'ごろ）');
+  // 2. 値段の深さと価値の物差し
+  const g2 = G('値段の深さ・価値の物差し', '');
+  const bgp = nm => (S.bg ? S.bg.parts : []).find(x => x.nm.indexOf(nm) === 0);
+  const dd = bgp('天井からの下落'); if (dd) row(g2, '天井からの下げ', dd.now, dd.p >= 0.9 ? 'ok' : 'ng', '過去の底は ' + dd.bots + '。浅くなる傾向を延ばした今回の目安は ' + dd.tgt);
+  const mv = bgp('MVRV'); const mvNow = S.oc && S.oc.mvrv && S.oc.mvrv.length ? +S.oc.mvrv[S.oc.mvrv.length - 1][1] : NaN, realized = ok(mvNow) ? L.c[nL - 1] / mvNow : NaN;
+  if (mv) row(g2, 'MVRV（みんなの平均の買値との比）', mv.now, mv.p >= 0.9 ? 'ok' : 'ng', '過去の底は ' + mv.bots + '（平均の買値より下まで売られた）。今回の目安は ' + mv.tgt + (ok(realized) ? '。今の平均の買値（実現価格）は ' + usd(realized) : ''));
+  const w2now = ok(ls.w200[nL - 1]) ? L.c[nL - 1] / Math.exp(ls.w200[nL - 1]) : NaN;
+  if (ok(w2now)) { const r = L.c[nL - 1] / w2now; row(g2, '200週線との比', r.toFixed(2), r <= 1.0 ? 'ok' : 'ng', '過去の底は 0.89・1.00・0.66。今の200週線は ' + usd(w2now)); }
+  const w200d = bgp('200日線比'); if (w200d) row(g2, '200日線との比', w200d.now, w200d.p >= 0.9 ? 'ok' : 'ng', '過去の底は ' + w200d.bots + '。今回の目安は ' + w200d.tgt);
+  const fr = L.c[nL - 1] / Math.exp(ls.resid[nL - 1]); row(g2, '長期成長線との比', '×' + (L.c[nL - 1] / fr).toFixed(2), L.c[nL - 1] / fr <= 0.5 ? 'ok' : 'ng', '過去の底は ×0.15・×0.49・×0.36');
+  // 3. 気持ち
+  const g3 = G('売られすぎ・気持ち', '');
+  const rsi = bgp('週足RSI'); if (rsi) row(g3, '週足RSI', rsi.now, rsi.p >= 0.9 ? 'ok' : 'ng', '過去の底は ' + rsi.bots);
+  const fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null; if (fg != null) row(g3, '恐怖指数', fg, 'ref', '参考。極度の恐怖は底以外でもよく出る');
+  // 4. 値動きの形
+  const g4 = G('値動きの形', '');
   let last90 = -1; for (let k = n - 1; k >= n - 30; k--) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { last90 = k; break; } }
-  const since = last90 >= 0 ? i - last90 : 99; add('90日ぶりの安値から', since === 0 ? '今日' : since + '日', since >= 10, '新しい安値を付けているうちは、まだ下げの途中');
+  const since = last90 >= 0 ? i - last90 : 99; row(g4, '終値で90日ぶりの安値から', since === 0 ? '今日' : since === 99 ? '30日以上' : since + '日', since >= 10 ? 'ok' : 'ng', '新しい安値を付けているうちは、まだ下げの途中');
+  let wickNew = false;
   if (S.rt) {
-    const lr = S.liveRow && S.liveRow[0] > d.t[n - 1] ? Math.min(S.liveRow[3], S.price) : Infinity; let l10 = lr; for (let j = n - 10; j < n; j++) l10 = Math.min(l10, d.l[j]);
-    // 前の底のヒゲ：終値の安値の日の前後5日の、日中の安値
+    const lr = S.liveRow && S.liveRow[0] > d.t[n - 1] ? Math.min(S.liveRow[3], P) : Infinity; let l10 = lr; for (let j = n - 10; j < n; j++) l10 = Math.min(l10, d.l[j]);
     let ki = -1; for (let j = n - 1; j >= 0; j--) if (Math.abs(d.c[j] - S.rt.lo) < 0.5) { ki = j; break; }
     let wPrev = S.rt.lo, wDay = ki; if (ki >= 0) for (let j = Math.max(0, ki - 5); j <= Math.min(n - 11, ki + 5); j++) if (d.l[j] < wPrev) { wPrev = d.l[j]; wDay = j; }
-    const wickNew = l10 < wPrev;
-    add('前の安値（終値 ' + kfmt(S.rt.lo) + '・日中 ' + kfmt(wPrev) + '）', S.rt.broke ? '終値で割った' : wickNew ? '日中で割った' : S.rt.retest ? '試している' : '—', !S.rt.broke && !S.rt.retest && !wickNew,
-      '前の底も日中は ' + usd(wPrev) + (wDay >= 0 ? '（' + md(d.t[wDay]) + '）' : '') + ' まで下げていました。' + (wickNew && !S.rt.broke ? '今回は日中に ' + usd(l10) + ' まで下げて、日中同士でも ' + pc(l10 / wPrev - 1) + ' 下に更新。終値ではまだ割っていません。終値で ' + usd(S.rt.level) + '（分かれ目）を割ると、過去は一段下げの形' : S.rt.broke ? '終値で割ると、過去は一段下げの形' : '分かれ目 ' + usd(S.rt.level)));
+    wickNew = l10 < wPrev;
+    row(g4, '前の底（終値 ' + kfmt(S.rt.lo) + '・日中 ' + kfmt(wPrev) + '）', S.rt.broke ? '終値で割った' : wickNew ? '日中で割った' : S.rt.retest ? '試している' : '上', !S.rt.broke && !S.rt.retest && !wickNew ? 'ok' : 'ng', (wickNew && !S.rt.broke ? '日中は ' + usd(l10) + ' まで下げて前の底を更新、終値ではまだ。' : '') + '終値で ' + usd(S.rt.level) + '（分かれ目）を割ると、過去は一段下げの形');
   }
-  const mm = S.R.hz.m.pct; add('中期の判定（上向きの確認）', Math.round(mm), mm >= 75, '75以上で「上がり始め」と判断（過去の検証で一番安定していた合図）');
-  const nOk = rows.filter(x => x.ok).length;
-  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : since < 10 || (S.rt && S.rt.broke) ? ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。'] : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
-  return '<section class="card" id="c-where"><div class="row"><h2>今どこ？</h2><b class="' + phase[1] + '">' + phase[0] + '</b></div><p>' + phase[2] + '</p><p class="sub" style="margin-top:0">底の水準に届いている指標：' + nOk + '／' + rows.length + '</p>' +
-    '<ul class="wh">' + rows.map(x => '<li class="' + (x.ok ? 'ok' : 'ng') + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>' +
-    '<details class="more-in"><summary>2倍にするのはいつか</summary><p class="sub">過去の検証では、「中期75以上（上がり始め）」で2倍に替えるのが一番安定していました。50や60で早めに替えると、2015年・2019年は少し良くなりましたが、2023年はBTC 1229→637、MSTR 3033→735、COIN 1826→294と大きく悪化しました（research/lad2x_on.js）。セリクラ（大きな下げ＋出来高の急増）や長い下ヒゲの日も、過去の底値圏では、その後90日で上がったのは23〜42%だけで、底の合図にはなっていません。</p></details></section>';
+  const mm = S.R.hz.m.pct; row(g4, '中期の判定（上向きの確認）', Math.round(mm), mm >= 75 ? 'ok' : 'ng', '75以上で「上がり始め」（過去の検証で一番安定していた合図）');
+  // 5. 需給（ETFの時代の構造）
+  const g5 = G('需給（ETFの時代の構造）', '現物ETFは2024年から。過去のサイクルにはなかった買い手と売り手なので、効き目は検証できていません');
+  const ef = etfState(); if (ef) row(g5, 'ETFの資金の出入り（20日）', (ef.s20 < 0 ? '-' : '+') + '$' + (Math.abs(ef.s20) / 1000).toFixed(1) + 'B', ef.s20 < 0 ? 'ng' : 'ok', '2024年以降で下から' + pc(ef.rank, 0, false) + '。流出が止まって流入に変わるのが、底を付けた後の形');
+  if (S.etff && S.etff.flows) { const idx = new Map(Array.from(L.t).map((t, k) => [dkey(t), k])); let u = 0, b = 0; S.etff.flows.forEach(([dd2, f]) => { const k = idx.get(dd2); if (k != null) { u += f; b += f / L.c[k]; } }); if (b > 0) { const cost = u / b; row(g5, 'ETFの買い手の平均の買値（推定）', usd(cost), P < cost ? 'ng' : 'ok', '今は平均の買値の ' + pc(P / cost - 1, 0) + '。含み損の人が多いほど、戻るたびに売りが出やすい（やれやれ売り）'); } }
+  row(g5, 'Strategy（MSTR）の買い', '弱い', 'ng', '株価が保有BTCの価値に近づき、増資でBTCを買う力が落ちている。前のサイクルの終わりにはなかった大口の買い手が、今は止まりかけている');
+  // 6. 参考
+  const g6 = G('参考（構造が変わっている可能性）', '');
+  const mr = bgp('マイナー収入'); if (mr) row(g6, 'マイナー収入（1年平均比）', mr.now, 'ref', '過去の底は ' + mr.bots + '。マイナーがAI向けのデータセンターに収入を広げていて、昔ほど売りに追い込まれにくい可能性');
+  // 段階
+  const all = groups.flatMap(g => g.rows), nOk = all.filter(x => x.st === 'ok').length, nAll = all.filter(x => x.st !== 'ref').length;
+  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : since < 10 || (S.rt && S.rt.broke) || wickNew ? ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。'] : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
+  // 底の値段の物差し
+  const scen = [];
+  if (S.rt) scen.push(['今回の直近の安値（日中）', groups[3].rows[1] ? Math.min(...[d.l[n - 1], d.l[n - 2], S.liveRow ? S.liveRow[3] : Infinity].filter(ok)) : NaN]);
+  if (ok(realized)) { scen.push(['みんなの平均の買値（実現価格）', realized]); if (mv) scen.push(['実現価格×今回の目安（' + mv.tgt + '）', realized * +mv.tgt]); }
+  if (ok(w2now)) scen.push(['200週線×0.66（2022年型）', w2now * 0.66]);
+  if (dd) { const pk = c.cur.peak; scen.push(['天井から' + dd.tgt + '（浅くなる傾向を延ばす）', pk * (1 + parseFloat(dd.tgt) / 100)]); }
+  const sc2 = scen.filter(x => ok(x[1])).sort((a, b) => b[1] - a[1]);
+  return '<section class="card" id="c-where"><div class="row"><h2>今どこ？</h2><b class="' + phase[1] + '">' + phase[0] + '</b></div><p>' + phase[2] + '</p>' +
+    '<p class="sub" style="margin-top:0">底の水準に届いている物差し：' + nOk + '／' + nAll + '。底の時期の目安は、過去の傾向を延ばすと ' + md(nextLowT) + 'ごろ（今から約' + Math.max(0, Math.round((nextLowT - Date.now()) / DAY)) + '日）。</p>' +
+    groups.map(g => '<h3 class="wh-g">' + esc(g.title) + '</h3>' + (g.note ? '<p class="sub" style="margin:0 0 4px">' + esc(g.note) + '</p>' : '') + '<ul class="wh">' + g.rows.map(x => '<li class="' + x.st + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>').join('') +
+    (sc2.length ? '<h3 class="wh-g">底の値段の物差し</h3><ul class="wh">' + sc2.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><span class="num">' + usd(x[1]) + '</span><small>今から ' + pc(x[1] / P - 1, 0) + '</small></li>').join('') + '</ul><p class="sub">どれが当たるかは分かりません。ETFが入ってからは値動きが穏やかになっていて、浅い方で止まる可能性もあれば、ETFの買い手の含み損が売りを呼んで深くなる可能性もあります。買い下がりの指値（-10%ずつ）は、この幅に備えるためのものです。</p>' : '') +
+    '<details class="more-in"><summary>2倍にするのはいつか</summary><p class="sub">過去の検証では、「中期75以上（上がり始め）」で2倍に替えるのが一番安定していました。50や60で早めに替えると、2023年はBTC 1229→637、MSTR 3033→735、COIN 1826→294と大きく悪化しました。セリクラ（大きな下げ＋出来高の急増）や長い下ヒゲの日も、過去の底値圏では、その後90日で上がったのは23〜42%だけで、底の合図にはなっていません。</p></details></section>';
 }
 function miniGrid() { // 1か所で全部見えるように：大事な数字を小さな札で並べる（緑＝買いの材料、赤＝注意、灰＝参考）
   const R = []; const add = (go, name, val, tone, note) => R.push('<button class="mini m-' + tone + '" data-go="' + go + '"><span class="mn">' + name + '</span><b class="num">' + val + '</b><span class="mt">' + note + '</span></button>');
