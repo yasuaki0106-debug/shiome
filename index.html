@@ -62,6 +62,11 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .more-in{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}.more-in>summary{cursor:pointer;font-size:13.5px;color:var(--muted);padding:4px 0}.more-in[open]>summary{color:var(--ink);font-weight:700}
 .todo-meta{margin:2px 0 0;font-size:13px;color:var(--muted)}.todo-meta b{color:var(--ink)}.todo-meta .cn{color:var(--avoid)}
 .ord{margin:4px 0 2px;padding:6px 10px;background:var(--bg);border-radius:4px;list-style:none;font-size:14px;font-weight:400}.ord li{padding:2px 0}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 14px}.tile{display:grid;grid-template-rows:auto 1fr auto;align-items:center;justify-items:start;gap:2px;min-height:96px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);text-align:left;font:inherit;color:var(--ink);cursor:pointer}.t-h{font-size:12px;color:var(--muted)}.t-b{display:flex;gap:10px;align-items:center}.t-f{font-size:11.5px;color:var(--muted)}.tile .big{font-size:26px;line-height:1}.ring{width:40px;height:40px}.rg-bg{fill:none;stroke:var(--soft);stroke-width:4}.rg-fg{fill:none;stroke:var(--brass);stroke-width:4;stroke-linecap:round}.ringv{font-size:18px}.cbar{display:block;width:120px;height:8px;background:var(--soft);border-radius:4px;overflow:hidden}.cbar i{display:block;height:100%;background:var(--brass)}
+.todo li[data-done]{cursor:pointer}.todo li.done{text-decoration:line-through;opacity:.45}.todo li.done::marker{content:'✓ '}.todo-hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+.lad-s{fill:var(--muted);font-size:11px}.lk i{display:inline-block;width:14px;height:0!important;border:0!important;border-top:3px solid!important;background:none!important}.tbl.tmap td{text-align:left}
+.lk .lk-w{border-top-color:var(--avoid)!important}.lk .lk-s{border-top-color:var(--buy)!important}.lk .lk-f{border-top-color:var(--brass)!important}
+.lad{width:100%;height:auto;margin:6px 0}.lad-ax{stroke:var(--line);stroke-width:2}.lad-t{font-size:12.5px;fill:var(--ink)}.lad-now{font-size:11px;fill:var(--ink);font-weight:700}
 .todo{border:1px solid var(--line);border-left:5px solid var(--brass);border-radius:6px;padding:10px 12px;margin:0 0 14px;background:var(--surface)}.todo.has-al{border-left-color:var(--avoid)}.todo h2{font-size:15px;margin:0}.todo ol{margin:6px 0 0 20px;font-size:15px;line-height:1.55}.todo li{padding:3px 0}.todo li.t-warn{color:var(--avoid);font-weight:700}.todo li.t-buy{font-weight:700}.todo li.t-info{color:var(--muted);font-size:13.5px}
 .tmap th{white-space:nowrap;width:5.5em;color:var(--muted);font-weight:400}.tmap td{text-align:left}
 .vb-u{fill:var(--buy);opacity:.28}.vb-d{fill:var(--avoid);opacity:.28}
@@ -1427,17 +1432,18 @@ function holdOne(p) {
   return { a, why, now, pl, plUsd: p.qty ? (now - p.cost) * p.qty : null, days, decay, undRet, need, undNeed: need != null && an ? stockAt(an, S.price) * (1 + need) : null, lim, alarm, line, eb };
 }
 function holdAll() { migrateCash(); return LS.get('pos', []).map((p, i) => Object.assign({ i, p }, holdOne(p))); }
+function doneSet() { const k = 'done.' + dkey(Date.now()); return new Set(LS.get(k, [])); }
 function todoCard() { // 画面を開いて最初に見る場所：今日やることを番号で並べる
   const p = S.plan; if (!p) return '';
   const items = [], al = (S.hold || []).filter(h => h.alarm), b = budget();
-  al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : ''; items.push({ lv: 'warn', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + '：' + (h.a === 'switch' ? '売って、同じ金額で ' + und + ' を買う（2倍をやめて元の株へ）' : h.a === 'sell' ? '売る' : h.alarm) }); });
+  al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : ''; items.push({ lv: 'warn', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → ' + (h.a === 'switch' ? '売って ' + und + ' に替える（2倍をやめる）' : h.a === 'sell' ? '売る' : h.alarm) }); });
   if (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial') {
     const t = planTicker(p), per = { buy: b.total * (1 - LAD_SHARE) / MAXBUY, trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
     const lo = p.a === 'ladder' ? ladderOrders(p) : null;
     if (b.total > 0 && lo) { const ex = new Date(lo.exp);
       items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる', sub: lo.rows.map(r => r.k + '本目　' + usd2(r.px) + '　' + r.n + '株' + (r.k === 1 ? '（期限 ' + mdUS(lo.exp) + '）' : '')) });
-      items.push({ lv: 'info', t: '1回目は ' + mdUS(lo.exp) + ' の引けまでに届かなければ、その日の引けに成行で買う' + (lo.ev ? '（' + lo.ev.title + 'で動きやすいので、期限をその後まで延ばしています）' : '') + '。2〜4回目は期限なしで置いたまま' });
-      items.push({ lv: 'info', t: '約定したら「関連株」タブで記録する。1回目の実際の買値に合わせて、2〜4回目の値段を出し直します' }); }
+      items.push({ lv: 'info', t: '1本目が ' + mdUS(lo.exp) + ' の引けまでに届かなければ、引けに成行で買う' + (lo.ev ? '（' + lo.ev.title.replace(/（.*?）/g, '') + 'の後まで待つ）' : '') });
+      items.push({ lv: 'info', t: '約定したら「関連株」タブで記録（2〜4本目の値段を出し直します）' }); }
     else if (b.total > 0) { items.push({ lv: 'buy', t: (p.a === 'buy' ? '確認買い' : '試し買い') + '：' + t + ' を ' + usd(amt) + ' 分' + (ok(n) ? '（約' + n + '株、目安 ' + usd2(px) + '）' : '') + '、その取引時間のうちに買う（指値で待たない）' });
       items.push({ lv: 'info', t: '買ったら「関連株」タブで記録する（現金は自動で引かれます）' }); }
     else items.push({ lv: 'info', t: '「関連株」タブの「資金」に現金を入れる（金額と株数が出ます）' });
@@ -1447,7 +1453,21 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   const nothing = !items.length;
   if (nothing) items.push({ lv: 'info', t: '今日は売り買いなし。' + (b.cash > 0 ? '現金 ' + usd(b.cash) + ' はそのまま待機' : '次の合図を待つ') });
   const cn = (() => { try { const t = planTicker(p); return concernsFor(ETF[t] ? ETF[t].und : t).length; } catch (e) { return 0; } })();
-  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念材料 ' + cn + '件（結論の下の「金額の内訳と懸念材料」）</span>' : '') + '</p><ol>' + items.map(x => '<li class="t-' + x.lv + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + '</li>').join('') + '</ol></section>';
+  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + '</li>').join('') + '</ol><p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
+}
+function tilesCard() {
+  if (!S.R) return '';
+  const fs = S.R.hz.s.fc, fm = S.R.hz.m.fc, c = S.cyc, bg = S.bg, p = S.plan || {};
+  const arrow = f => !f ? ['—', 'v-na'] : f.up >= 0.56 ? ['↗', 'v-buy'] : f.up <= 0.44 ? ['↘', 'v-avoid'] : ['→', 'v-wait'];
+  const [a7, c7] = arrow(fs), [a30, c30] = arrow(fm);
+  const g = bg ? Math.round(bg.g * 100) : null, ring = v => '<svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" class="rg-bg"/><circle cx="18" cy="18" r="15" class="rg-fg" stroke-dasharray="' + (v * 0.942).toFixed(1) + ' 94.2" transform="rotate(-90 18 18)"/></svg>';
+  const cyc = c ? Math.min(1, c.day / 1460) : 0, t = planTicker(p), und = ETF[t] ? ETF[t].und : t, cn = concernsFor(und).length;
+  const tile = (go, head, body, foot) => '<button class="tile" data-go="' + go + '"><span class="t-h">' + head + '</span><span class="t-b">' + body + '</span><span class="t-f">' + foot + '</span></button>';
+  return '<section class="tiles">' +
+    tile('dir', '方向', '<b class="' + c7 + ' big">' + a7 + '</b><b class="' + c30 + ' big">' + a30 + '</b>', '1週間 ' + (fs ? Math.round(fs.up * 100) + '%' : '—') + '・1か月 ' + (fm ? Math.round(fm.up * 100) + '%' : '—')) +
+    tile('bottom', '底らしさ', (g != null ? ring(g) + '<b class="ringv num">' + g + '%</b>' : '—'), g == null ? '' : g >= 50 ? '底値圏の水準' : 'まだ高い') +
+    tile('long', 'サイクル', '<span class="cbar"><i style="width:' + Math.round(cyc * 100) + '%"></i></span>', c ? c.name + '・' + c.day + '日目' : '—') +
+    tile('concern', '懸念', '<b class="big ' + (cn ? 'v-avoid' : 'v-buy') + '">' + cn + '</b>', und + '系と相場全体') + '</section>';
 }
 function alarmBanner() { // 買った玉のどれかにアラームが出ていたら、画面の一番上に出す
   const al = (S.hold || []).filter(h => h.alarm); if (!al.length) return '';
@@ -1455,17 +1475,16 @@ function alarmBanner() { // 買った玉のどれかにアラームが出てい�
 }
 function holdCards() {
   const hs = S.hold || []; if (!hs.length) return '';
-  return '<h2 class="sec">買った玉（1つずつ判定します）</h2>' + hs.map(h => {
+  return '<h2 class="sec">買った玉</h2>' + hs.map(h => {
     if (h.p.kind === 'cash') { const [lb, cl] = HOLD[h.a]; return '<div class="plan-stock"><div class="row"><b class="sym">' + usd(h.cash) + '<small>' + esc(h.p.sym) + 'を売ったお金' + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cl + ' plan-v">' + lb + '</b></div><p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p>' + (h.a === 'reinvest' && ok(h.undNow) ? '<dl class="kv"><dt>' + h.und + ' の今の目安</dt><dd class="num">' + usd2(h.undNow) + '（約' + Math.floor(h.cash / h.undNow) + '株）</dd></dl>' : '') + '<p class="sub">買ったら、この記録を削除して、買った株を記録してください。</p></div>'; }
     const [lab, cls] = HOLD[h.a], e = ETF[h.p.sym], kv = [], kn = h.p.kind === 'ladder' ? '買い下がり' : h.p.kind === 'trial' ? '試し' : h.p.kind === 'buy' ? '確認買い' : '以前からの保有';
-    const cn = concernsFor(ETF[h.p.sym] ? ETF[h.p.sym].und : h.p.sym); if (cn.length) kv.push(['懸念材料', cn.length + '件（「関連株」タブのニュース）']);
     if (h.line && ok(h.line.px)) kv.push([h.line.label, usd2(h.line.px) + (ok(h.line.btc) ? '（BTC ' + usd(h.line.btc) + '）' : '')]);
     if (ok(h.now)) { kv.push(['いまの目安 / 買値', usd2(h.now) + ' / ' + usd2(h.p.cost)]); kv.push(['損益', pc(h.pl) + (h.plUsd != null ? '（' + (h.plUsd < 0 ? '-' : '+') + '$' + Math.abs(Math.round(h.plUsd)).toLocaleString('en-US') + '）' : '')]); }
     if (ok(h.lim)) kv.push(['買い足しの指値', usd2(h.lim)]);
     if (h.days != null) kv.push(['持っている日数', h.days + '日']);
     if (h.decay != null) kv.push([h.decay < 0 ? '2倍の計算より目減りした分' : '2倍の計算より上振れした分', pc(h.decay) + '（' + e.und + 'は' + pc(h.undRet) + '）']);
     if (h.need != null) kv.push(['買値に戻るには', e.und + 'が ' + pc(h.need) + (h.undNeed ? '（' + usd2(h.undNeed) + '）' : '') + ' 以上']);
-    return '<div class="plan-stock' + (h.alarm ? ' alarm' : '') + '"><div class="row"><b class="sym">' + h.p.sym + '<small>' + kn + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cls + ' plan-v">' + lab + '</b></div>' + (h.alarm ? '<p class="alarm-t">アラーム：' + esc(h.alarm) + '</p>' : '') + '<p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p><dl class="kv">' + kv.map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl>' + (h.need != null && e.L > 1 ? '<p class="sub">「買値に戻るには」は目減りを無視した最低ラインです。時間がかかるほど、必要な上昇は大きくなります。</p>' : '') + '</div>';
+    return '<div class="plan-stock' + (h.alarm ? ' alarm' : '') + '"><div class="row"><b class="sym">' + h.p.sym + '<small>' + kn + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cls + ' plan-v">' + lab + '</b></div>' + (h.alarm ? '<p class="alarm-t">アラーム：' + esc(h.alarm) + '</p>' : '') + '<dl class="kv">' + kv.slice(0, 3).map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl><details class="more-in"><summary>理由と詳しい数字</summary><p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p><dl class="kv">' + kv.slice(3).map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl>' + (h.need != null && e.L > 1 ? '<p class="sub">「買値に戻るには」は目減りを無視した最低ラインです。時間がかかるほど、必要な上昇は大きくなります。</p>' : '') + '</details></div>';
   }).join('');
 }
 function cycleStrip() {
@@ -1971,9 +1990,9 @@ function longChart() {
   // 今
   const X = sx(t[i2]), Y = sy(C[i2]); g += '<circle cx="' + X.toFixed(1) + '" cy="' + Y.toFixed(1) + '" r="4" class="dot"/><text x="' + (X + 6).toFixed(1) + '" y="' + (Y + 14).toFixed(1) + '" class="ax wk-lab">今 ' + kfmt(C[i2]) + '</text>';
   const ratio = C[i2] / fair(i2);
-  return '<section class="card"><h2>長期チャートで今どこか</h2><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="2012年からのBTCの長期チャート（対数目盛）。半減期、過去の天井と底、長期成長線、200週線、次の天井の見込みつき">' + g + '</svg>' +
+  return '<section class="card" id="c-long"><h2>長期チャートで今どこか</h2><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="2012年からのBTCの長期チャート（対数目盛）。半減期、過去の天井と底、長期成長線、200週線、次の天井の見込みつき">' + g + '</svg>' +
     '<p class="keys"><span><i class="k-px"></i>BTC（週ごと）</span><span><i class="k-50"></i>長期成長線（点線は延長）</span><span><i class="k-200"></i>200週線</span><span><i class="k-cu" style="border-radius:50%"></i>底</span><span><i class="k-cd" style="border-radius:50%"></i>天井</span><span><i class="k-zone"></i>次の天井の時期</span></p>' +
-    '<p>今は、半減期から' + c.day + '日目の' + c.name + 'です。値段は長期成長線の' + Math.round(ratio * 100) + '%（過去の底は成長線の18〜49%、天井は127〜1060%）で、200週線より' + pc(Math.exp(ls.w200[i2]) - 1, 0) + 'です。縦の細線は半減期で、右端の薄い線が次の半減期（見込み）です。</p></section>';
+    '<p>半減期から' + c.day + '日目の' + c.name + '。値段は長期成長線の<b>' + Math.round(ratio * 100) + '%</b>（過去の底は18〜49%、天井は127〜1060%）。</p></section>';
 }
 function topCard() {
   const c = S.cyc; if (!c || !ok(S.price)) return '';
@@ -1984,9 +2003,9 @@ function topCard() {
   const rows = TOPS.map(T => '<tr><th>' + T.k + '</th><td class="num">' + usd(T.p) + '</td><td class="num">' + (T.p / b0).toFixed(1) + '倍</td>' + (tot > 0 ? '<td class="num">' + usd(proj(T)) + '</td>' : '') + '</tr>').join('');
   return '<section class="card"><h2>次の天井の見込み</h2><p>時期は' + f(nh + 520 * DAY) + '〜' + f(nh + 560 * DAY) + 'ごろ（過去の天井は半減期から525〜548日目）。値段は3つの見方で幅を出しています。</p>' +
     '<table class="tbl sm"><thead><tr><th></th><th>BTCの天井</th><th>今から</th>' + (tot > 0 ? '<th>あなたの資産</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>' +
-    '<ul class="why3">' + TOPS.map(T => '<li class="pn"><b>' + T.k + '</b> ' + esc(T.why) + '</li>').join('') + '</ul>' +
+    '<details class="more-in"><summary>見込みの根拠と計算の前提</summary><ul class="why3">' + TOPS.map(T => '<li class="pn"><b>' + T.k + '</b> ' + esc(T.why) + '</li>').join('') + '</ul>' +
     (tot > 0 ? '<p class="sub">あなたの資産は、今の評価額 ' + usd(val) + '＋現金 ' + usd(cash) + '＝' + usd(tot) + ' から計算。株は前回のサイクルでのBTCに対する伸び方（MSTRはBTCの1.5乗、COINは1.1乗）で換算し、現金は今の値段で ' + pu + ' に入れた場合です。2倍の玉も、守りのルールで1倍と2倍を行き来する前提で1倍として計算しています。</p>' : '') +
-    '<p class="sub">あくまで過去3〜4回の延長です。MSTRは直近2年、BTCより弱い動きが続いていて、前回ほど伸びない可能性があります。毎朝の値段で計算し直します。</p></section>';
+    '<p class="sub">あくまで過去3〜4回の延長です。MSTRは直近2年、BTCより弱い動きが続いていて、前回ほど伸びない可能性があります。</p></details></section>';
 }
 function dirCard() {
   if (!S.R || !S.zones) return '';
@@ -2005,13 +2024,23 @@ function dirCard() {
   const u = S.up, liqTxt = u && ok(u.ratio) ? (u.ratio >= 0.6 ? '清算は上側（ショート）に多めです。上がり始めると、ショートの損切りの買いで動きが速くなりやすい状態です' : u.ratio <= 0.4 ? '清算は下側（ロング）に多めです。下がり始めると、ロングの損切りの売りで動きが速くなりやすい状態です' : '清算は上と下でほぼ同じくらいです。どちらかに抜けた方へ、動きが速くなりやすい状態です') : '';
   const w1 = ab.find(z => kindUp(z)[0] !== '燃料'), f1 = ab.find(z => /燃料/.test(kindUp(z)[0])), s1 = be.find(z => /支え/.test(kindDn(z)[0])), a1 = be.find(z => /加速/.test(kindDn(z)[0]));
   const sum = '1週間は' + vd(fs)[0] + '。' + (w1 ? '上は ' + usd(w1.p) + ' で止められやすく' + (f1 && f1.p > w1.p ? '、抜けると ' + usd(f1.p) + ' まで行きやすい' : '') + '。' : '') + (s1 ? '下は ' + usd(s1.p) + ' で止まりやすく' + (a1 && a1.p < s1.p ? '、割ると ' + usd(a1.p) + ' まで速く下げやすい' : '') + '。' : '');
-  return '<section class="card"><h2>上がる？下がる？どこで止まる？</h2><p class="dir-sum">' + esc(sum) + '</p>' +
-    '<table class="tbl sm"><thead><tr><th></th><th>見立て</th><th>上がった割合</th><th>半分のケース</th></tr></thead><tbody>' + hzRow('1週間', fs) + hzRow('1か月', fm) + '</tbody></table>' +
-    '<p class="sub">今と似た状況だった過去の日の、その後の値動きです。過去の検証では、1週間の方向の当たりは5割強しかなく、方向だけで売り買いを決められるほどの力はありません。</p>' +
+  // 値段のはしご：今の値段を真ん中に、上の節目と下の節目を縦に並べる
+  const ladderSvg = (() => { const all = ab.slice(0, 3).map(z => ({ z, up: true, k: kindUp(z) })).concat(be.slice(0, 3).map(z => ({ z, up: false, k: kindDn(z) })));
+    if (!all.length) return ''; const ps = all.map(x => x.z.p).concat([price]), hi = Math.max(...ps) * 1.01, lo = Math.min(...ps) * 0.99, Wd = 340, Hh = 26 * (all.length + 1) + 20, sy = v => 10 + (Math.log(hi) - Math.log(v)) / (Math.log(hi) - Math.log(lo)) * (Hh - 20);
+    const col = k => /燃料|加速/.test(k[0]) ? 'var(--brass)' : /支え/.test(k[0]) && !/加速/.test(k[0]) ? 'var(--buy)' : 'var(--avoid)';
+    let g = '<line x1="60" x2="60" y1="6" y2="' + (Hh - 6) + '" class="lad-ax"/>';
+    const used = []; all.sort((a, b) => b.z.p - a.z.p).forEach(x => { let y = sy(x.z.p); while (used.some(u => Math.abs(u - y) < 18)) y += 18; used.push(y);
+      g += '<line x1="52" x2="68" y1="' + sy(x.z.p).toFixed(1) + '" y2="' + sy(x.z.p).toFixed(1) + '" stroke="' + col(x.k) + '" stroke-width="3"/><text x="74" y="' + (y + 4).toFixed(1) + '" class="lad-t"><tspan class="num" font-weight="700">' + kfmt(x.z.p) + '</tspan>  ' + pc(x.z.p / price - 1) + '  <tspan fill="' + col(x.k) + '" font-weight="700">' + x.k[0] + '</tspan><tspan class="lad-s">  ' + u1 + ' ' + usd2(priceAtBtc(u1, x.z.p)) + '</tspan></text>'; });
+    const yp = sy(price); g += '<circle cx="60" cy="' + yp.toFixed(1) + '" r="6" class="dot"/><text x="4" y="' + (yp + 4).toFixed(1) + '" class="lad-now num">' + kfmt(price) + '</text>';
+    return '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="lad" role="img" aria-label="今の値段と、上下の節目">' + g + '</svg>'; })();
+  return '<section class="card" id="c-dir"><h2>上がる？下がる？どこで止まる？</h2><p class="dir-sum">' + esc(sum) + '</p>' + ladderSvg +
+    '<p class="keys lk"><span><i class="lk-w"></i>壁（止められやすい）</span><span><i class="lk-s"></i>支え（止まりやすい）</span><span><i class="lk-f"></i>燃料・加速（清算で速く動く）</span></p>' +
+    '<details class="more-in"><summary>節目ごとの株価と理由</summary>' +
+    '<table class="tbl sm"><thead><tr><th></th><th>見立て</th><th>上がった割合</th><th>半分のケース</th></tr></thead><tbody>' + hzRow('1週間', fs) + hzRow('1か月', fm) + '</tbody></table><p class="sub">今と似た状況の過去の日の、その後です。1週間の方向の当たりは5割強で、これだけで決められる力はありません。</p>' +
     '<h3>上がったら</h3><ul class="lv">' + ab.slice(0, 4).map(z => row(z, kindUp(z))).join('') + '</ul>' +
     '<h3>下がったら</h3><ul class="lv">' + be.slice(0, 4).map(z => row(z, kindDn(z))).join('') + '</ul>' +
     (liqTxt ? '<p class="sub">' + esc(liqTxt) + '。</p>' : '') +
-    '<p class="sub">節目は、移動平均・高値と安値・出来高の厚い価格帯・オプションの建玉・清算の集中帯（推定）を重ねたものです。株価はBTCがその値段になったときの換算。清算とオプションは過去の履歴が取れないため、節目として効くかどうかは検証できていません。</p></section>';
+    '<p class="sub">節目は、移動平均・高値と安値・出来高の厚い価格帯・オプションの建玉・清算の集中帯（推定）を重ねたものです。株価はBTCがその値段になったときの換算。清算とオプションは過去の履歴が取れないため、節目として効くかどうかは検証できていません。</p></details></section>';
 }
 function bottomCard() {
   const b = S.bo; if (!b) return '';
@@ -2023,20 +2052,20 @@ function bottomCard() {
   ];
   const near = b.near.slice(0, 4).map(x => '<li><b class="num">' + usd(x.p) + '</b><span class="num dist">' + pc(x.p / S.price - 1) + '</span><span>' + esc(x.why) + '</span></li>').join('');
   const sg = stageOf(), gg = S.bg;
-  const gauge = gg ? '<h3>底らしさ <span class="num">' + Math.round(gg.g * 100) + '%</span></h3><p class="sub" style="margin-top:0">天井の日を0%、過去の底の水準を100%として、今どこまで来たか（5つの指標の加重平均）。</p><ul class="gauge">' + gg.parts.map(x => '<li><span>' + esc(x.nm) + '</span><span class="gbar"><b style="width:' + Math.round(x.p * 100) + '%"></b></span><span class="num">' + Math.round(x.p * 100) + '%</span><span class="sub2">今 ' + x.now + '／過去の底 ' + x.bots + '</span></li>').join('') + '</ul>' + gg.extra.map(x => '<p class="sub">' + esc(x) + '</p>').join('') + '<p class="sub">過去の検証では、この数字が高まるのは底の数か月前からで、「あと何日」を当てる力はありません。底値圏にいることの確認に使い、買う日は下の判定で決めます。</p>' : '';
+  const gauge = gg ? '<h3>底らしさ <span class="num">' + Math.round(gg.g * 100) + '%</span></h3><p class="sub" style="margin-top:0">天井の日を0%、過去の底の水準を100%として、今どこまで来たか（5つの指標の加重平均）。</p><ul class="gauge">' + gg.parts.map(x => '<li><span>' + esc(x.nm) + '</span><span class="gbar"><b style="width:' + Math.round(x.p * 100) + '%"></b></span><span class="num">' + Math.round(x.p * 100) + '%</span><span class="sub2">今 ' + x.now + '／過去の底 ' + x.bots + '</span></li>').join('') + '</ul><details class="more-in"><summary>底らしさの説明</summary>' + gg.extra.map(x => '<p class="sub">' + esc(x) + '</p>').join('') + '<p class="sub">過去の検証では、この数字が高まるのは底の数か月前からで、「あと何日」を当てる力はありません。底値圏にいることの確認に使い、買う日は判定で決めます。</p></details>' : '';
   const P0 = S.plan || {}, c0 = S.cyc, ladn = (P0.lad || []).length, nb0 = P0.n || 0, f2 = t => { const d = new Date(t); return d.getFullYear() + '年' + (d.getMonth() + 1) + '月'; };
   const tmap = c0 ? '<h3>時間軸ごとの今</h3><table class="tbl sm tmap"><tbody>' +
     '<tr><th>今日〜数日</th><td>' + (S.rt && S.rt.broke ? '前の安値を割った' : S.rt && S.rt.retest ? '前の安値を試している（分かれ目 ' + usd(S.rt.level) + '）' : '特になし') + '</td></tr>' +
     '<tr><th>数週間</th><td>買い下がり ' + ladn + '／4回' + (P0.a === 'ladder' ? '（今日が開始の合図）' : ladn ? '（指値で待つ）' : '（90日ぶりの安値で開始）') + '</td></tr>' +
     '<tr><th>数か月</th><td>確認買い ' + nb0 + '／2回。' + (b.eta ? '見込みは' + f(b.eta.from) + '〜' + f(b.eta.to) : '中期の判定 ' + Math.round(b.mNow) + '（75で合図）') + '</td></tr>' +
     '<tr><th>数年</th><td>' + c0.name + '（半減期から' + c0.day + '日目）。売り始めの目安は ' + f2(c0.nextHalving + 400 * DAY) + '〜</td></tr></tbody></table>' : '';
-  return '<section class="card"><div class="row"><h2>底と買い場の見込み</h2><b class="' + sg.cls + '">' + sg.name + '</b></div><p>' + esc(sg.text) + '</p>' + tmap + gauge +
-    '<p>今は天井から <b class="num">' + pc(b.dd, 0) + '</b>、' + b.daysTop + '日。半減期から' + b.day + '日目。200週線の' + pc(b.wr, 0) + '、長期成長線に対して過去の下位' + pc(b.valPct, 0, false) + 'の安さです。</p>' +
+  return '<section class="card" id="c-bottom"><div class="row"><h2>底と買い場の見込み</h2><b class="' + sg.cls + '">' + sg.name + '</b></div><p>' + esc(sg.text) + '</p>' + tmap + gauge +
+    '<details class="more-in"><summary>底の値段のシナリオ・下値の目安・確認買いの時期</summary><p>今は天井から <b class="num">' + pc(b.dd, 0) + '</b>、' + b.daysTop + '日。半減期から' + b.day + '日目。200週線の' + pc(b.wr, 0) + '、長期成長線に対して過去の下位' + pc(b.valPct, 0, false) + 'の安さです。</p>' +
     '<h3>底の値段のシナリオ</h3><table class="tbl"><tbody>' + scen.map(x => '<tr><th>' + x[0] + '</th><td class="num">' + x[1] + '</td></tr><tr><td colspan="2" class="sub" style="text-align:left;padding-top:0">' + esc(x[2]) + '</td></tr>').join('') + '</tbody></table>' +
     retestBlock() + (near ? '<h3>この先数週間の下値の目安</h3><ul class="clist">' + near + '</ul>' : '') +
     '<h3>確認買いが出るまでの見込み</h3>' + (b.eta ? '<p>中期の判定が今と同じくらい弱かった日から、過去3回の底値圏で買い判定が出るまでは、中央値で' + WAIT.med + '日、半分のケースが' + WAIT.q25 + '〜' + WAIT.q75 + '日でした。今日から数えると <b>' + f(b.eta.from) + '〜' + f(b.eta.to) + '</b>（中心は' + f(b.eta.med) + '）です。</p><p class="sub">その間にさらに下げた幅は中央値で' + pc(WAIT.dnMed, 0) + '、悪い方の4回に1回は' + pc(WAIT.dnQ25, 0) + '。買い判定が出た日の値段は、今日の値段と比べて中央値で' + pc(WAIT.pxMed, 0) + '（' + pc(WAIT.pxQ25, 0) + '〜' + pc(WAIT.pxQ75, 0) + '）でした。底で買うのではなく、底を打って上向いたのを確認した値段で買う、という見込みです。</p>' : '<p>中期の判定はすでに弱い水準を抜けています（今は' + Math.round(b.mNow) + '、買い好機は75以上）。買い判定は近いうちに出る可能性があります。上の「今日どうするか」と暫定の枠を毎日見てください。</p>') +
     '<p class="sub">準備の目安：買い下がりは、底値圏で90日ぶりの安値を付けた日に始まります（予定額の半分を4回）。確認買い（残り半分を2回）は、上の時期が目安です。</p>' +
-    '<p class="sub">この見込みは毎朝9時の確定データで計算し直します。根拠は過去3回のサイクルだけなので、時期も値段も幅を持って見てください。毎日の見込みは記録して、後で当たり外れを確かめます。</p></section>';
+    '<p class="sub">この見込みは毎朝9時の確定データで計算し直します。根拠は過去3回のサイクルだけなので、時期も値段も幅を持って見てください。</p></details></section>';
 }
 function todayCard() {
   const p = S.plan; if (!p) return '';
@@ -2045,7 +2074,7 @@ function todayCard() {
   const nb = p.n || 0;
   let lead = p.a === 'buy'
     ? (p.kind === 'add' ? '上向きの確認が続いています。予定額の4分の1で ' + buyTicker() + ' を買い足します（確認買い2回目／2回）。' : '上向きを確認しました。予定額の4分の1で ' + buyTicker() + ' を買います（確認買い1回目／2回）。もう1回は、14日以上あけて判定が続いていれば買います。')
-    : p.a === 'ladder' ? '買い下がりを始める合図です。予定額の半分を4回に分けて、指値を4本まとめて置きます（値段と株数は「今日やること」に出しています）。残り半分は、上向きを確認してから使います。'
+    : p.a === 'ladder' ? '予定額の半分を、4本の指値で買い下がります。残り半分は、上向きを確かめてから。'
     : p.a === 'trial' ? '本格的な買い判定の前の、試し買いの合図です。入れるのは予定額の8分の1まで。撤退ラインは買値の10%下（BTCの終値）で、割ったら必ず降ります。'
     : p.a === 'exit' ? '試し買いの撤退ラインを割りました。試し分は売って、次の合図を待ちます。'
     : (p.lad || []).length ? '今日は新しく買いません。買い下がりの残りの指値はそのまま置いておき、確認買いは下の条件がそろった日に出ます。' : '今日は買いません。買い下がりは、底値圏でBTCの終値が90日ぶりの安値を付けた日に始まります。確認買いは、下の条件がすべてそろった日に出ます。';
@@ -2074,7 +2103,7 @@ function todayCard() {
   const buys = cycleBuys(), rec = '<div class="buyrec"><span>買い下がり <b class="num">' + (p.lad || []).length + '</b>／4、確認買い <b class="num">' + buys.length + '</b>／2' + (buys.length ? '（最後は ' + md(buys[buys.length - 1].t) + '、BTC ' + usd(buys[buys.length - 1].btc) + '）' : '') + '</span><span><button class="link" data-rec="buy">買った玉を記録する</button></span></div>';
   return '<section class="today">' + cycleStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p>' + ladBox + trialBox + provBox() +
     (rows ? '<details class="more-in"><summary>MSTR・COIN・MSTU・CONLの今の値段</summary>' + rows + '</details>' : '') +
-    '<details class="more-in"><summary>金額の内訳と懸念材料</summary>' + moneyBox(p) + '</details>' +
+    '<details class="more-in mb"><summary>金額の内訳と懸念材料</summary>' + moneyBox(p) + '</details>' +
     (ladChk ? '<details class="more-in"><summary>買い下がりの条件' + (p.a === 'ladder' ? '（今日の判定の根拠）' : '') + '</summary>' + ladChk + '<p class="sub">買い下がりには、中期の判定は使っていません。この4つがそろった日に始まります。</p></details>' : '') +
     '<details class="more-in"><summary>確認買い（残り半分）の条件' + (p.a === 'buy' ? '（今日の判定の根拠）' : '') + '</summary>' + chk.replace('<p class="chk-h">確認買い（残り半分）の条件</p>', '') + '<p class="sub">確認買いは、上向きを確かめてから残り半分を使う買い方です。ここでだけ、中期の判定（30日先の見立て）を使います。</p>' + rec + '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul><p class="sub">買い方：予定額の半分は、底値圏で90日ぶりの安値から4回に分けて買い下がる（-10%ごと）。残り半分は、上向きを確認してから2回。過去に完了した5つのケースでは、どれも以前の買い方より最終額が上でした（+2〜+22%）。</p></details>' +
     sessionStrip() + '</section>';
@@ -2097,7 +2126,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + todayCard() + fl(warn) + holdCards() + dirCard() + intradayChart() + bottomCard() + longChart() + topCard() +
+  return todoCard() + tilesCard() + todayCard() + fl(warn) + holdCards() + dirCard() + intradayChart() + bottomCard() + longChart() + topCard() +
     '<details class="more"><summary>もっと詳しく（サイクルと出口・銘柄の選び方・スコア・価格チャート・データ）</summary>' + cycleCard() +
     (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + fl(info) + upsideCard(false) +
     '<h2 class="sec">時間軸ごとの判定（買い方の土台になるスコア）</h2>' + '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
@@ -2383,6 +2412,8 @@ document.addEventListener('click', e => {
       if ((kind === 'buy' || kind === 'trial' || kind === 'ladder') && qty && $('#pos-pay') && $('#pos-pay').checked) setCash(cashBal() - cost * qty);
       LS.set('pos', a); S.recKind = null; if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); writeLog(); } location.hash = 'judge';
   }
+  else if (t.closest && t.closest('.todo li[data-done]') && !t.closest('.ord')) { const k = +t.closest('.todo li[data-done]').dataset.done, key = 'done.' + dkey(Date.now()), a = new Set(LS.get(key, [])); a.has(k) ? a.delete(k) : a.add(k); LS.set(key, [...a]); render(); }
+  else if (t.closest && t.closest('.tile')) { const go = t.closest('.tile').dataset.go, el = document.getElementById('c-' + go); if (go === 'concern') { const d = document.querySelector('.today .more-in.mb'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } else if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.dataset.rec) { S.recKind = t.dataset.rec === 'trial' ? 'trial' : (S.plan && (S.plan.a === 'ladder' || ((S.plan.lad || []).length && S.plan.a !== 'buy'))) ? 'ladder' : 'buy'; location.hash = 'stocks'; setTimeout(() => { const el = document.getElementById('pos-form'); if (el) el.scrollIntoView(); }, 80); }
   else if (t.id === 'trial-add') { LS.set('trial', { t: Date.now(), btc: Math.round(S.price) }); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
   else if (t.id === 'trial-clear') { LS.del('trial'); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
