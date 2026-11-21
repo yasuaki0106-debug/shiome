@@ -560,8 +560,8 @@ function etfAt(sym, btc) { // BTCがその値段のときのETFの目安
 }
 const HOLD = { reinvest: ['1倍で買う', 'v-buy'], relevbuy: ['2倍で買い直す', 'v-buy'], cashwait: ['現金で待つ', 'v-wait'], hold: ['持ち続ける', 'v-buy'], add: ['買い足し可', 'v-buy'], trim: ['一部売る', 'v-wait'], sell: ['売る', 'v-avoid'], switch: ['1倍に乗り換える', 'v-wait'], relev: ['2倍に戻せる', 'v-buy'], na: ['判定できません', 'v-na'] };
 const LEV_OFF = 20, LEV_ON = 75;   // 守りのルール：中期20未満で2倍→元の株、75以上で元の株→2倍（research/protect.js）
-function buyTicker() { const t = (S.cfg && S.cfg.buy) || 'MSTU'; if (t !== 'auto') return t; const k = S.pick ? S.pick.final : 'MSTR'; return k === 'COIN' ? 'CONL' : 'MSTU'; }
-function prefUnd(fallback) { const t = buyTicker(); return ETF[t] ? ETF[t].und : fallback; }
+function buyTicker() { const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return t; const k = S.pick ? S.pick.final : 'MSTR'; return k === 'COIN' ? 'CONL' : 'MSTU'; }
+function prefUnd(fallback) { return fallback; }   // 持っている玉の乗り換えは、同じ元の株の中だけ（MSTU⇔MSTR、CONL⇔COIN）。新しく買う銘柄だけを状況で選ぶ
 function cashBal() { return +LS.get('cash', 0) || 0; }
 function setCash(v) { LS.set('cash', Math.max(0, Math.round(v * 100) / 100)); }
 function migrateCash() { // 以前の「売ったお金」の記録を、現金の残高にまとめる
@@ -697,7 +697,7 @@ function pickStock() {
   else if ((S.hold || []).length) hold.push('保有銘柄に株数を入れると、どちらに偏っているかも見ます');
   if (lossy.length) hold.push(lossy.join('・') + 'は含み損が大きいですが、それを理由に同じ銘柄を選ぶことはしていません。取り返しやすさは、どちらを買っても変わらないためです');
   const diff = sc.MSTR - sc.COIN;
-  let pick = diff >= 2 ? 'MSTR' : diff <= -2 ? 'COIN' : 'even';
+  let pick = diff >= 2 ? 'MSTR' : diff <= -2 ? 'COIN' : 'even';   // 互角のときは MSTR（サイクルの上昇局面での伸びが大きかった）
   let final = pick;
   // 手持ちの偏りで選び直すことはしない（利用者の方針）
   return { pick, final, sc, why, hold, tilt };
@@ -705,12 +705,12 @@ function pickStock() {
 function pickCard() {
   const k = S.pick; if (!k) return '';
   const skip = S.plan && S.plan.a === 'skip', lev = { MSTR: 'MSTU', COIN: 'CONL' };
-  const title = k.final === 'even' ? '半分ずつ' : k.final + '（' + lev[k.final] + '）';
+  const fin = k.final === 'even' ? 'MSTR' : k.final, title = fin + '（' + lev[fin] + '）';
   const li = k.why.map(w => '<li class="' + (w.s === 'MSTR' ? 'pm' : w.s === 'COIN' ? 'pc' : 'pn') + '">' + (w.s ? '<b>' + w.s + '</b> ' : '') + esc(w.t) + '</li>').join('');
   return '<section class="card"><div class="row"><h2>' + (skip ? '買うときに選ぶなら' : 'どっちを買うか') + '</h2><b class="v-buy">' + title + '</b></div>' +
-    '<p class="sub" style="margin-top:4px">点数：MSTR ' + k.sc.MSTR + ' ／ COIN ' + k.sc.COIN + (k.final === 'even' ? '（互角なので、MSTUとCONLに半分ずつ）' : k.final !== k.pick ? '（点数は互角。手持ちの偏りから ' + k.final + ' を選んでいます）' : '') + '</p>' +
+    '<p class="sub" style="margin-top:4px">点数：MSTR ' + k.sc.MSTR + ' ／ COIN ' + k.sc.COIN + (k.final === 'even' ? '（差が2点未満なので、サイクルの上昇局面で伸びが大きかったMSTRにしています）' : '') + '</p>' +
     '<ul class="why3">' + li + '</ul>' + '' +
-    '<p class="sub">差が2点以上なら片方、それ未満なら半分ずつにしています。割安・割高は、株価とBTCの比率が直近90日の平均からどれだけ離れているかです。割安・割高を点数に入れるのは、過去の全期間と直近2年の両方で実際に効いていた場合だけで、開くたびに確かめ直しています。</p></section>';
+    '<p class="sub">差が2点以上なら点の高い方、それ未満ならMSTRです。手持ちの銘柄は見ていません。決まった銘柄は、新しく買うお金にだけ使います。持っている玉を別の銘柄へ入れ替えることはしません。割安・割高は、株価とBTCの比率が直近90日の平均からどれだけ離れているかです。割安・割高を点数に入れるのは、過去の全期間と直近2年の両方で実際に効いていた場合だけで、開くたびに確かめ直しています。</p></section>';
 }
 const PLAN = { buy: ['買う', 'v-buy'], limit: ['指値で待つ', 'v-wait'], skip: ['買わない', 'v-avoid'], trial: ['試し買い', 'v-wait'], exit: ['試し分を撤退', 'v-avoid'] };
 function planLabel(a) {
@@ -1169,7 +1169,7 @@ function viewJudge() {
   const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
   const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
-  return alarmBanner() + todayCard() + holdCards() + intradayChart() + bottomCard() + (((S.cfg && S.cfg.buy) || 'MSTU') === 'auto' ? pickCard() : '') + '<h2 class="sec">時間軸ごとの判定</h2>' +
+  return alarmBanner() + todayCard() + holdCards() + intradayChart() + bottomCard() + (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
     flags + cycleCard() + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
@@ -1362,7 +1362,7 @@ function viewStocks() {
     const pi = S.pendingImport, nm = { buy: '本買い', trial: '試し', old: '以前からの保有', cash: '売ったお金' };
     h += '<section class="card" style="border:2px solid var(--buy)"><h2>記録の取り込み</h2>' + (pi.length ? (pi.some(x => x.r) ? '<p>' + [...new Set(pi.filter(x => x.r).map(x => x.sym))].join('・') + ' の今までの記録を消して、次の内容に置き換えます。</p>' : '<p>次の記録を、この端末に取り込みます。</p>') + '<ul class="pair">' + pi.map(x => '<li><span><b>' + x.sym + '</b>　' + nm[x.kind] + '</span><span class="num">' + (x.kind === 'cash' ? usd(x.cost) : usd2(x.cost) + ' × ' + x.qty + '株') + (x.date ? '　' + esc(x.date) : '') + '</span></li>').join('') + '</ul><button class="btn" id="imp-ok">取り込む</button><button class="btn ghost" id="imp-no">やめる</button>' : '<p class="muted">リンクの中身を読めませんでした。</p><button class="btn ghost" id="imp-no">閉じる</button>') + '</section>';
   }
-  h += '<section class="card" id="fund"><h2>資金</h2><dl class="kv"><dt>現金（買うために用意している額）</dt><dd class="num">' + usd(cashBal()) + '</dd></dl><div class="form"><label>現金を直す（ドル）<input id="cash-set" type="number" inputmode="decimal" step="0.01" placeholder="' + cashBal() + '"></label><button class="btn ghost" id="cash-save">現金を直す</button><label>買う銘柄<select id="buy-tk">' + [['MSTU', 'MSTU（MSTRの2倍）'], ['CONL', 'CONL（COINの2倍）'], ['MSTR', 'MSTR'], ['COIN', 'COIN'], ['auto', 'おまかせ（「どっちを買うか」の結果の2倍）']].map(x => '<option value="' + x[0] + '"' + (((S.cfg && S.cfg.buy) || 'MSTU') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></label><button class="btn ghost" id="tk-save">買う銘柄を決める</button></div><p class="sub">買った玉を記録すると、その金額が現金から自動で引かれます。売ったときは、玉の「売った」に受取額を入れると現金に足されます。</p></section>';
+  h += '<section class="card" id="fund"><h2>資金</h2><dl class="kv"><dt>現金（買うために用意している額）</dt><dd class="num">' + usd(cashBal()) + '</dd></dl><div class="form"><label>現金を直す（ドル）<input id="cash-set" type="number" inputmode="decimal" step="0.01" placeholder="' + cashBal() + '"></label><button class="btn ghost" id="cash-save">現金を直す</button><label>買う銘柄<select id="buy-tk">' + [['MSTU', 'MSTU（MSTRの2倍）'], ['CONL', 'CONL（COINの2倍）'], ['MSTR', 'MSTR'], ['COIN', 'COIN'], ['auto', '状況で選ぶ（「どっちを買うか」の結果の2倍）']].map(x => '<option value="' + x[0] + '"' + (((S.cfg && S.cfg.buy) || 'auto') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></label><button class="btn ghost" id="tk-save">買う銘柄を決める</button></div><p class="sub">買った玉を記録すると、その金額が現金から自動で引かれます。売ったときは、玉の「売った」に受取額を入れると現金に足されます。</p></section>';
   h += '<section class="card" id="pos-form"><h2>買った玉を記録する</h2>' + (pos.length ? '<ul class="pair">' + pos.map((p, i) => '<li class="lot"><span><b>' + p.sym + '</b>　' + (p.kind === 'cash' ? '売ったお金' : p.kind === 'trial' ? '試し' : p.kind === 'buy' ? '本買い' : '以前からの保有') + '　<span class="num">' + (p.kind === 'cash' ? usd(p.cost) : usd2(p.cost) + (p.qty ? ' × ' + p.qty + '株' : '')) + (p.date ? '　' + esc(p.date) : '') + '</span></span><span class="lot-act">' + (p.kind !== 'cash' ? '<input type="number" inputmode="decimal" id="q-' + i + '" placeholder="残りの株数" value="' + (p.qty || '') + '"><button class="link" data-qty="' + i + '">株数を直す</button>' : '') + '<input type="number" inputmode="decimal" id="s-' + i + '" placeholder="受取額$"><button class="link" data-sell="' + i + '">売った</button><button class="link" data-delpos="' + i + '">記録だけ消す</button></span></li>').join('') + '</ul>' : '<p class="muted">まだ記録がありません。買うたびに1つずつ記録すると、玉ごとに撤退ラインと「持ち続ける／乗り換える／売る」が判定タブに常に出て、割ったときは一番上にアラームが出ます。</p>') +
     '<div class="form"><label>種類<select id="pos-kind"><option value="buy"' + (S.recKind !== 'trial' ? ' selected' : '') + '>本買い（買い判定で買った）</option><option value="trial"' + (S.recKind === 'trial' ? ' selected' : '') + '>試し買い（撤退ラインつき）</option><option value="old">以前から持っている（アラームなし）</option></select></label><label>銘柄<select id="pos-sym"><option' + (buyTicker() === 'MSTU' ? ' selected' : '') + '>MSTU</option><option' + (buyTicker() === 'CONL' ? ' selected' : '') + '>CONL</option><option>MSTZ</option><option>MSTR</option><option>COIN</option></select></label> <p class="sub" style="margin:0">本買い・試し買いを株数つきで記録すると、その金額（買値×株数）を「売ったお金」から自動で差し引きます。「売ったお金」のときは、銘柄に売った銘柄を選び、金額欄に受け取ったドルを入れてください。</p><label>平均の買値（ドル）<input id="pos-cost" type="number" inputmode="decimal" step="0.01" placeholder="例：25.40"></label><label>株数（空欄でも可）<input id="pos-qty" type="number" inputmode="decimal" placeholder="例：100"></label><label>買った日（空欄なら今日）<input id="pos-date" type="date"></label><label style="flex-direction:row;display:flex;gap:8px;align-items:center"><input id="pos-pay" type="checkbox" checked style="width:auto;min-height:0"> 現金から差し引く（本買い・試し買い）</label><button class="btn" id="pos-add">この玉を記録する</button></div><p class="sub">この端末の中だけに保存されます。株式併合があった銘柄は、moomooに表示されている今の平均取得単価を入れてください。</p></section>';
   h += planRecord();
