@@ -1,0 +1,28 @@
+===== https://api.alternative.me/fng/?limit=2
+HTTP/2 200 
+access-control-allow-origin: *
+{
+	"name": "Fear and Greed Index",
+	"data": [
+		{
+			"value": "12",
+			"value_classification": "Extreme Fear",
+			"timestamp": "1795219200",
+			"time_until_update": "71988"
+		},
+		{
+			"value": "12",
+			"value_classification": "Extreme Fear",
+			"timestamp": "1795132800"
+		}
+	],
+	"metadata": {
+		"er
+===== https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc&metrics=CapMVRVCur&frequency=1d&page_size=2
+HTTP/2 200 
+access-control-allow-origin: *
+{"data":[{"asset":"btc","time":"2026-11-19T00:00:00.000000000Z","CapMVRVCur":"1.158746124163797914"},{"asset":"btc","time":"2026-11-20T00:00:00.000000000Z","CapMVRVCur":"1.104933597125702049"}],"next_page_token":"0.MjAyNi0xMS0xOVQwMDowMDowMFo","next_page_url":"https://community-api.coinmetrics.io/v4
+===== https://api.blockchain.info/charts/hash-rate?timespan=1week&format=json&cors=true
+HTTP/2 200 
+access-control-allow-origin: *
+{"status":"ok","name":"Hash Rate","unit":"Hash Rate TH/s","period":"day","description":"The estimated number of tera hashes per second (trillions of hashes per second) the Bitcoin network is performing.","values":[{"x":1794614400,"y":9.23605620046974E8},{"x":1794700800,"y":1.15276624060469E9},{"x":1
