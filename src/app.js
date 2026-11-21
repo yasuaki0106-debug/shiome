@@ -630,7 +630,10 @@ function holdOne(p) {
   // 玉ごとの撤退アラーム
   const eb = lotBtc(p), lastClose = S.d.c[S.d.c.length - 1]; let alarm = null, line = null;
   if (e.L > 0 && ok(eb)) {
-    if (p.kind === 'ladder') { const l0 = ladderLots()[0], base = l0 ? l0.cost : p.cost, wl = base * (1 - LAD_WARN); line = { btc: NaN, px: wl, label: '想定外ライン（1回目の買値の半分）' }; if (ok(now) && l0 && l0.sym === p.sym && now < wl) alarm = '買い下がりの1回目から半分以下になりました。過去の底値圏でもなかった下げです。作戦を見直してください'; }
+    if (p.kind === 'ladder') { // 想定外ライン：1回目を買ったときのBTCから-50%（過去3回の底値圏では、1回目の後の下げは最大-45%）
+      const l0 = ladderLots()[0], b0 = l0 ? lotBtc(l0) : eb, wl = b0 * (1 - LAD_WARN);
+      line = { btc: wl, px: etfAt(p.sym, wl), label: '想定外ライン（1回目のときのBTCから-50%）' };
+      if (ok(wl) && lastClose < wl) alarm = '買い下がりの1回目のときからBTCが半分以下になりました。過去3回の底値圏でもなかった下げ（最大-45%）です。作戦を見直してください'; }
     else if (p.kind === 'trial') { const st = eb * (1 - TRIAL_STOP); line = { btc: st, px: etfAt(p.sym, st), label: '撤退ライン（BTCの終値で買値の10%下）' }; if (lastClose < st) { alarm = '撤退ラインを割りました。この試し分は売ってください'; a = 'sell'; why.length = 0; why.push('試し買いの撤退ライン（BTC ' + usd(st) + '）を、終値で割りました'); } }
     else if (p.kind === 'buy') { const st = eb * (1 - WARN_DD); line = { btc: st, px: etfAt(p.sym, st), label: '想定外ライン（BTCが買ったときの35%下）' }; if (lastClose < st) alarm = '買った後の下げが、過去の買い判定の後の最大（-34%）を超えました。作戦が外れている可能性があります'; }
   }
