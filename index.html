@@ -1789,6 +1789,22 @@ function intradayChart() {
     '<p class="keys"><span><i class="k-cu"></i>上げ</span><span><i class="k-cd"></i>下げ</span><span>細い線が上ヒゲ・下ヒゲ</span></p>' +
     '<p class="sub">日付の縦線は朝9時（日足の区切り）。下ヒゲは、いったん売られた後に買い戻された跡です。判定は朝9時の終値で決めるので、ヒゲで線を割っても、それだけでは判定は変わりません。</p></section>';
 }
+// 次の天井の見込み（research/top.py）：3つの見方の幅。株は前回サイクルのBTCに対する伸び方（対数の比）で換算
+const TOPS = [{ k: '控えめ', p: 125000, why: '前回の天井と同じ。天井どうしの倍率は17倍→3.5倍→1.85倍と縮んでいる' }, { k: '中くらい', p: 175000, why: '底から次の天井までの倍率（112倍→21倍→7.9倍）がさらに半分ほどに縮む場合' }, { k: '強め', p: 230000, why: '長期成長線に対する天井の上振れ（10.6倍→6.4倍→3.0倍→1.3倍）の縮み方が続く場合' }];
+const ELAS = { MSTR: 1.5, COIN: 1.1 };
+function topCard() {
+  const c = S.cyc; if (!c || !ok(S.price)) return '';
+  const nh = c.nextHalving, f = t => { const d = new Date(t); return d.getFullYear() + '年' + (d.getMonth() + 1) + '月'; };
+  const b0 = S.price, cash = cashBal(), hs = (S.hold || []).filter(h => h.p.kind !== 'cash' && ok(h.now) && h.p.qty > 0);
+  const val = hs.reduce((s, h) => s + h.now * h.p.qty, 0), tot = val + cash, pu = pickUnd();
+  const proj = T => { const m = T.p / b0; let v = cash * Math.pow(m, ELAS[pu] || 1.3); hs.forEach(h => { const u = ETF[h.p.sym].und; v += h.now * h.p.qty * Math.pow(m, ELAS[u] || 1.3); }); return v; };
+  const rows = TOPS.map(T => '<tr><th>' + T.k + '</th><td class="num">' + usd(T.p) + '</td><td class="num">' + (T.p / b0).toFixed(1) + '倍</td>' + (tot > 0 ? '<td class="num">' + usd(proj(T)) + '</td>' : '') + '</tr>').join('');
+  return '<section class="card"><h2>次の天井の見込み</h2><p>時期は' + f(nh + 520 * DAY) + '〜' + f(nh + 560 * DAY) + 'ごろ（過去の天井は半減期から525〜548日目）。値段は3つの見方で幅を出しています。</p>' +
+    '<table class="tbl sm"><thead><tr><th></th><th>BTCの天井</th><th>今から</th>' + (tot > 0 ? '<th>あなたの資産</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<ul class="why3">' + TOPS.map(T => '<li class="pn"><b>' + T.k + '</b> ' + esc(T.why) + '</li>').join('') + '</ul>' +
+    (tot > 0 ? '<p class="sub">あなたの資産は、今の評価額 ' + usd(val) + '＋現金 ' + usd(cash) + '＝' + usd(tot) + ' から計算。株は前回のサイクルでのBTCに対する伸び方（MSTRはBTCの1.5乗、COINは1.1乗）で換算し、現金は今の値段で ' + pu + ' に入れた場合です。2倍の玉も、守りのルールで1倍と2倍を行き来する前提で1倍として計算しています。</p>' : '') +
+    '<p class="sub">あくまで過去3〜4回の延長です。MSTRは直近2年、BTCより弱い動きが続いていて、前回ほど伸びない可能性があります。毎朝の値段で計算し直します。</p></section>';
+}
 function bottomCard() {
   const b = S.bo; if (!b) return '';
   const f = t => { const d = new Date(t); return (d.getMonth() + 1) + '月' + (d.getDate() <= 10 ? '上旬' : d.getDate() <= 20 ? '中旬' : '下旬'); };
@@ -1869,7 +1885,7 @@ function viewJudge() {
   const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
   const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
-  return alarmBanner() + todayCard() + holdCards() + intradayChart() + bottomCard() + (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + '<h2 class="sec">時間軸ごとの判定</h2>' +
+  return alarmBanner() + todayCard() + holdCards() + intradayChart() + bottomCard() + topCard() + (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
     flags + cycleCard() + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
