@@ -1112,6 +1112,15 @@ function signalsStockCard() {
     '<p class="sub">「2倍」は、毎日2倍になるETFを経費込みで計算した値です。実際のMSTU・CONLとは少しずれます。今回の2回の合図を実物で見ると、MSTUは6/22の買値から一時+80%、今は-67%。8/20の買値から一時+100%、今は-63%。CONLはそれぞれ今-72%、-71%です（11/20時点）。</p>' +
     '<p class="sub">2倍は、当たったときの伸びが大きい代わりに、撤退ラインに届くまでの損も-12〜-61%と大きくなっています。2022年のCOINの2倍は、1年後も-36〜-83%でした。</p></section>';
 }
+function e2eCard() {
+  const rows = [['BTC', '5711', '837', '542', '95'], ['BTCの2倍＋守り', '71254', '1491', '1043', '99'], ['MSTR', '—', '—', '1306', '89'], ['MSTRの2倍＋守り', '—', '—', '2930', '95'], ['COIN', '—', '—', '613', '85'], ['COINの2倍＋守り', '—', '—', '1267', '84']];
+  const dd = [['BTC', '-35%', '-66%', '-29%', '-14%'], ['BTCの2倍＋守り', '-61%', '-88%', '-42%', '-17%'], ['MSTR', '—', '—', '-50%', '-26%'], ['MSTRの2倍＋守り', '—', '—', '-70%', '-33%'], ['COIN', '—', '—', '-57%', '-20%'], ['COINの2倍＋守り', '—', '—', '-76%', '-25%']];
+  const tb = (r, cap) => '<table class="tbl sm"><thead><tr><th>' + cap + '</th><th>2015年</th><th>2019年</th><th>2023年</th><th>今回</th></tr></thead><tbody>' + r.map(x => '<tr><th>' + x[0] + '</th>' + x.slice(1).map(v => '<td class="num">' + v + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+  return '<section class="card"><h2>通しの検証：合図どおりに全部やったら</h2><p>予定額を100として、試し買い（12.5）、撤退、本買い（25を4回まで）、2倍の守り、天井の出口まで、アプリの合図どおりに動いた場合です。使っていない分は現金で持ちます。</p>' +
+    tb(rows, '最後の金額（100から）') + tb(dd, '途中の最大の下落') +
+    '<p class="sub">列は底の年で、次の天井の出口で売るまでの結果です。「今回」は2026年11月20日時点。株は合図の翌営業日の終値で売買。今回は試し買い1回と本買い1回で、予定額の37.5%しか使っていないため、株が3割下げていても全体では1割前後の下げで済んでいます。</p>' +
+    '<p class="sub">うまくいったサイクルでも、途中で大きく増えた後に半分以上減る場面があります。株で確かめられた完了済みのサイクルは1回だけです。</p></section>';
+}
 function wfCard() {
   return '<section class="card"><h2>先の情報なしで選び直す検証</h2><p>買いルールの数字（何日目から、判定がいくつ以上、何日あけるか、底らしさは何%以上か）を540通り用意し、「それ以前のサイクルだけで一番良かった設定」を選んで、次のサイクルで試しました。</p>' +
     '<table class="tbl"><thead><tr><th>試したサイクル</th><th>過去だけで選んだ設定</th><th>今の設定</th><th>全候補の真ん中</th></tr></thead><tbody>' +
@@ -1167,7 +1176,7 @@ function viewVerify() {
     '<table class="tbl"><thead><tr><th></th><th>年率</th><th>最大下落</th><th>保有日の割合</th></tr></thead><tbody><tr><th>シグナルに従う</th><td class="num">' + pc(sim.cagr, 0) + '</td><td class="num">' + pc(sim.mdd, 0) + '</td><td class="num">' + pc(sim.exposure, 0, false) + '</td></tr><tr><th>持ち続ける</th><td class="num">' + pc(sim.bcagr, 0) + '</td><td class="num">' + pc(sim.bmdd, 0) + '</td><td class="num">100%</td></tr></tbody></table>' +
     '<p class="sub">スコア60以上で買い、40未満で売り、その間は維持。売買のたびに手数料0.1%を引いています。売買 ' + sim.trades + ' 回、' + sim.years.toFixed(1) + ' 年間。BTC現物での結果で、関連株の結果は「関連株」タブにあります。</p></section>' +
     '<section class="card"><div class="row"><h2>直近の答え合わせ</h2><span class="num muted">' + hits + '/' + judged.length + ' 的中</span></div><ul class="calls">' + pend + calls + '</ul><p class="sub">' + h.d + '日おきに1件ずつ。買い系は上昇で的中、見送りは下落で的中、様子見は対象外です。</p></section>' +
-    ruleCard() + signalsCard() + signalsStockCard() + wfCard() + protectCard() + fixedCard() + provRecord() + '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
+    ruleCard() + e2eCard() + signalsCard() + signalsStockCard() + wfCard() + protectCard() + fixedCard() + provRecord() + '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
     '<details class="card"><summary>計算のしかた</summary><p>テクニカル9種、出来高4種、オプション2種（Deribit DVOL、2021年以降）、資金調達率2種（Binance先物、2019年以降）、長期サイクル2種（長期成長線と200週線からの乖離。長期の判定だけに使用）の指標を毎日計算します。各指標が過去4年間で「' + h.d + '日後のリターン」とどれだけ連動していたかを相関で測り、それを重みにして合成したものがスコアです。スコアは過去4年の中での順位（0〜100）に直しています。</p><p>重みの計算にはその日より前に結果が確定していたデータしか使わないため、上の成績はすべて「当時知り得た情報だけで出した判定」の結果です。プット・コール比率、スキュー、建玉、清算の集中帯は長期の履歴が公開されていないのでスコアには入れず、警戒フラグとして判定を一段階下げる用途に限っています。</p></details>';
 }
 
