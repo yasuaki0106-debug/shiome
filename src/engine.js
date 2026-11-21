@@ -437,7 +437,7 @@ function autoExpiries(now, months) {
   const o = [], d0 = new Date(now);
   for (let k = 0; k < months; k++) {
     const y = d0.getUTCFullYear() + Math.floor((d0.getUTCMonth() + k) / 12), m = (d0.getUTCMonth() + k) % 12, t = lastFriday(y, m);
-    if (t > now - 864e5) { const q = m % 3 === 2; o.push({ t, title: q ? 'BTCオプション四半期満期（Deribit）' : 'BTCオプション月次満期（Deribit）', kind: 'expiry', impact: 1, auto: true, note: '2019年以降、満期の日の値動きは普段の金曜と差がない（むしろやや小さい）' });   // 重要度は下げる（research/expiry.py） }
+    if (t > now - 864e5) { const q = m % 3 === 2; o.push({ t, title: q ? 'BTCオプション四半期満期（Deribit）' : 'BTCオプション月次満期（Deribit）', kind: 'expiry', impact: 1, auto: true, note: '2019年以降、満期の日の値動きは普段の金曜と差がない（むしろやや小さい）' }); /* 重要度は下げる（research/expiry.py） */ }
   }
   return o;
 }
