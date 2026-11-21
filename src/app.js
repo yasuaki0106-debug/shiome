@@ -588,7 +588,10 @@ const HOLD = { reinvest: ['1倍で買う', 'v-buy'], relevbuy: ['2倍で買い�
 const LEV_OFF = 20, LEV_ON = 75;   // 守りのルール：中期20未満で2倍→元の株、75以上で元の株→2倍（research/protect.js）
 function buyTicker() { const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return t; return pickUnd() === 'COIN' ? 'CONL' : 'MSTU'; }
 function pickUnd() { const k = S.pick ? S.pick.final : null; return k === 'COIN' ? 'COIN' : 'MSTR'; }   // その日の状況（BTCに対する割安・割高など）で選んだ元の株
-function prefUnd(fallback) { const t = (S.cfg && S.cfg.buy) || 'auto'; return t === 'auto' ? pickUnd() : (ETF[t] ? ETF[t].und : fallback); }
+function prefUnd(fallback) { // 持っている玉の乗り換え先。点数がはっきり差をつけた日（2点以上）だけ別の銘柄へ、互角なら同じ元の株のまま
+  const t = (S.cfg && S.cfg.buy) || 'auto'; if (t !== 'auto') return ETF[t] ? ETF[t].und : fallback;
+  const k = S.pick ? S.pick.final : null; return k === 'MSTR' || k === 'COIN' ? k : fallback;
+}
 function cashBal() { return +LS.get('cash', 0) || 0; }
 function setCash(v) { LS.set('cash', Math.max(0, Math.round(v * 100) / 100)); }
 function migrateCash() { // 以前の「売ったお金」の記録を、現金の残高にまとめる
