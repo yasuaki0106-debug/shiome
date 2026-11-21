@@ -3,6 +3,7 @@ import json, time, urllib.request, datetime as dt, sys, os
 
 SYMS = ["MSTR", "COIN", "MSTU", "MSTZ", "CONL"]
 UA = {"User-Agent": "Mozilla/5.0 (shiome stock updater)"}
+DEBUG = {}
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "stocks.json")
 
 def get(url):
@@ -19,6 +20,8 @@ def yahoo(sym):
             ts, q = r["timestamp"], r["indicators"]["quote"][0]["close"]
             off = r.get("meta", {}).get("gmtoffset", -18000)
             rows = [[dt.datetime.utcfromtimestamp(t + off).strftime("%Y-%m-%d"), round(c, 4)] for t, c in zip(ts, q) if c]
+            m = r.get("meta", {})
+            DEBUG[sym] = {"now": int(time.time()), "regularMarketTime": m.get("regularMarketTime"), "regularMarketPrice": m.get("regularMarketPrice"), "gmtoffset": off, "tail": [[t, c] for t, c in list(zip(ts, q))[-4:]], "n": len(ts)}
             if len(rows) > 100:
                 return rows
         except Exception as e:
@@ -61,6 +64,7 @@ def main():
         out["symbols"][s] = rows[-1600:]
         print(s, len(rows), rows[-1])
     out["source"] = "・".join(sorted(used)) or old.get("source", "")
+    out["debug"] = DEBUG
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump(out, open(OUT, "w", encoding="utf-8"), separators=(",", ":"))
 
