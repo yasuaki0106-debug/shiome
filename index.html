@@ -55,6 +55,7 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .concern{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}.concern>b{font-size:13px}.concern ul{margin:4px 0 0;font-size:13px}.concern li{padding:4px 0 4px 10px;border-left:3px solid var(--wait);margin-bottom:4px;line-height:1.5}.concern li.c-warn{border-left-color:var(--avoid)}.concern small{display:block;color:var(--muted);font-size:11.5px}.concern a,.news a{color:inherit}
 .news li{padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.5}.news li.nc a{font-weight:700}.news div{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px}.news small{color:var(--muted);font-size:11.5px;margin-left:auto}.tg{font-size:11px;padding:1px 6px;border-radius:3px;background:var(--soft);color:var(--muted)}.tg.tw{background:var(--avoid);color:var(--bg)}
 .money{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0;background:var(--surface)}.money .row b{font-size:15px}.money-do{font-size:15px;margin-top:6px}
+.flowbars{margin:8px 0}.flowbars li{display:grid;grid-template-columns:3.2em 1fr 6.5em;gap:8px;align-items:center;font-size:12.5px;padding:2px 0}.flowbars i{height:8px;border-radius:1px;justify-self:start}.flowbars .fu{background:var(--buy)}.flowbars .fd{background:var(--avoid)}.flowbars b{text-align:right;font-weight:400}
 .todo{border:1px solid var(--line);border-left:5px solid var(--brass);border-radius:6px;padding:10px 12px;margin:0 0 14px;background:var(--surface)}.todo.has-al{border-left-color:var(--avoid)}.todo h2{font-size:15px;margin:0}.todo ol{margin:6px 0 0 20px;font-size:15px;line-height:1.55}.todo li{padding:3px 0}.todo li.t-warn{color:var(--avoid);font-weight:700}.todo li.t-buy{font-weight:700}.todo li.t-info{color:var(--muted);font-size:13.5px}
 .tmap th{white-space:nowrap;width:5.5em;color:var(--muted);font-weight:400}.tmap td{text-align:left}
 .vb-u{fill:var(--buy);opacity:.28}.vb-d{fill:var(--avoid);opacity:.28}
@@ -1287,8 +1288,23 @@ function newsFor(k) { // 日本語の記事と、日本語に訳せた英語の�
   const I = (S.news && S.news.items) || {}, a = (I[k + '_JA'] || []).concat((I[k] || []).filter(x => x.ja));
   const seen = new Set(); return a.sort((x, y) => y.t - x.t).filter(x => { const key = (x.ja || x.title).slice(0, 18); if (seen.has(key)) return false; seen.add(key); return true; });
 }
+function etfState() { // 現物ETFの資金の出入り：直近5日・20日の合計と、過去の中での位置
+  const f = S.etff && S.etff.flows; if (!f || f.length < 60) return null;
+  const v = f.map(x => x[1]), n = v.length, sum = (a, b) => { let s = 0; for (let i = a; i < b; i++) s += v[i]; return s; };
+  const s5 = sum(n - 5, n), s20 = sum(n - 20, n), all = []; for (let i = 20; i <= n; i++) all.push(sum(i - 20, i));
+  const rank = all.filter(x => x < s20).length / all.length;
+  return { s5, s20, rank, last: f[n - 1], days: f.slice(-10) };
+}
+function etfCard() {
+  const e = etfState(); if (!e) return '';
+  const m = x => (x >= 0 ? '+' : '-') + '$' + Math.abs(Math.round(x)).toLocaleString('en-US') + 'M', mx = Math.max(...e.days.map(x => Math.abs(x[1])), 1);
+  return '<section class="card"><h2>現物ETFの資金の出入り</h2><dl class="kv"><dt>直近5営業日の合計</dt><dd class="num ' + (e.s5 >= 0 ? 'up' : 'dn') + '">' + m(e.s5) + '</dd><dt>直近20営業日の合計</dt><dd class="num ' + (e.s20 >= 0 ? 'up' : 'dn') + '">' + m(e.s20) + '</dd><dt>20日合計の位置（2024年1月以降）</dt><dd class="num">下から' + pc(e.rank, 0, false) + '</dd></dl>' +
+    '<ul class="flowbars">' + e.days.map(x => '<li><span>' + x[0].slice(5).replace('-', '/') + '</span><i class="' + (x[1] >= 0 ? 'fu' : 'fd') + '" style="width:' + Math.round(Math.abs(x[1]) / mx * 100) + '%"></i><b class="num">' + m(x[1]) + '</b></li>').join('') + '</ul>' +
+    '<p class="sub">米国の現物ビットコインETF全体の、1日ごとの資金の出入りです（Farside Investors）。2024年以降のデータで確かめると、その後の値動きを先取りする力は弱めでした。20日合計の流出が大きい下位2割のとき、7日後に上がった割合は42%（流入が大きい上位2割では55%）。判定には入れず、需給の確認として出しています。</p></section>';
+}
 function concernsFor(und) {
   const now = Date.now(), out = PINNED.filter(x => (x.sym === und || x.sym === 'ALL') && now >= x.from && now < x.until).map(x => ({ lv: x.lv, text: x.text, src: x.src, link: x.link, t: x.from, pinned: true }));
+  const ef = etfState(); if (ef && ef.rank <= 0.10) out.push({ lv: 'warn', text: '現物ETFから資金の流出が続いています（直近20営業日で $' + Math.abs(Math.round(ef.s20)).toLocaleString('en-US') + 'M、2024年以降で下から' + pc(ef.rank, 0, false) + '）。流出が大きい時期は、過去は7日後がやや弱めでした', src: 'Farside Investors', link: 'https://farside.co.uk/btc/', t: Date.parse(ef.last[0] + 'T00:00:00Z') });
   const it = newsFor(und);
   it.filter(x => x.concern && now - x.t < 10 * DAY).slice(0, 3).forEach(x => out.push({ lv: 'info', text: x.ja || x.title, src: x.src, link: x.link, t: x.t, tags: x.tags }));
   const ed = S.news && S.news.earn && S.news.earn[und]; if (ed) { const T = Date.parse(ed + 'T21:00:00Z'); if (T > now && T - now < 14 * DAY) out.unshift({ lv: 'warn', text: '決算発表が ' + md(T) + ' に予定されています。発表の前後は大きく動きます', src: 'Nasdaq', t: now }); }
@@ -1594,6 +1610,7 @@ async function refreshAll() {
   tasks.push(loadOnchain().then(v => { S.oc = v; S.status.oc = { ok: true, name: 'オンチェーン・恐怖指数', note: 'MVRV・マイナー収入・ハッシュレート・恐怖と強欲指数' }; }, () => { S.oc = null; S.status.oc = { ok: false, name: 'オンチェーン・恐怖指数', note: '取得できません。底らしさの一部が出ません' }; }));
   tasks.push(loadRepoJson('review.json').then(v => { S.review = v; }, () => { S.review = null; }));
   tasks.push(loadRepoJson('signal_log.json').then(v => { S.slog = v; }, () => { S.slog = null; }));
+  tasks.push(loadRepoJson('etf_flows.json').then(v => { S.etff = v; S.status.etff = { ok: true, name: 'ETFの資金の出入り', note: '米国の現物ビットコインETF（Farside、毎日）' }; }, () => { S.etff = null; }));
   tasks.push(loadRepoJson('mnav.json').then(v => { S.mnav = v; }, () => { S.mnav = null; }));
   tasks.push(loadNews().then(v => { S.news = v; S.status.news = { ok: true, name: 'ニュース', note: 'MSTR・COIN・規制の見出し（毎日更新）' }; }, () => { S.news = null; S.status.news = { ok: false, name: 'ニュース', note: '取得できません' }; }));
   tasks.push(loadCoinbase().then(v => { S.cb = v; S.status.cb = { ok: true, name: 'コインベース・プレミアム', note: 'Coinbase BTC-USD' }; }, () => { S.cb = null; S.status.cb = { ok: false, name: 'コインベース・プレミアム', note: '取得できません' }; }));
@@ -2088,8 +2105,8 @@ function viewVerify() {
 function meter(val, label, level) { return '<div class="meter"><div class="row"><span>' + label + '</span><b class="lvl-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '">' + level + '<span class="num"> ' + val + '</span></b></div><div class="mtrack"><b style="width:' + val + '%" class="m-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '"></b></div></div>'; }
 function viewFlow() {
   if (!S.R) return '';
-  const q = S.liq, o = S.opt, price = S.price; let h = '<section class="lead"><h1>建玉とオプションの偏り</h1><p>レバレッジの積み上がりと、オプション市場の構えを見ます。</p></section>';
-  h += upsideCard(true);
+  const q = S.liq, o = S.opt, price = S.price; let h = '<section class="lead"><h1>需給</h1><p>ETFの資金の出入り、レバレッジの積み上がり、オプション市場の構えを見ます。</p></section>';
+  h += etfCard() + upsideCard(true);
   if (q && q.ok) {
     const kv = [];
     const ag = q.agg;
@@ -2196,7 +2213,7 @@ function viewStocks() {
   });
   if (S.news && S.news.items) {
     const nm = { MSTR: 'MSTR（Strategy）', COIN: 'COIN（Coinbase）', REG: '規制・法律（暗号資産全体）' };
-    h += '<h2 class="sec" style="margin-top:22px">ニュース</h2>' + ['MSTR', 'COIN', 'REG'].map(k => { const it = newsFor(k).slice(0, 12); if (!it.length) return '';
+    h += '<h2 class="sec" style="margin-top:22px">ニュース</h2>' + ['MSTR', 'COIN', 'REG'].map(k => { const it = newsFor(k).filter(x => k !== 'REG' || (x.tags || []).indexOf('規制・法律') >= 0).slice(0, 12); if (!it.length) return '';
       return '<section class="card"><h2>' + nm[k] + '</h2>' + (k !== 'REG' ? concernList(k, 6) : '') + '<ul class="news">' + it.map(x => '<li' + (x.concern ? ' class="nc"' : '') + '><a href="' + esc(x.link) + '" target="_blank" rel="noopener" title="' + esc(x.title) + '">' + esc(x.ja || x.title) + '</a><div>' + (x.concern ? '<span class="tg tw">懸念</span>' : '') + (x.tags || []).map(g => '<span class="tg">' + esc(g) + '</span>').join('') + '<small>' + esc(x.src || '') + '・' + md(x.t) + '</small></div></li>').join('') + '</ul></section>'; }).join('') +
       '<p class="sub">見出しはGoogleニュースから毎日取り込んでいます。日本語の記事はそのまま、英語の記事は機械翻訳で日本語にしたものだけを出しています（訳がおかしいときは、タップして元の記事を見てください）。種類と「懸念」は、見出しの言葉から自動で付けた目安です。</p>';
   }
