@@ -53,4 +53,4 @@ jobs:
           git config user.name "shiome-bot"
           git config user.email "shiome-bot@users.noreply.github.com"
           git add data/*.json data/*.csv data/*.txt
-          git diff --cached --quiet || (git commit -m "データを更新" && git push)
+          git diff --cached --quiet || (git commit -m "データを更新" && (git push || (git pull --rebase && git push)))

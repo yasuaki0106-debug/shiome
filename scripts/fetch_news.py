@@ -56,10 +56,11 @@ def mymemory(t):
     return None
 def translate_all(titles):
     """まだ訳していない見出しを、まとめて少ない回数で訳す（Googleの翻訳。失敗したら英語のまま）"""
-    todo = [t for t in dict.fromkeys(titles) if t not in TR]
+    todo = [t for t in dict.fromkeys(titles) if t not in TR]; google_ok = True
     for k in range(0, len(todo), 12):
+        if not google_ok: break
         chunk = todo[k:k + 12]
-        for attempt in range(3):
+        for attempt in range(1):
             try:
                 u = "https://translate.googleapis.com/translate_a/single?" + urllib.parse.urlencode({"client": "gtx", "sl": "en", "tl": "ja", "dt": "t", "q": "\n".join(prep(t) for t in chunk)})
                 j = json.loads(get(u, 20)); lines = "".join(seg[0] for seg in j[0] if seg and seg[0]).split("\n")
@@ -67,7 +68,7 @@ def translate_all(titles):
                     for t, l in zip(chunk, lines): TR[t] = l.strip()
                 break
             except Exception as e:
-                print("warn translate", e, file=sys.stderr); time.sleep(5 * (attempt + 1))
+                print("warn translate", e, file=sys.stderr); google_ok = False
         time.sleep(1.5)
     left = [t for t in todo if t not in TR][:40]   # Googleの翻訳が使えないときは、別の無料の翻訳で新しい見出しだけ訳す
     for t in left:
