@@ -699,7 +699,7 @@ function pickStock() {
   const diff = sc.MSTR - sc.COIN;
   let pick = diff >= 2 ? 'MSTR' : diff <= -2 ? 'COIN' : 'even';
   let final = pick;
-  if (tilt && pick === 'even') final = tilt;
+  // 手持ちの偏りで選び直すことはしない（利用者の方針）
   return { pick, final, sc, why, hold, tilt };
 }
 function pickCard() {
@@ -709,7 +709,7 @@ function pickCard() {
   const li = k.why.map(w => '<li class="' + (w.s === 'MSTR' ? 'pm' : w.s === 'COIN' ? 'pc' : 'pn') + '">' + (w.s ? '<b>' + w.s + '</b> ' : '') + esc(w.t) + '</li>').join('');
   return '<section class="card"><div class="row"><h2>' + (skip ? '買うときに選ぶなら' : 'どっちを買うか') + '</h2><b class="v-buy">' + title + '</b></div>' +
     '<p class="sub" style="margin-top:4px">点数：MSTR ' + k.sc.MSTR + ' ／ COIN ' + k.sc.COIN + (k.final === 'even' ? '（互角なので、MSTUとCONLに半分ずつ）' : k.final !== k.pick ? '（点数は互角。手持ちの偏りから ' + k.final + ' を選んでいます）' : '') + '</p>' +
-    '<ul class="why3">' + li + '</ul>' + (k.hold.length ? '<h3>手持ちを踏まえると</h3><ul class="why3">' + k.hold.map(x => '<li class="pn">' + esc(x) + '</li>').join('') + '</ul>' : '') +
+    '<ul class="why3">' + li + '</ul>' + '' +
     '<p class="sub">差が2点以上なら片方、それ未満なら半分ずつにしています。割安・割高は、株価とBTCの比率が直近90日の平均からどれだけ離れているかです。割安・割高を点数に入れるのは、過去の全期間と直近2年の両方で実際に効いていた場合だけで、開くたびに確かめ直しています。</p></section>';
 }
 const PLAN = { buy: ['買う', 'v-buy'], limit: ['指値で待つ', 'v-wait'], skip: ['買わない', 'v-avoid'], trial: ['試し買い', 'v-wait'], exit: ['試し分を撤退', 'v-avoid'] };
@@ -1169,7 +1169,7 @@ function viewJudge() {
   const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
   const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
-  return alarmBanner() + todayCard() + holdCards() + intradayChart() + bottomCard() + pickCard() + '<h2 class="sec">時間軸ごとの判定</h2>' +
+  return alarmBanner() + todayCard() + holdCards() + intradayChart() + bottomCard() + (((S.cfg && S.cfg.buy) || 'MSTU') === 'auto' ? pickCard() : '') + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
     flags + cycleCard() + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
