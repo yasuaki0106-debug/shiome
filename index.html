@@ -48,6 +48,9 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .today-lead{font-size:15px}.today-why{font-size:13px;color:var(--muted);margin-top:6px}
 .plan-stock{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--ink);border-radius:6px;padding:12px 14px;margin-top:12px}
 .plan-stock .sym{font-size:17px;letter-spacing:.06em}.plan-v{font-size:17px}.plan-stock .kv{margin-top:4px}
+.alarm-top{border:2px solid var(--avoid);border-radius:6px;padding:10px 12px;margin:0 0 14px;background:var(--surface)}.alarm-top>b{color:var(--avoid);font-size:16px}.alarm-top ul{margin-top:4px;font-size:13.5px}.alarm-top li{padding:3px 0}
+.plan-stock.alarm{border-left-color:var(--avoid)}.alarm-t{color:var(--avoid);font-weight:700;font-size:13.5px;margin-top:4px}.plan-stock .sym small{font-size:11.5px;font-weight:400;color:var(--muted);margin-left:8px;letter-spacing:0}
+.tbl.sm{font-size:12px}.tbl.sm small{color:var(--muted);font-weight:400}
 .sigs li{padding:9px 0;border-bottom:1px solid var(--line)}.sigs li>div{display:flex;gap:10px;align-items:baseline;font-size:14px}.sigs dl{display:grid;grid-template-columns:1fr auto;gap:1px 10px;font-size:12.5px;margin:4px 0 0;color:var(--muted)}.sigs dd{margin:0;text-align:right;color:var(--ink)}
 .gauge{margin:6px 0}.gauge li{display:grid;grid-template-columns:1fr 34% 2.6em;gap:4px 8px;align-items:center;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line)}.gauge .gbar{height:6px;background:var(--soft);border-radius:1px;overflow:hidden}.gauge .gbar b{display:block;height:100%;background:var(--brass)}.gauge .num{text-align:right}.gauge .sub2{grid-column:1/4;font-size:11.5px;color:var(--muted)}
 .chks{margin:8px 0 6px}.buyrec{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 0;margin-top:6px}
@@ -958,10 +961,23 @@ function trialSignal(R) { // 試し買いの合図：直近20日に90日ぶり�
   }
   return null;
 }
-function trialPos() { const t = LS.get('trial', null); return t && t.btc > 0 ? Object.assign({ stop: t.btc * (1 - TRIAL_STOP) }, t) : null; }
-function cycleBuys() { // この端末に記録した「買った日」のうち、今のサイクルの底値圏以降のもの
+const WARN_DD = 0.35;   // 本買いの「想定外」ライン：過去の買い判定の後の最大の含み損（-34%）を超える下げ
+function lotTime(p) { return p.date ? Date.parse(p.date + 'T00:00:00Z') : (p.at || 0); }
+function lotBtc(p) { // その玉を買ったときのBTC価格。記録がなければ買った日の終値で補う
+  if (p.btc > 0) return p.btc;
+  if (p.date && S.d) { const T = Date.parse(p.date + 'T00:00:00Z'); for (let i = S.d.t.length - 1; i >= 0; i--) if (S.d.t[i] <= T) return S.d.c[i]; }
+  return NaN;
+}
+function lots() { return LS.get('pos', []); }
+function trialPos() { // 試し買いの玉のうち、撤退ラインが一番高い（先に割れる）もの
+  const ts = lots().filter(p => p.kind === 'trial').map(p => ({ t: lotTime(p), btc: lotBtc(p) })).filter(x => x.btc > 0), old = LS.get('trial', null); if (old && old.btc > 0) ts.push(old);
+  if (!ts.length) return null; const t = ts.sort((a, b) => b.btc - a.btc)[0]; return Object.assign({ stop: t.btc * (1 - TRIAL_STOP), n: ts.length }, t);
+}
+function cycleBuys() { // 記録した本買いのうち、今のサイクルの底値圏以降のもの（同じ日は1回と数える）
   const c = S.cyc; if (!c) return [];
-  const from = c.cur.h + 750 * DAY; return LS.get('buys', []).filter(b => b.t >= from).sort((a, b) => a.t - b.t);
+  const from = c.cur.h + 750 * DAY, seen = new Set(), out = [];
+  lots().filter(p => p.kind === 'buy' && ETF[p.sym] && ETF[p.sym].L > 0).map(p => ({ t: lotTime(p), btc: lotBtc(p) })).concat(LS.get('buys', [])).filter(b => b.t >= from).sort((a, b) => a.t - b.t).forEach(b => { const k = dkey(b.t); if (!seen.has(k)) { seen.add(k); out.push(b); } });
+  return out;
 }
 function planDecision(acts) {
   // 買う／買わない の二択。ルールは過去4回のサイクルの検証で決めたもの（research/buyrule5.js の E）：
@@ -1235,6 +1251,14 @@ function holdOne(p) {
     if (ph === 'down' && lvOf('m') === 0 && lvOf('s') === 0) { a = 'hold'; why.push('下落期で、判定も見送り。ただし逆2倍は目減りが大きいので短期で'); }
     else { a = 'sell'; why.push('このアプリは下げを予測できません。' + (ph ? 'サイクルは' + c.name + 'で、' : '') + '逆2倍は持つほど目減りします'); }
   }
+  // 玉ごとの撤退アラーム
+  const eb = lotBtc(p), lastClose = S.d.c[S.d.c.length - 1]; let alarm = null, line = null;
+  if (e.L > 0 && ok(eb)) {
+    if (p.kind === 'trial') { const st = eb * (1 - TRIAL_STOP); line = { btc: st, px: etfAt(p.sym, st), label: '撤退ライン（BTCの終値で買値の10%下）' }; if (lastClose < st) { alarm = '撤退ラインを割りました。この試し分は売ってください'; a = 'sell'; why.length = 0; why.push('試し買いの撤退ライン（BTC ' + usd(st) + '）を、終値で割りました'); } }
+    else if (p.kind === 'buy') { const st = eb * (1 - WARN_DD); line = { btc: st, px: etfAt(p.sym, st), label: '想定外ライン（BTCが買ったときの35%下）' }; if (lastClose < st) alarm = '買った後の下げが、過去の買い判定の後の最大（-34%）を超えました。作戦が外れている可能性があります'; }
+  }
+  if (!alarm && a === 'switch') alarm = '2倍の分を元の株に乗り換える合図が出ています';
+  if (!alarm && a === 'sell' && e.L > 0) alarm = '売る合図が出ています';
   const pl = now / p.cost - 1, days = p.date ? Math.max(0, Math.round((Date.now() - Date.parse(p.date)) / DAY)) : null;
   let decay = null, undRet = null;
   if (p.date && S.etf && S.etf[p.sym] && S.etf[e.und] && e.L !== 1) {
@@ -1244,19 +1268,24 @@ function holdOne(p) {
   const an = S.stocks[e.und] && S.stocks[e.und].an;
   const need = e.L > 0 && pl < 0 ? Math.pow(p.cost / now, 1 / e.L) - 1 : null;
   const lim = a === 'add' && plan && plan.target ? etfAt(p.sym, plan.target.mid) : NaN;
-  return { a, why, now, pl, plUsd: p.qty ? (now - p.cost) * p.qty : null, days, decay, undRet, need, undNeed: need != null && an ? stockAt(an, S.price) * (1 + need) : null, lim };
+  return { a, why, now, pl, plUsd: p.qty ? (now - p.cost) * p.qty : null, days, decay, undRet, need, undNeed: need != null && an ? stockAt(an, S.price) * (1 + need) : null, lim, alarm, line, eb };
 }
 function holdAll() { return LS.get('pos', []).map((p, i) => Object.assign({ i, p }, holdOne(p))); }
+function alarmBanner() { // 買った玉のどれかにアラームが出ていたら、画面の一番上に出す
+  const al = (S.hold || []).filter(h => h.alarm); if (!al.length) return '';
+  return '<section class="alarm-top" role="alert"><b>アラーム ' + al.length + '件</b><ul>' + al.map(h => '<li><b>' + h.p.sym + '</b>（' + (h.p.kind === 'trial' ? '試し' : h.p.kind === 'buy' ? '本買い' : '保有') + (h.p.date ? ' ' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '、買値 ' + usd2(h.p.cost) + '）：' + esc(h.alarm) + '</li>').join('') + '</ul></section>';
+}
 function holdCards() {
   const hs = S.hold || []; if (!hs.length) return '';
-  return '<h2 class="sec">持っている銘柄</h2>' + hs.map(h => {
-    const [lab, cls] = HOLD[h.a], e = ETF[h.p.sym], kv = [];
+  return '<h2 class="sec">買った玉（1つずつ判定します）</h2>' + hs.map(h => {
+    const [lab, cls] = HOLD[h.a], e = ETF[h.p.sym], kv = [], kn = h.p.kind === 'trial' ? '試し' : h.p.kind === 'buy' ? '本買い' : '以前からの保有';
+    if (h.line && ok(h.line.px)) kv.push([h.line.label, usd2(h.line.px) + '（BTC ' + usd(h.line.btc) + '）']);
     if (ok(h.now)) { kv.push(['いまの目安 / 買値', usd2(h.now) + ' / ' + usd2(h.p.cost)]); kv.push(['損益', pc(h.pl) + (h.plUsd != null ? '（' + (h.plUsd < 0 ? '-' : '+') + '$' + Math.abs(Math.round(h.plUsd)).toLocaleString('en-US') + '）' : '')]); }
     if (ok(h.lim)) kv.push(['買い足しの指値', usd2(h.lim)]);
     if (h.days != null) kv.push(['持っている日数', h.days + '日']);
     if (h.decay != null) kv.push([h.decay < 0 ? '2倍の計算より目減りした分' : '2倍の計算より上振れした分', pc(h.decay) + '（' + e.und + 'は' + pc(h.undRet) + '）']);
     if (h.need != null) kv.push(['買値に戻るには', e.und + 'が ' + pc(h.need) + (h.undNeed ? '（' + usd2(h.undNeed) + '）' : '') + ' 以上']);
-    return '<div class="plan-stock"><div class="row"><b class="sym">' + h.p.sym + '</b><b class="' + cls + ' plan-v">' + lab + '</b></div><p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p><dl class="kv">' + kv.map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl>' + (h.need != null && e.L > 1 ? '<p class="sub">「買値に戻るには」は目減りを無視した最低ラインです。時間がかかるほど、必要な上昇は大きくなります。</p>' : '') + '</div>';
+    return '<div class="plan-stock' + (h.alarm ? ' alarm' : '') + '"><div class="row"><b class="sym">' + h.p.sym + '<small>' + kn + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cls + ' plan-v">' + lab + '</b></div>' + (h.alarm ? '<p class="alarm-t">アラーム：' + esc(h.alarm) + '</p>' : '') + '<p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p><dl class="kv">' + kv.map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl>' + (h.need != null && e.L > 1 ? '<p class="sub">「買値に戻るには」は目減りを無視した最低ラインです。時間がかかるほど、必要な上昇は大きくなります。</p>' : '') + '</div>';
   }).join('');
 }
 function cycleStrip() {
@@ -1700,8 +1729,8 @@ function todayCard() {
   const chk = (p.chk || []).length ? '<ul class="why2 chks">' + p.chk.map(x => '<li class="' + (x.ok ? 'up' : 'dn') + ' chk">' + esc(x.text) + '</li>').join('') + '</ul>' : '';
   const tp = p.tp, stopNow = tp ? tp.stop : (p.a === 'trial' ? S.price * (1 - TRIAL_STOP) : NaN);
   const stocksStop = ok(stopNow) ? ['MSTR', 'COIN'].filter(x => S.stocks[x] && S.stocks[x].an).map(x => x + ' ' + usd2(stockAt(S.stocks[x].an, stopNow)) + '、' + (x === 'MSTR' ? 'MSTU' : 'CONL') + ' ' + usd2(etfAt(x === 'MSTR' ? 'MSTU' : 'CONL', stopNow))).join('／') : '';
-  const trialBox = (p.a === 'trial' || tp) ? '<div class="prov chg ' + (p.a === 'exit' ? 'pd' : 'pu') + '"><b>' + (tp ? '試し買い中：撤退ライン BTC ' + usd(tp.stop) + '（終値）' : '撤退ライン：BTCの終値で ' + usd(stopNow) + '（買値の10%下）') + '</b><p>' + (tp ? md(tp.t) + ' にBTC ' + usd(tp.btc) + ' で記録。' : '') + (stocksStop ? '株価の目安：' + stocksStop + '。' : '') + '過去4回のサイクルでこの合図は7回出て、4回はそのまま本格的な買い判定につながり（その時点で+8〜+34%）、3回は撤退（-10〜-19%）でした。</p><p>' + (tp ? '<button class="link" id="trial-clear">' + (p.a === 'exit' ? '撤退したので記録を消す' : '試し買いの記録を消す') + '</button>' : '<button class="link" id="trial-add">試し買いをしたので記録する</button>') + '</p></div>' : '';
-  const buys = cycleBuys(), rec = '<div class="buyrec"><span>このサイクルで買った回数：<b class="num">' + buys.length + '</b>／4' + (buys.length ? '（最後は ' + md(buys[buys.length - 1].t) + '、BTC ' + usd(buys[buys.length - 1].btc) + '）' : '') + '</span><span><button class="link" id="buy-add">買ったので記録する</button>' + (buys.length ? '　<button class="link" id="buy-undo">最後の記録を取り消す</button>' : '') + '</span></div>';
+  const trialBox = (p.a === 'trial' || tp) ? '<div class="prov chg ' + (p.a === 'exit' ? 'pd' : 'pu') + '"><b>' + (tp ? '試し買い中：撤退ライン BTC ' + usd(tp.stop) + '（終値）' : '撤退ライン：BTCの終値で ' + usd(stopNow) + '（買値の10%下）') + '</b><p>' + (tp ? md(tp.t) + ' にBTC ' + usd(tp.btc) + ' で記録。' : '') + (stocksStop ? '株価の目安：' + stocksStop + '。' : '') + '過去4回のサイクルでこの合図は7回出て、4回はそのまま本格的な買い判定につながり（その時点で+8〜+34%）、3回は撤退（-10〜-19%）でした。</p><p>' + (tp ? '<button class="link" data-rec="list">' + (p.a === 'exit' ? '売ったら「関連株」タブで玉を削除する' : '記録した玉を見る') + '</button>' : '<button class="link" data-rec="trial">試し買いをしたら記録する</button>') + '</p></div>' : '';
+  const buys = cycleBuys(), rec = '<div class="buyrec"><span>このサイクルで買った回数：<b class="num">' + buys.length + '</b>／4' + (buys.length ? '（最後は ' + md(buys[buys.length - 1].t) + '、BTC ' + usd(buys[buys.length - 1].btc) + '）' : '') + '</span><span><button class="link" data-rec="buy">買った玉を記録する</button></span></div>';
   return '<section class="today">' + sessionStrip() + cycleStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p>' + trialBox + chk + rec + provBox() +
     (rows || '<p class="sub">MSTR・COINの株価を読み込めていないため、BTCの価格で表示しています。</p>') +
     '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
@@ -1723,7 +1752,7 @@ function viewJudge() {
   const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
   const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
-  return todayCard() + bottomCard() + pickCard() + holdCards() + '<h2 class="sec">時間軸ごとの判定</h2>' +
+  return alarmBanner() + todayCard() + holdCards() + bottomCard() + pickCard() + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
     flags + cycleCard() + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
@@ -1749,6 +1778,14 @@ function signalsCard() {
   const nm = { '2012': '2015年の底', '2016': '2018〜19年の底', '2020': '2022〜23年の底', '2024': '今回（11/20時点）' };
   return '<section class="card"><h2>この判定で動いていたら（全記録）</h2><p>今のルールを過去に当てはめたときの、すべての合図と、その後の結果です（BTCの値段）。</p>' + Object.keys(by).map(k => '<h3>' + nm[k] + '</h3><ul class="sigs">' + by[k].map(x => '<li><div><b class="' + (x.kind === '買い' ? 'v-buy' : 'v-wait') + '">' + x.kind + '</b><span class="num">' + x.date.replace(/-/g, '/') + '</span><span class="num">$' + x.px.toLocaleString('en-US') + '</span></div><dl>' + (x.kind === '試し' ? '<dt>撤退ライン</dt><dd>' + (x.stop === '撤退なし' ? '割らず' : x.stop + 'で撤退') + '</dd>' : '') + '<dt>30日後に売ると</dt><dd class="num">' + x.d30 + '</dd><dt>90日後</dt><dd class="num">' + x.d90 + '</dd><dt>1年後</dt><dd class="num">' + x.d365 + '</dd><dt>天井の出口で売ると</dt><dd class="num">' + x.top + '</dd><dt>1年以内の最大の含み損</dt><dd class="num">' + x.mae + '</dd></dl></li>').join('') + '</ul>').join('') +
     '<p class="sub">「天井の出口」は、次の半減期から400〜550日目に200日線を2週間割った日（なければ550日目）です。底らしさは、買いの日が52〜86%、今回見送りになった9〜10月の3日は18〜33%でした。MSTR・COINの動きはこの1.5倍前後、MSTU・CONLはさらに大きくなります。</p></section>';
+}
+const SIG_STK = [{"cyc":"2020","kind":"試し","date":"2022-06-02","asset":"MSTR","buy":"2022-06-03","stop":"-33%","d30":"-17%","d90":"-4%","d365":"+32%","top":"+1136%","mae":"-40%"},{"cyc":"2020","kind":"試し","date":"2022-07-06","asset":"MSTR","buy":"2022-07-07","stop":"-12%","d30":"+45%","d90":"+10%","d365":"+86%","top":"+1179%","mae":"-38%"},{"cyc":"2020","kind":"試し","date":"2022-10-03","asset":"MSTR","buy":"2022-10-04","stop":"-30%","d30":"-0%","d90":"-34%","d365":"+30%","top":"+1029%","mae":"-45%"},{"cyc":"2020","kind":"試し","date":"2022-11-30","asset":"MSTR","buy":"2022-12-01","stop":"","d30":"-27%","d90":"+19%","d365":"+183%","top":"+1311%","mae":"-31%"},{"cyc":"2020","kind":"買い","date":"2023-01-12","asset":"MSTR","buy":"2023-01-13","stop":"","d30":"+25%","d90":"+44%","d365":"+130%","top":"+1194%","mae":"-12%"},{"cyc":"2020","kind":"買い","date":"2023-01-26","asset":"MSTR","buy":"2023-01-27","stop":"","d30":"+2%","d90":"+27%","d365":"+101%","top":"+987%","mae":"-26%"},{"cyc":"2020","kind":"買い","date":"2023-02-15","asset":"MSTR","buy":"2023-02-16","stop":"","d30":"-7%","d90":"+1%","d365":"+148%","top":"+889%","mae":"-32%"},{"cyc":"2020","kind":"買い","date":"2023-03-13","asset":"MSTR","buy":"2023-03-14","stop":"","d30":"+48%","d90":"+24%","d365":"+631%","top":"+1124%","mae":"-1%"},{"cyc":"2024","kind":"試し","date":"2026-06-20","asset":"MSTR","buy":"2026-06-22","stop":"","d30":"-9%","d90":"+54%","d365":"—","top":"進行中 -29%","mae":"-29%"},{"cyc":"2024","kind":"買い","date":"2026-08-19","asset":"MSTR","buy":"2026-08-20","stop":"","d30":"+50%","d90":"-20%","d365":"—","top":"進行中 -31%","mae":"-31%"},{"cyc":"2020","kind":"試し","date":"2022-06-02","asset":"MSTRの2倍","buy":"2022-06-03","stop":"-61%","d30":"-44%","d90":"-37%","d365":"-41%","top":"+625%","mae":"-82%"},{"cyc":"2020","kind":"試し","date":"2022-07-06","asset":"MSTRの2倍","buy":"2022-07-07","stop":"-38%","d30":"+91%","d90":"-4%","d365":"+41%","top":"+870%","mae":"-77%"},{"cyc":"2020","kind":"試し","date":"2022-10-03","asset":"MSTRの2倍","buy":"2022-10-04","stop":"-59%","d30":"-5%","d90":"-67%","d365":"-19%","top":"+853%","mae":"-77%"},{"cyc":"2020","kind":"試し","date":"2022-11-30","asset":"MSTRの2倍","buy":"2022-12-01","stop":"","d30":"-49%","d90":"+20%","d365":"+348%","top":"+1769%","mae":"-55%"},{"cyc":"2020","kind":"買い","date":"2023-01-12","asset":"MSTRの2倍","buy":"2023-01-13","stop":"","d30":"+47%","d90":"+68%","d365":"+200%","top":"+1613%","mae":"-30%"},{"cyc":"2020","kind":"買い","date":"2023-01-26","asset":"MSTRの2倍","buy":"2023-01-27","stop":"","d30":"-3%","d90":"+31%","d365":"+132%","top":"+1137%","mae":"-49%"},{"cyc":"2020","kind":"買い","date":"2023-02-15","asset":"MSTRの2倍","buy":"2023-02-16","stop":"","d30":"-20%","d90":"-17%","d365":"+248%","top":"+975%","mae":"-56%"},{"cyc":"2020","kind":"買い","date":"2023-03-13","asset":"MSTRの2倍","buy":"2023-03-14","stop":"","d30":"+105%","d90":"+28%","d365":"+2477%","top":"+1648%","mae":"-2%"},{"cyc":"2024","kind":"試し","date":"2026-06-20","asset":"MSTRの2倍","buy":"2026-06-22","stop":"","d30":"-22%","d90":"+91%","d365":"—","top":"進行中 -64%","mae":"-64%"},{"cyc":"2024","kind":"買い","date":"2026-08-19","asset":"MSTRの2倍","buy":"2026-08-20","stop":"","d30":"+104%","d90":"-47%","d365":"—","top":"進行中 -61%","mae":"-61%"},{"cyc":"2020","kind":"試し","date":"2022-06-02","asset":"COIN","buy":"2022-06-03","stop":"-22%","d30":"-22%","d90":"-2%","d365":"-23%","top":"+380%","mae":"-51%"},{"cyc":"2020","kind":"試し","date":"2022-07-06","asset":"COIN","buy":"2022-07-07","stop":"+10%","d30":"+62%","d90":"+27%","d365":"+41%","top":"+457%","mae":"-43%"},{"cyc":"2020","kind":"試し","date":"2022-10-03","asset":"COIN","buy":"2022-10-04","stop":"-32%","d30":"-19%","d90":"-49%","d365":"+0%","top":"+330%","mae":"-56%"},{"cyc":"2020","kind":"試し","date":"2022-11-30","asset":"COIN","buy":"2022-12-01","stop":"","d30":"-26%","d90":"+39%","d365":"+212%","top":"+608%","mae":"-28%"},{"cyc":"2020","kind":"買い","date":"2023-01-12","asset":"COIN","buy":"2023-01-13","stop":"","d30":"+18%","d90":"+35%","d365":"+168%","top":"+541%","mae":"-3%"},{"cyc":"2020","kind":"買い","date":"2023-01-26","asset":"COIN","buy":"2023-01-27","stop":"","d30":"+6%","d90":"-12%","d365":"+113%","top":"+422%","mae":"-21%"},{"cyc":"2020","kind":"買い","date":"2023-02-15","asset":"COIN","buy":"2023-02-16","stop":"","d30":"+15%","d90":"-8%","d365":"+164%","top":"+388%","mae":"-26%"},{"cyc":"2020","kind":"買い","date":"2023-03-13","asset":"COIN","buy":"2023-03-14","stop":"","d30":"+10%","d90":"-16%","d365":"+273%","top":"+411%","mae":"-23%"},{"cyc":"2024","kind":"試し","date":"2026-06-20","asset":"COIN","buy":"2026-06-22","stop":"","d30":"+1%","d90":"+22%","d365":"—","top":"進行中 -38%","mae":"-38%"},{"cyc":"2024","kind":"買い","date":"2026-08-19","asset":"COIN","buy":"2026-08-20","stop":"","d30":"+17%","d90":"-36%","d365":"—","top":"進行中 -41%","mae":"-41%"},{"cyc":"2020","kind":"試し","date":"2022-06-02","asset":"COINの2倍","buy":"2022-06-03","stop":"-41%","d30":"-48%","d90":"-37%","d365":"-83%","top":"+43%","mae":"-89%"},{"cyc":"2020","kind":"試し","date":"2022-07-06","asset":"COINの2倍","buy":"2022-07-07","stop":"-12%","d30":"+116%","d90":"+14%","d365":"-36%","top":"+123%","mae":"-82%"},{"cyc":"2020","kind":"試し","date":"2022-10-03","asset":"COINの2倍","buy":"2022-10-04","stop":"-58%","d30":"-38%","d90":"-80%","d365":"-61%","top":"+88%","mae":"-85%"},{"cyc":"2020","kind":"試し","date":"2022-11-30","asset":"COINの2倍","buy":"2022-12-01","stop":"","d30":"-48%","d90":"+39%","d365":"+328%","top":"+510%","mae":"-51%"},{"cyc":"2020","kind":"買い","date":"2023-01-12","asset":"COINの2倍","buy":"2023-01-13","stop":"","d30":"+20%","d90":"+33%","d365":"+234%","top":"+469%","mae":"-34%"},{"cyc":"2020","kind":"買い","date":"2023-01-26","asset":"COINの2倍","buy":"2023-01-27","stop":"","d30":"-4%","d90":"-43%","d365":"+119%","top":"+296%","mae":"-54%"},{"cyc":"2020","kind":"買い","date":"2023-02-15","asset":"COINの2倍","buy":"2023-02-16","stop":"","d30":"+23%","d90":"-32%","d365":"+263%","top":"+295%","mae":"-54%"},{"cyc":"2020","kind":"買い","date":"2023-03-13","asset":"COINの2倍","buy":"2023-03-14","stop":"","d30":"+11%","d90":"-44%","d365":"+612%","top":"+355%","mae":"-48%"},{"cyc":"2024","kind":"試し","date":"2026-06-20","asset":"COINの2倍","buy":"2026-06-22","stop":"","d30":"-3%","d90":"+26%","d365":"—","top":"進行中 -70%","mae":"-70%"},{"cyc":"2024","kind":"買い","date":"2026-08-19","asset":"COINの2倍","buy":"2026-08-20","stop":"","d30":"+26%","d90":"-65%","d365":"—","top":"進行中 -70%","mae":"-70%"}];
+function signalsStockCard() {
+  const assets = ['MSTR', 'MSTRの2倍', 'COIN', 'COINの2倍'];
+  const blk = a => { const r = SIG_STK.filter(x => x.asset === a); return '<h3>' + a + (a.indexOf('2倍') > 0 ? '（' + (a[0] === 'M' ? 'MSTU' : 'CONL') + '相当の計算値）' : '') + '</h3><table class="tbl sm"><thead><tr><th>合図の日</th><th>3か月</th><th>1年</th><th>天井の出口</th><th>最大含み損</th></tr></thead><tbody>' + r.map(x => '<tr><th>' + (x.kind === '試し' ? '試 ' : '買 ') + x.date.slice(2).replace(/-/g, '/') + (x.stop ? '<br><small>撤退 ' + x.stop + '</small>' : '') + '</th><td class="num">' + x.d90 + '</td><td class="num">' + x.d365 + '</td><td class="num">' + x.top + '</td><td class="num">' + x.mae + '</td></tr>').join('') + '</tbody></table>'; };
+  return '<section class="card"><h2>同じ合図で関連株を買っていたら</h2><p>BTCの合図が出た翌営業日の終値で買った場合です。MSTRがBTCを持ち始めたのは2020年8月、COINの上場は2021年4月なので、確かめられるのは2022〜23年の底と今回だけです。</p>' + assets.map(blk).join('') +
+    '<p class="sub">「2倍」は、毎日2倍になるETFを経費込みで計算した値です。実際のMSTU・CONLとは少しずれます。今回の2回の合図を実物で見ると、MSTUは6/22の買値から一時+80%、今は-67%。8/20の買値から一時+100%、今は-63%。CONLはそれぞれ今-72%、-71%です（11/20時点）。</p>' +
+    '<p class="sub">2倍は、当たったときの伸びが大きい代わりに、撤退ラインに届くまでの損も-12〜-61%と大きくなっています。2022年のCOINの2倍は、1年後も-36〜-83%でした。</p></section>';
 }
 function wfCard() {
   return '<section class="card"><h2>先の情報なしで選び直す検証</h2><p>買いルールの数字（何日目から、判定がいくつ以上、何日あけるか、底らしさは何%以上か）を540通り用意し、「それ以前のサイクルだけで一番良かった設定」を選んで、次のサイクルで試しました。</p>' +
@@ -1805,7 +1842,7 @@ function viewVerify() {
     '<table class="tbl"><thead><tr><th></th><th>年率</th><th>最大下落</th><th>保有日の割合</th></tr></thead><tbody><tr><th>シグナルに従う</th><td class="num">' + pc(sim.cagr, 0) + '</td><td class="num">' + pc(sim.mdd, 0) + '</td><td class="num">' + pc(sim.exposure, 0, false) + '</td></tr><tr><th>持ち続ける</th><td class="num">' + pc(sim.bcagr, 0) + '</td><td class="num">' + pc(sim.bmdd, 0) + '</td><td class="num">100%</td></tr></tbody></table>' +
     '<p class="sub">スコア60以上で買い、40未満で売り、その間は維持。売買のたびに手数料0.1%を引いています。売買 ' + sim.trades + ' 回、' + sim.years.toFixed(1) + ' 年間。BTC現物での結果で、関連株の結果は「関連株」タブにあります。</p></section>' +
     '<section class="card"><div class="row"><h2>直近の答え合わせ</h2><span class="num muted">' + hits + '/' + judged.length + ' 的中</span></div><ul class="calls">' + pend + calls + '</ul><p class="sub">' + h.d + '日おきに1件ずつ。買い系は上昇で的中、見送りは下落で的中、様子見は対象外です。</p></section>' +
-    ruleCard() + signalsCard() + wfCard() + protectCard() + fixedCard() + provRecord() + '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
+    ruleCard() + signalsCard() + signalsStockCard() + wfCard() + protectCard() + fixedCard() + provRecord() + '<section class="card"><h2>このアプリが記録した判定</h2>' + live + '<p class="sub">開いた日の判定をこの端末に保存し、期日が来たら自動で照合します。後から計算し直した判定ではなく、その日に実際に表示した内容の記録です。</p></section>' +
     '<details class="card"><summary>計算のしかた</summary><p>テクニカル9種、出来高4種、オプション2種（Deribit DVOL、2021年以降）、資金調達率2種（Binance先物、2019年以降）、長期サイクル2種（長期成長線と200週線からの乖離。長期の判定だけに使用）の指標を毎日計算します。各指標が過去4年間で「' + h.d + '日後のリターン」とどれだけ連動していたかを相関で測り、それを重みにして合成したものがスコアです。スコアは過去4年の中での順位（0〜100）に直しています。</p><p>重みの計算にはその日より前に結果が確定していたデータしか使わないため、上の成績はすべて「当時知り得た情報だけで出した判定」の結果です。プット・コール比率、スキュー、建玉、清算の集中帯は長期の履歴が公開されていないのでスコアには入れず、警戒フラグとして判定を一段階下げる用途に限っています。</p></details>';
 }
 
@@ -1895,8 +1932,8 @@ function viewStocks() {
       (zl ? '<h3>BTCのエントリー候補に対応する株価の目安</h3><ul class="pair">' + zl + '</ul><p class="sub">現在のベータで単純換算した値です。個別の材料や決算では大きくずれます。</p>' : '') + '</section>';
   });
   const pos = LS.get('pos', []);
-  h += '<section class="card"><h2>持っている銘柄を登録する</h2>' + (pos.length ? '<ul class="pair">' + pos.map((p, i) => '<li><span><b>' + p.sym + '</b>　<span class="num">' + usd2(p.cost) + (p.qty ? ' × ' + p.qty + '株' : '') + (p.date ? '　' + esc(p.date) : '') + '</span></span><button class="link" data-delpos="' + i + '">削除する</button></li>').join('') + '</ul>' : '<p class="muted">まだ登録がありません。登録すると、判定タブに「持ち続ける／買い足し可／一部売る／売る」が毎日出ます。</p>') +
-    '<div class="form"><label>銘柄<select id="pos-sym"><option>MSTU</option><option>CONL</option><option>MSTZ</option><option>MSTR</option><option>COIN</option></select></label><label>平均の買値（ドル）<input id="pos-cost" type="number" inputmode="decimal" step="0.01" placeholder="例：25.40"></label><label>株数（空欄でも可）<input id="pos-qty" type="number" inputmode="decimal" placeholder="例：100"></label><label>買った日（空欄でも可。入れると目減りを計算します）<input id="pos-date" type="date"></label><button class="btn" id="pos-add">保有銘柄を登録する</button></div><p class="sub">この端末の中だけに保存されます。株式併合があった銘柄は、moomooに表示されている今の平均取得単価を入れてください。</p></section>';
+  h += '<section class="card" id="pos-form"><h2>買った玉を記録する</h2>' + (pos.length ? '<ul class="pair">' + pos.map((p, i) => '<li><span><b>' + p.sym + '</b>　' + (p.kind === 'trial' ? '試し' : p.kind === 'buy' ? '本買い' : '以前からの保有') + '　<span class="num">' + usd2(p.cost) + (p.qty ? ' × ' + p.qty + '株' : '') + (p.date ? '　' + esc(p.date) : '') + '</span></span><button class="link" data-delpos="' + i + '">売ったので削除する</button></li>').join('') + '</ul>' : '<p class="muted">まだ記録がありません。買うたびに1つずつ記録すると、玉ごとに撤退ラインと「持ち続ける／乗り換える／売る」が判定タブに常に出て、割ったときは一番上にアラームが出ます。</p>') +
+    '<div class="form"><label>種類<select id="pos-kind"><option value="buy"' + (S.recKind !== 'trial' ? ' selected' : '') + '>本買い（買い判定で買った）</option><option value="trial"' + (S.recKind === 'trial' ? ' selected' : '') + '>試し買い（撤退ラインつき）</option><option value="old">以前から持っている（アラームなし）</option></select></label><label>銘柄<select id="pos-sym"><option>MSTU</option><option>CONL</option><option>MSTZ</option><option>MSTR</option><option>COIN</option></select></label><label>平均の買値（ドル）<input id="pos-cost" type="number" inputmode="decimal" step="0.01" placeholder="例：25.40"></label><label>株数（空欄でも可）<input id="pos-qty" type="number" inputmode="decimal" placeholder="例：100"></label><label>買った日（空欄なら今日）<input id="pos-date" type="date"></label><button class="btn" id="pos-add">この玉を記録する</button></div><p class="sub">この端末の中だけに保存されます。株式併合があった銘柄は、moomooに表示されている今の平均取得単価を入れてください。</p></section>';
   h += planRecord();
   if (!have.length && !['MSTR', 'COIN'].some(s => S.stocks[s])) h += '<section class="card"><p class="muted">株価を読み込んでいます…</p></section>';
   if (S.stkSrc) h += '<p class="sub">株価：' + esc(S.stkSrc) + '。米国市場の終値を、取引終了後に毎日取り込んでいます。</p>';
@@ -1939,12 +1976,15 @@ document.addEventListener('click', e => {
     if (!title || !ok(tm)) { t.textContent = '内容と日時を入力してください'; return; }
     const a = LS.get('events', []); a.push({ t: tm, title, impact: +$('#ev-imp').value, kind: 'custom' }); LS.set('events', a); $('#ev-title').value = ''; $('#ev-time').value = ''; S.events = allEvents(); if (S.R) decide(); render();
   }
-  else if (t.dataset.delpos != null) { const a = LS.get('pos', []); a.splice(+t.dataset.delpos, 1); LS.set('pos', a); if (S.R) { S.hold = holdAll(); S.pick = pickStock(); } render(); }
+  else if (t.dataset.delpos != null) { const a = LS.get('pos', []); a.splice(+t.dataset.delpos, 1); LS.set('pos', a); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); S.pick = pickStock(); } render(); }
   else if (t.id === 'pos-add') {
     const cost = +$('#pos-cost').value, qty = +$('#pos-qty').value || null, date = $('#pos-date').value || null;
     if (!(cost > 0)) { t.textContent = '買値を入力してください'; return; }
-    const a = LS.get('pos', []); a.push({ sym: $('#pos-sym').value, cost, qty, date }); LS.set('pos', a); if (S.R) { S.hold = holdAll(); S.pick = pickStock(); writeLog(); } location.hash = 'judge';
+    const today = dkey(Date.now()), dt = date || today, kind = $('#pos-kind') ? $('#pos-kind').value : 'buy';
+      const lot = { sym: $('#pos-sym').value, cost, qty, date: dt, kind, at: Date.now() }; if (dt === today && ok(S.price)) lot.btc = Math.round(S.price);
+      const a = LS.get('pos', []); a.push(lot); LS.set('pos', a); S.recKind = null; if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); S.pick = pickStock(); writeLog(); } location.hash = 'judge';
   }
+  else if (t.dataset.rec) { S.recKind = t.dataset.rec === 'trial' ? 'trial' : 'buy'; location.hash = 'stocks'; setTimeout(() => { const el = document.getElementById('pos-form'); if (el) el.scrollIntoView(); }, 80); }
   else if (t.id === 'trial-add') { LS.set('trial', { t: Date.now(), btc: Math.round(S.price) }); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
   else if (t.id === 'trial-clear') { LS.del('trial'); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
   else if (t.id === 'buy-add') { const a = LS.get('buys', []); a.push({ t: Date.now(), btc: Math.round(S.price) }); LS.set('buys', a); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
