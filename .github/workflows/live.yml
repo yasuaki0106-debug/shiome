@@ -1,5 +1,8 @@
-name: 今の相場の控え（手動）
-on: workflow_dispatch
+name: 今の相場の控え（1時間ごと）
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:

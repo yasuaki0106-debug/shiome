@@ -91,6 +91,11 @@
 - 「価格と予測レンジ」は3か月表示のときだけ日足のローソク足
 - 日中に分かれ目を割った場合は「安値割れ（日中）」の注意を出すが、判定（割ったかどうか）は朝9時の終値で決める（過去の検証が終値ベースのため）
 
+## 会話で今の相場を見る方法（2026-11-21）
+- Claudeの作業環境からは取引所に直接つながらない。`.github/workflows/live.yml` が1時間ごとに Coinbase BTC-USD の直近72時間の1時間足を `research/live.json` に保存するので、会話の最初に raw.githubusercontent.com から読む（トークン不要）
+  `https://raw.githubusercontent.com/yasuaki0106-debug/shiome/main/research/live.json`
+- 形式：{"at": 取得時刻, "price": 最新, "h1": [[t, open, high, low, close], ...]}（tはUNIX秒、UTC）
+
 ## 取引所データの合算（2026-11-21 追加）
 - 建玉・資金調達率は Binance先物 + OKX + Bybit を合算（OKX・Bybitは取れたものだけ）。OKXの建玉履歴はブラウザから読めないため Actions が `data/okx_oi.json` に4時間ごとの控えを作る。Bybitは米国からは遮断されるので、端末から直接取る（取れるかは端末側の表示で確認）
 - 資金調達率の履歴（スコアの要因）は検証との整合のため Binance のまま
