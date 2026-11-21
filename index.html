@@ -1313,6 +1313,11 @@ function budget() { // 今のサイクルで使う予定額＝現金＋このサ
   const used = lots().filter(p => (p.kind === 'buy' || p.kind === 'trial' || p.kind === 'ladder') && p.qty > 0 && lotTime(p) >= from).reduce((s, p) => s + p.cost * p.qty, 0);
   return { cash: cashBal(), used, total: cashBal() + used };
 }
+function closeJST(t) { // 米国の引け（東部時間16時）を日本時間で。夏時間（3月第2日曜〜11月第1日曜）は1時間早い
+  const d = new Date(t - 5 * 36e5), y = d.getUTCFullYear(), nth = (m, k) => { const f = new Date(Date.UTC(y, m, 1)).getUTCDay(); return Date.UTC(y, m, 1 + ((7 - f) % 7) + 7 * (k - 1)); };
+  const day = Date.UTC(y, d.getUTCMonth(), d.getUTCDate()), dst = day >= nth(2, 2) && day < nth(10, 1), c = day + (dst ? 20 : 21) * 36e5, j = new Date(c + 9 * 36e5);
+  return (j.getUTCMonth() + 1) + '/' + j.getUTCDate() + ' ' + String(j.getUTCHours()).padStart(2, '0') + ':00';
+}
 function mdUS(t) { const d = new Date(t - 5 * 36e5); return (d.getUTCMonth() + 1) + '/' + d.getUTCDate(); }   // 米国の日付（東部時間）
 function usTradingDays(from, n) { // from（ミリ秒）から数えて n 営業日目（米国、土日と休場日を除く）の日付
   let t = from, k = 0; while (k < n) { t += DAY; const d = new Date(t - 5 * 36e5), w = d.getUTCDay(), key = d.toISOString().slice(0, 10); if (w !== 0 && w !== 6 && US_CLOSED.indexOf(key) < 0) k++; } return t;
@@ -1460,8 +1465,9 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
     const t = planTicker(p), per = { buy: b.cash / Math.max(1, MAXBUY - (p.n || 0)), trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
     const po = placedOrders(), lo = p.a === 'ladder' && !po ? ladderOrders(p) : null;
     if (false) {} else if (b.total > 0 && lo) { const ex = new Date(lo.exp);
-      items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる（値段は今朝9時の確定値で決めていて、今日のあいだは変わりません）', sub: lo.rows.map(r => r.k + '本目　' + usd2(r.px) + '　' + r.n + '株' + (r.k === 1 ? '（期限 ' + mdUS(lo.exp) + '）' : '')) });
-      items.push({ lv: 'info', t: '1本目が ' + mdUS(lo.exp) + ' の引けまでに届かなければ、引けに成行で買う' + (lo.ev ? '（' + lo.ev.title.replace(/（.*?）/g, '') + 'の後まで待つ）' : '') });
+      items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる（値段は今朝9時の確定値で決めていて、今日のあいだは変わりません）', sub: lo.rows.map(r => r.k + '本目　' + usd2(r.px) + '　' + r.n + '株' + (r.k === 1 ? '（期限 ' + mdUS(lo.exp) + 'の引け＝日本時間 ' + closeJST(lo.exp) + '）' : '')) });
+      items.push({ lv: 'info', t: '入れるのは朝9時20分以降（その日の値段が出てから）。moomooの24時間取引なら、平日の朝10時からの夜間取引でも約定します' });
+      items.push({ lv: 'info', t: '1本目が ' + mdUS(lo.exp) + ' の引け（日本時間 ' + closeJST(lo.exp) + '）までに届かなければ、引けに成行で買う' + (lo.ev ? '（' + lo.ev.title.replace(/（.*?）/g, '') + 'の後まで待つ）' : '') });
       items.push({ lv: 'info', t: '4本入れたら、下のボタンを押す（値段を覚えて、変える必要があるときだけ知らせます）', btn: 'ord-set' }); }
     if (p.a === 'buy' && placedOrders() && ladderLots().length < LAD_N) items.push({ lv: 'warn', t: '残っている買い下がりの指値（' + (LAD_N - ladderLots().length) + '本）を取り消す。そのお金も確認買いに回して、買い切ります', btn: 'ord-cancel' });
     else if (b.total > 0 && p.a !== 'ladder') { items.push({ lv: 'buy', t: (p.a === 'buy' ? '確認買い' : '試し買い') + '：' + t + ' を ' + usd(amt) + ' 分' + (ok(n) ? '（約' + n + '株、目安 ' + usd2(px) + '）' : '') + '、その取引時間のうちに買う（指値で待たない）' });
