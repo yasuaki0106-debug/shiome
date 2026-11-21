@@ -107,7 +107,7 @@ h2.sec{font-size:13px;color:var(--muted);font-weight:500;margin:0 0 6px}
 .grid{stroke:var(--line);stroke-width:.6}.ax{fill:var(--muted);font-size:9px;font-family:"Saira Semi Condensed",system-ui,sans-serif}
 .px{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-linejoin:round}.ma50{fill:none;stroke:var(--brass);stroke-width:1}.ma200{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:3 2}
 .cone1{fill:var(--buy);opacity:.13}.cone2{fill:var(--buy);opacity:.26}.med{stroke:var(--buy);stroke-width:1.2;stroke-dasharray:3 2}.nowl{stroke:var(--muted);stroke-width:.7;stroke-dasharray:2 2}
-.zone{fill:var(--brass);opacity:.22}.wk-u{stroke:var(--buy);stroke-width:1}.wk-d{stroke:var(--avoid);stroke-width:1}.cd-u{fill:var(--buy)}.cd-d{fill:var(--avoid)}.wk-lab{fill:var(--ink)}.k-cu,.k-cd{height:8px!important;width:8px!important;border:0!important}.k-cu{background:var(--buy)}.k-cd{background:var(--avoid)}.ln-warn{stroke:var(--avoid);stroke-width:1;stroke-dasharray:4 3}.ln-mute{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 3}.ln-buy{stroke:var(--buy);stroke-width:1;stroke-dasharray:4 3}.dot{fill:var(--ink)}
+.zone{fill:var(--brass);opacity:.22}.ln-half{stroke:var(--muted);stroke-width:.8;stroke-dasharray:1 3}.dot-top{fill:var(--avoid)}.dot-low{fill:var(--buy)}.wk-u{stroke:var(--buy);stroke-width:1}.wk-d{stroke:var(--avoid);stroke-width:1}.cd-u{fill:var(--buy)}.cd-d{fill:var(--avoid)}.wk-lab{fill:var(--ink)}.k-cu,.k-cd{height:8px!important;width:8px!important;border:0!important}.k-cu{background:var(--buy)}.k-cd{background:var(--avoid)}.ln-warn{stroke:var(--avoid);stroke-width:1;stroke-dasharray:4 3}.ln-mute{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 3}.ln-buy{stroke:var(--buy);stroke-width:1;stroke-dasharray:4 3}.dot{fill:var(--ink)}
 .rb-buy{fill:var(--buy)}.rb-try{fill:var(--try)}.rb-wait{fill:var(--line)}.rb-avoid{fill:var(--avoid);opacity:.7}
 .bar-c{fill:var(--buy)}.bar-p{fill:var(--avoid);opacity:.8}
 .spark{width:120px;height:28px}
@@ -1776,7 +1776,11 @@ function intradayChart() {
   const lines = [];
   if (r && (r.retest || r.broke)) { lines.push({ p: r.level, lab: '分かれ目 ' + kfmt(r.level), cls: 'ln-warn' }); lines.push({ p: r.lo, lab: '6月の安値 ' + kfmt(r.lo), cls: 'ln-mute' }); }
   const tp = trialPos(); if (tp) lines.push({ p: tp.stop, lab: '撤退 ' + kfmt(tp.stop), cls: 'ln-warn' });
-  if (ok(need)) lines.push({ p: need, lab: '試し買いの目安 ' + kfmt(need), cls: 'ln-buy' });
+  // 買い下がりの目安：始める前は「90日ぶりの安値」（終値でここ以下なら1回目）。始めた後は、残りの指値をBTCの値段に直した目安
+  const lad = ladderLots();
+  if (!lad.length) { const cc = S.d.c, nn = cc.length; let m90 = Infinity; for (let j = nn - 90; j < nn; j++) m90 = Math.min(m90, cc[j]); lines.push({ p: m90, lab: '買い下がり開始 ' + kfmt(m90) + ' 以下', cls: 'ln-buy' }); }
+  else { const l0 = lad[0], e = ETF[l0.sym], an = S.stocks[e.und] && S.stocks[e.und].an;
+    if (an) for (let k = lad.length; k < LAD_N; k++) { const tgt = l0.cost * (1 - LAD_STEP * k), undMove = (tgt / etfAt(l0.sym, S.price) - 1) / e.L, undPx = stockAt(an, S.price) * (1 + undMove), btc = an.btcAt * (1 + (undPx / an.px - 1) / an.beta); if (ok(btc) && btc > 0) lines.push({ p: btc, lab: '買い下がり' + (k + 1) + '回目 ≈' + kfmt(btc), cls: 'ln-buy' }); } }
   let lo = Infinity, hi = -Infinity; R0.forEach(x => { lo = Math.min(lo, x[3]); hi = Math.max(hi, x[2]); });
   const vis = lines.filter(l => l.p > lo * 0.92 && l.p < hi * 1.10); vis.forEach(l => { lo = Math.min(lo, l.p); hi = Math.max(hi, l.p); });
   lo *= 0.99; hi *= 1.01;
@@ -1787,11 +1791,45 @@ function intradayChart() {
   g += candles(R0, sx, sy, Math.max(2, step * 0.62)) + wickNote(R0, sx, sy, 0.012);
   return '<section class="card"><div class="row"><h2>直近7日の動き</h2><span class="sub" style="margin:0">4時間足</span></div><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="BTCの4時間足のローソク足、直近7日。分かれ目などの水準の線つき">' + g + '</svg>' +
     '<p class="keys"><span><i class="k-cu"></i>上げ</span><span><i class="k-cd"></i>下げ</span><span>細い線が上ヒゲ・下ヒゲ</span></p>' +
-    '<p class="sub">日付の縦線は朝9時（日足の区切り）。下ヒゲは、いったん売られた後に買い戻された跡です。判定は朝9時の終値で決めるので、ヒゲで線を割っても、それだけでは判定は変わりません。</p></section>';
+    '<p class="sub">緑の点線は買い下がりの目安です（指値は株価で決まるので、BTCの値段は連動の強さから換算した目安）。日付の縦線は朝9時（日足の区切り）。下ヒゲは、いったん売られた後に買い戻された跡です。判定は朝9時の終値で決めるので、ヒゲで線を割っても、それだけでは判定は変わりません。</p></section>';
 }
 // 次の天井の見込み（research/top.py）：3つの見方の幅。株は前回サイクルのBTCに対する伸び方（対数の比）で換算
 const TOPS = [{ k: '控えめ', p: 125000, why: '前回の天井と同じ。天井どうしの倍率は17倍→3.5倍→1.85倍と縮んでいる' }, { k: '中くらい', p: 175000, why: '底から次の天井までの倍率（112倍→21倍→7.9倍）がさらに半分ほどに縮む場合' }, { k: '強め', p: 230000, why: '長期成長線に対する天井の上振れ（10.6倍→6.4倍→3.0倍→1.3倍）の縮み方が続く場合' }];
 const ELAS = { MSTR: 1.5, COIN: 1.1 };
+function longChart() {
+  const L = S._L, ls = S._ls, c = S.cyc; if (!L || !ls || !c) return '';
+  const t = L.t, C = L.c, n = C.length, T0 = Date.UTC(2012, 0, 1), T1 = Date.UTC(2030, 5, 1);
+  const pts = []; for (let i = 0; i < n; i += 7) if (t[i] >= T0) pts.push(i); if (pts[pts.length - 1] !== n - 1) pts.push(n - 1);
+  const fair = i => C[i] / Math.exp(ls.resid[i]), w2 = i => ok(ls.w200[i]) ? C[i] / Math.exp(ls.w200[i]) : NaN;
+  // 成長線を未来に伸ばす：直近2年の成長線の伸び方（対数の傾き）で延長
+  const i2 = n - 1, i1 = Math.max(0, n - 730), slope = (Math.log(fair(i2)) - Math.log(fair(i1))) / ((t[i2] - t[i1]) / DAY);
+  const fairAt = T => fair(i2) * Math.exp(slope * (T - t[i2]) / DAY);
+  const lo = 2, hi = 400000, Wd = 360, Hh = 250, pl = 30, pr = 6, pt = 8, pb = 18;
+  const sx = T => pl + (T - T0) / (T1 - T0) * (Wd - pl - pr), sy = v => pt + (Math.log(hi) - Math.log(Math.max(lo, v))) / (Math.log(hi) - Math.log(lo)) * (Hh - pt - pb);
+  let g = '';
+  [10, 100, 1000, 10000, 100000].forEach(v => { g += '<line x1="' + pl + '" x2="' + (Wd - pr) + '" y1="' + sy(v).toFixed(1) + '" y2="' + sy(v).toFixed(1) + '" class="grid"/><text x="' + (pl - 3) + '" y="' + (sy(v) + 3).toFixed(1) + '" class="ax" text-anchor="end">' + (v >= 1000 ? (v / 1000) + 'k' : v) + '</text>'; });
+  for (let y = 2013; y <= 2030; y += 2) { const X = sx(Date.UTC(y, 0, 1)); g += '<text x="' + X.toFixed(1) + '" y="' + (Hh - 4) + '" class="ax" text-anchor="middle">' + String(y).slice(2) + '</text>'; }
+  // 半減期
+  E.HALVINGS.concat([c.nextHalving]).forEach((h, k, a) => { const X = sx(h).toFixed(1); g += '<line x1="' + X + '" x2="' + X + '" y1="' + pt + '" y2="' + (Hh - pb) + '" class="ln-half"/><text x="' + (+X + 2) + '" y="' + (Hh - pb - 3) + '" class="ax">' + (k === a.length - 1 ? '半減期?' : '半減期') + '</text>'; });
+  // 次の天井の時期と見込み
+  const w0 = c.nextHalving + 520 * DAY, w1 = c.nextHalving + 560 * DAY;
+  g += '<rect x="' + sx(w0).toFixed(1) + '" y="' + pt + '" width="' + Math.max(3, sx(w1) - sx(w0)).toFixed(1) + '" height="' + (Hh - pt - pb) + '" class="zone"/>';
+  TOPS.forEach(T => { const y = sy(T.p).toFixed(1); g += '<line x1="' + (sx(w0) - 6).toFixed(1) + '" x2="' + (sx(w1) + 6).toFixed(1) + '" y1="' + y + '" y2="' + y + '" class="ln-buy"/>'; });
+  g += '<text x="' + (sx(w0) - 4).toFixed(1) + '" y="' + (pt + 9) + '" class="ax" text-anchor="end">次の天井 ' + kfmt(TOPS[0].p) + '〜' + kfmt(TOPS[2].p) + '</text>';
+  // 長期成長線（実線は過去、点線は延長）と200週線
+  const pf = 'M' + pts.filter(i => ok(fair(i)) && t[i] >= Date.UTC(2015, 0, 1)).map(i => sx(t[i]).toFixed(1) + ' ' + sy(fair(i)).toFixed(1)).join('L'), fut = []; for (let T = t[i2]; T <= T1; T += 30 * DAY) fut.push(sx(T).toFixed(1) + ' ' + sy(fairAt(T)).toFixed(1));
+  g += '<path d="' + pf + '" class="ma50"/><path d="M' + fut.join('L') + '" class="ma50" stroke-dasharray="3 3"/>';
+  const p2 = pts.filter(i => ok(w2(i))); g += '<path d="M' + p2.map(i => sx(t[i]).toFixed(1) + ' ' + sy(w2(i)).toFixed(1)).join('L') + '" class="ma200"/>';
+  g += '<path d="M' + pts.map(i => sx(t[i]).toFixed(1) + ' ' + sy(C[i]).toFixed(1)).join('L') + '" class="px"/>';
+  // 過去の天井と底
+  c.cyc.forEach(x => { g += '<circle cx="' + sx(x.peakT).toFixed(1) + '" cy="' + sy(x.peak).toFixed(1) + '" r="2.5" class="dot-top"/>'; if (x.done) g += '<circle cx="' + sx(x.lowT).toFixed(1) + '" cy="' + sy(x.low).toFixed(1) + '" r="2.5" class="dot-low"/>'; });
+  // 今
+  const X = sx(t[i2]), Y = sy(C[i2]); g += '<circle cx="' + X.toFixed(1) + '" cy="' + Y.toFixed(1) + '" r="4" class="dot"/><text x="' + (X + 6).toFixed(1) + '" y="' + (Y + 14).toFixed(1) + '" class="ax wk-lab">今 ' + kfmt(C[i2]) + '</text>';
+  const ratio = C[i2] / fair(i2);
+  return '<section class="card"><h2>長期チャートで今どこか</h2><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="2012年からのBTCの長期チャート（対数目盛）。半減期、過去の天井と底、長期成長線、200週線、次の天井の見込みつき">' + g + '</svg>' +
+    '<p class="keys"><span><i class="k-px"></i>BTC（週ごと）</span><span><i class="k-50"></i>長期成長線（点線は延長）</span><span><i class="k-200"></i>200週線</span><span><i class="k-cu" style="border-radius:50%"></i>底</span><span><i class="k-cd" style="border-radius:50%"></i>天井</span><span><i class="k-zone"></i>次の天井の時期</span></p>' +
+    '<p>今は、半減期から' + c.day + '日目の' + c.name + 'です。値段は長期成長線の' + Math.round(ratio * 100) + '%（過去の底は成長線の18〜49%、天井は127〜1060%）で、200週線より' + pc(Math.exp(ls.w200[i2]) - 1, 0) + 'です。縦の細線は半減期で、右端の薄い線が次の半減期（見込み）です。</p></section>';
+}
 function topCard() {
   const c = S.cyc; if (!c || !ok(S.price)) return '';
   const nh = c.nextHalving, f = t => { const d = new Date(t); return d.getFullYear() + '年' + (d.getMonth() + 1) + '月'; };
@@ -1885,7 +1923,7 @@ function viewJudge() {
   const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
   const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
-  return alarmBanner() + todayCard() + holdCards() + intradayChart() + bottomCard() + topCard() + (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + '<h2 class="sec">時間軸ごとの判定</h2>' +
+  return alarmBanner() + todayCard() + holdCards() + intradayChart() + longChart() + bottomCard() + topCard() + (((S.cfg && S.cfg.buy) || 'auto') === 'auto' ? pickCard() : '') + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
     flags + cycleCard() + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
