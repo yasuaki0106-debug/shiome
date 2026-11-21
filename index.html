@@ -1373,7 +1373,7 @@ function concernList(und, max) {
 }
 function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
   const b = budget(), t0 = buyTicker(), t = planTicker(p);
-  const px = priceNow(t), per = { buy: b.total * (1 - LAD_SHARE) / MAXBUY, trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a];
+  const px = priceNow(t), per = { buy: b.cash / Math.max(1, MAXBUY - (p.n || 0)), trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a];
   if (!(b.total > 0)) return '<div class="money"><b>現金：未登録</b><p>「関連株」タブの「資金」に、買うために用意している現金を入れると、買う日に金額と株数を出します。</p></div>';
   let h = '<div class="money"><div class="row"><b>現金 <span class="num">' + usd(b.cash) + '</span></b><span class="sub" style="margin:0">予定額 ' + usd(b.total) + '（使った分 ' + usd(b.used) + '）</span></div>';
   if (per) {
@@ -1449,12 +1449,13 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   const items = [], al = (S.hold || []).filter(h => h.alarm), b = budget();
   al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : ''; items.push({ lv: 'warn', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → ' + (h.a === 'switch' ? '売って ' + und + ' に替える（2倍をやめる）' : h.a === 'sell' ? '売る' : h.alarm) }); });
   if (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial') {
-    const t = planTicker(p), per = { buy: b.total * (1 - LAD_SHARE) / MAXBUY, trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
+    const t = planTicker(p), per = { buy: b.cash / Math.max(1, MAXBUY - (p.n || 0)), trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
     const po = placedOrders(), lo = p.a === 'ladder' && !po ? ladderOrders(p) : null;
-    if (b.total > 0 && lo) { const ex = new Date(lo.exp);
+    if (false) {} else if (b.total > 0 && lo) { const ex = new Date(lo.exp);
       items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる（値段は今朝9時の確定値で決めていて、今日のあいだは変わりません）', sub: lo.rows.map(r => r.k + '本目　' + usd2(r.px) + '　' + r.n + '株' + (r.k === 1 ? '（期限 ' + mdUS(lo.exp) + '）' : '')) });
       items.push({ lv: 'info', t: '1本目が ' + mdUS(lo.exp) + ' の引けまでに届かなければ、引けに成行で買う' + (lo.ev ? '（' + lo.ev.title.replace(/（.*?）/g, '') + 'の後まで待つ）' : '') });
       items.push({ lv: 'info', t: '4本入れたら、下のボタンを押す（値段を覚えて、変える必要があるときだけ知らせます）', btn: 'ord-set' }); }
+    if (p.a === 'buy' && placedOrders() && ladderLots().length < LAD_N) items.push({ lv: 'warn', t: '残っている買い下がりの指値（' + (LAD_N - ladderLots().length) + '本）を取り消す。そのお金も確認買いに回して、買い切ります', btn: 'ord-cancel' });
     else if (b.total > 0 && p.a !== 'ladder') { items.push({ lv: 'buy', t: (p.a === 'buy' ? '確認買い' : '試し買い') + '：' + t + ' を ' + usd(amt) + ' 分' + (ok(n) ? '（約' + n + '株、目安 ' + usd2(px) + '）' : '') + '、その取引時間のうちに買う（指値で待たない）' });
       items.push({ lv: 'info', t: '買ったら「関連株」タブで記録する（現金は自動で引かれます）' }); }
     else if (!(b.total > 0)) items.push({ lv: 'info', t: '「関連株」タブの「資金」に現金を入れる（金額と株数が出ます）' });
@@ -1473,7 +1474,7 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   const nothing = !items.length;
   if (nothing) items.push({ lv: 'info', t: '今日は売り買いなし。' + (b.cash > 0 ? '現金 ' + usd(b.cash) + ' はそのまま待機' : '次の合図を待つ') });
   const cn = (() => { try { const t = planTicker(p); return concernsFor(ETF[t] ? ETF[t].und : t).length; } catch (e) { return 0; } })();
-  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + (x.btn === 'ord-set' ? '<button class="btn small" data-ord="set">4本入れた</button>' : x.btn === 'ord-fix' ? '<button class="btn small" data-ord="fix">変えた</button>' : '') + '</li>').join('') + '</ol><p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
+  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + (x.btn === 'ord-set' ? '<button class="btn small" data-ord="set">4本入れた</button>' : x.btn === 'ord-fix' ? '<button class="btn small" data-ord="fix">変えた</button>' : x.btn === 'ord-cancel' ? '<button class="btn small" data-ord="cancel">取り消した</button>' : '') + '</li>').join('') + '</ol><p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
 }
 function glossary() {
   const G = [['買い下がり', '底値圏で、下がるたびに分けて買う買い方。予定額の半分を4本の指値（-10%ごと）で'], ['確認買い', '上向きを確かめてから買う買い方。残り半分を2回。中期の判定が75以上で出る'],
@@ -2218,7 +2219,7 @@ function ruleCard() {
   const nm = { '2015': '2015年の底', '2019': '2018〜19年の底', '2023': '2022〜23年の底', '今回': '今回（11/20時点）' };
   return '<section class="card"><h2>今の買い方</h2><ul class="exit">' +
     '<li><b>買い下がり（予定額の半分）</b>：半減期から750日目以降の底値圏で、底らしさ50%以上のとき、BTCの終値が90日ぶりの安値を付けたら1回目。その後は1回目の買値の-10%・-20%・-30%で買い足す（4回まで）。損切りは置かず、BTCが1回目から-50%で想定外のアラーム</li>' +
-    '<li><b>確認買い（残り半分）</b>：中期の判定が「買い好機」になった日に1回目、その後14日以上あけて「打診買い」以上なら2回目。底らしさ50%以上が条件。重要イベントの48時間前と清算リスクが高い日は見送り</li>' +
+    '<li><b>確認買い（残り半分）</b>：中期の判定が「買い好機」になった日に1回目、その後14日以上あけて「打診買い」以上なら2回目。その時点で約定していない買い下がりの指値は取り消し、そのお金も確認買いに回して買い切る（2026年11月から）。底らしさ50%以上が条件。重要イベントの48時間前と清算リスクが高い日は見送り</li>' +
     '<li><b>銘柄</b>：その日の状況（BTCに対する割安・割高など）でMSTR系かCOIN系を選ぶ。判定が20未満の間は1倍、75以上で2倍</li>' +
     '<li><b>出口</b>：次の半減期から400〜550日目に分けて売り、200日線を2週間割ったら残りも売る</li></ul>' +
     '<h3>この買い方で過去に出ていた合図</h3><p class="sub" style="margin-top:0">下＝買い下がり、確＝確認買い。損益は、その日に買って90日後・1年後・天井の出口で売った場合です。</p>' + Object.keys(by).map(k => { const st = by[k].some(x => x.MSTR); return '<h3 class="h3s">' + nm[k] + '</h3><div class="xscroll"><table class="tbl sm"><thead><tr><th>合図</th><th>BTC</th><th>90日後</th><th>1年後</th><th>出口</th>' + (st ? '<th>MSTR</th><th>COIN</th>' : '') + '</tr></thead><tbody>' + by[k].map(x => '<tr><th>' + x.kind.replace('買い下がり', '下').replace('確認買い', '確') + '<br><small>' + x.date.slice(2).replace(/-/g, '/') + '</small></th><td class="num">$' + x.px.toLocaleString('en-US') + '</td><td class="num">' + x.d90 + '</td><td class="num">' + x.d365 + '</td><td class="num">' + x.top.replace('進行中 ', '') + '</td>' + (st ? '<td class="num">' + (x.MSTR || '—').replace('進行中 ', '') + '</td><td class="num">' + (x.COIN || '—').replace('進行中 ', '') + '</td>' : '') + '</tr>').join('') + '</tbody></table></div>'; }).join('') +
@@ -2445,6 +2446,7 @@ document.addEventListener('click', e => {
   else if (t.dataset.keep != null) { const a = LS.get('pos', []), k = +t.dataset.keep; if (a[k]) { if (a[k].keep2x) delete a[k].keep2x; else a[k].keep2x = ymd(Date.now()) + 'に決定'; LS.set('pos', a); S.hold = holdAll(); render(); } }
   else if (t.dataset.ord) {
     if (t.dataset.ord === 'set') { const lo = ladderOrders(S.plan); if (lo) LS.set('orders', { t: lo.t, rows: lo.rows, exp: lo.exp, at: Date.now() }); }
+    if (t.dataset.ord === 'cancel') LS.del('orders');
     if (t.dataset.ord === 'fix') { const po = placedOrders(), f1 = ladderLots()[0]; if (po && f1) { po.rows = po.rows.map((r, k) => k === 0 ? Object.assign({}, r, { px: f1.cost }) : Object.assign({}, r, { px: Math.floor(f1.cost * (1 - LAD_STEP * k) * 100) / 100 })); LS.set('orders', po); } }
     render(); }
   else if (t.closest && t.closest('.todo li[data-done]') && !t.closest('.ord') && !t.closest('button')) { const k = +t.closest('.todo li[data-done]').dataset.done, key = 'done.' + dkey(Date.now()), a = new Set(LS.get(key, [])); a.has(k) ? a.delete(k) : a.add(k); LS.set(key, [...a]); render(); }
