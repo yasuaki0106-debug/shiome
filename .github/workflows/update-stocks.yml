@@ -42,7 +42,7 @@ jobs:
       - run: node scripts/daily_signal.js | tee data/last_signal_run.txt
         continue-on-error: true
         env:
-          NTFY_TOPIC: shiome-b385e71038d6
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TEST: ${{ github.event.inputs.test }}
       - run: python scripts/update_premium.py
         continue-on-error: true
