@@ -103,7 +103,7 @@ async function loadLong() {
 async function loadHourly() { // 直近8日ほどの1時間足。米国株の引けの時刻のBTC価格を知るために使う
   let lastErr;
   for (const host of ['https://data-api.binance.vision', 'https://api.binance.com']) {
-    try { const k = await jget(host + '/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=200'); if (!Array.isArray(k) || !k.length) throw new Error('empty'); const m = new Map(); k.forEach(x => m.set(+x[0], +x[4])); return m; }
+    try { const k = await jget(host + '/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=200'); if (!Array.isArray(k) || !k.length) throw new Error('empty'); const m = new Map(); k.forEach(x => m.set(+x[0], +x[4])); m.rows = k.map(x => [+x[0], +x[1], +x[2], +x[3], +x[4]]); return m; }
     catch (e) { lastErr = e; }
   }
   throw lastErr;
@@ -393,6 +393,7 @@ function decide() {
   }
   const rt0 = (() => { try { return retestState(); } catch (e) { return null; } })();
   if (rt0 && rt0.broke) flags.push({ lv: 'warn', src: '安値割れ', text: md(rt0.loT) + ' の安値 ' + usd(rt0.lo) + ' を終値で3%以上割りました。過去は、この後さらに大きく下げてから底を付けています。買い判定が出るまで待ってください。' });
+  else if (rt0 && rt0.retest && S.liveRow && Math.min(S.liveRow[3], S.price || Infinity) < rt0.level) flags.push({ lv: 'warn', src: '安値割れ（日中）', text: '今日、一時 ' + usd(Math.min(S.liveRow[3], S.price)) + ' まで下げて、分かれ目 ' + usd(rt0.level) + ' を割りました。朝9時の終値がこれより下なら「割った」に変わります。' });
   else if (rt0 && rt0.retest) flags.push({ lv: 'info', src: '安値の試し直し', text: md(rt0.loT) + ' の安値 ' + usd(rt0.lo) + ' を試しています。終値で ' + usd(rt0.level) + ' を割るかどうかが分かれ目です。' });
   const cp = S.cbp;
   if (cp && ok(cp.gap) && Math.abs(cp.gap) >= 0.0008) flags.push({ lv: 'info', src: '米国の需給', text: cp.gap > 0 ? '米国の取引所（Coinbase）で買いが強まっています。過去は、この状態の後1週間〜1か月が上がりやすい傾向でした。' : '米国の取引所（Coinbase）で売りが優勢です。過去は、この状態の後1週間〜1か月が弱めの傾向でした。' });
@@ -846,7 +847,9 @@ function priceChart() {
     g += '<line x1="' + x0.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + P(fc.q50).toFixed(1) + '" class="med"/>';
     g += '<line x1="' + x0.toFixed(1) + '" x2="' + x0.toFixed(1) + '" y1="' + pt + '" y2="' + (Hh - pb) + '" class="nowl"/>';
   }
-  g += '<path d="' + line(ind.s200) + '" class="ma200"/><path d="' + line(ind.s50) + '" class="ma50"/><path d="' + line(d.c) + '" class="px"/>';
+  g += '<path d="' + line(ind.s200) + '" class="ma200"/><path d="' + line(ind.s50) + '" class="ma50"/>';
+  if (N <= 120) { const rowsD = []; for (let i = a; i < n; i++) rowsD.push([d.t[i], d.o[i], d.h[i], d.l[i], d.c[i]]); const st = (sx(n - 1) - sx(a)) / Math.max(1, N - 1); g += candles(rowsD, k => sx(a + k), sy, Math.max(1.5, st * 0.62)) + wickNote(rowsD, k => sx(a + k), sy, 0.03); }
+  else g += '<path d="' + line(d.c) + '" class="px"/>';
   g += '<circle cx="' + sx(n - 1).toFixed(1) + '" cy="' + sy(price).toFixed(1) + '" r="3" class="dot"/>';
   // signal ribbon
   const pctA = hz.sc.pct; let run = null; const yb = Hh - pb + 4;
@@ -995,13 +998,63 @@ function retestState() { // 今の形：前の安値を試し直しているか�
   const rally = hi / lo - 1, px = C[last], level = lo * 0.97;
   return { lo, loT: t[li], rally, px, level, retest: rally >= 0.3 && px <= lo * 1.05, broke: rally >= 0.3 && px < level, days: last - pk };
 }
+function crossNeed() { // 明日の朝9時の確定で20日線を上抜くのに必要な終値（今日の終値で20日線の上に出る値）
+  const c = S.d.c, n = c.length; let s = 0; for (let i = n - 19; i < n; i++) s += c[i]; return s / 19;
+}
+function intradayBreak() { // 確定前の今日の日足で、分かれ目を一時的に割ったか
+  const r = S.rt, lr = S.liveRow; if (!r || !lr || !(r.retest || r.broke)) return null;
+  const lowToday = Math.min(lr[3], S.price);
+  return !r.broke && lowToday < r.level ? { low: lowToday, level: r.level } : null;
+}
 function retestBlock() {
   const r = S.rt; if (!r || !(r.retest || r.broke)) return '';
   const late = BREAKS.filter(x => x[1] >= 300 && x[0].slice(0, 4) !== '2026'), all = BREAKS.filter(x => x[0].slice(0, 4) !== '2026');
   const rng = a => pc(Math.max(...a.map(x => x[2])), 0) + '〜' + pc(Math.min(...a.map(x => x[2])), 0), dys = a => Math.min(...a.map(x => x[3])) + '〜' + Math.max(...a.map(x => x[3])) + '日';
-  return '<h3>今の形：前の安値の試し直し</h3><p>' + md(r.loT) + ' の安値 <span class="num">' + usd(r.lo) + '</span> から' + pc(r.rally, 0) + '戻した後、また同じ水準まで下げています（天井から' + r.days + '日）。' + (r.broke ? '<b>終値で前の安値を3%以上割りました。</b>' : '見るべき値段は <b class="num">' + usd(r.level) + '</b>（前の安値の3%下）です。終値でここを割るかどうかで、見込みが分かれます。') + '</p>' +
+  const ib = intradayBreak();
+  return '<h3>今の形：前の安値の試し直し</h3>' + (ib ? '<p class="note good" style="border-left-color:var(--wait)">今日（朝9時から）、一時 ' + usd(ib.low) + ' まで下げて分かれ目を割りました。判定は終値で決めるので、朝9時の確定で ' + usd(ib.level) + ' より上で終われば「割った」には数えません。過去の検証も終値で行っています。</p>' : '') + '<p>' + md(r.loT) + ' の安値 <span class="num">' + usd(r.lo) + '</span> から' + pc(r.rally, 0) + '戻した後、また同じ水準まで下げています（天井から' + r.days + '日）。' + (r.broke ? '<b>終値で前の安値を3%以上割りました。</b>' : '見るべき値段は <b class="num">' + usd(r.level) + '</b>（前の安値の3%下）です。終値でここを割るかどうかで、見込みが分かれます。') + '</p>' +
     '<ul class="exit"><li><b>割らずに止まる場合</b>：二番底の形です。買い判定が出るのを待ちます</li><li><b>割った場合</b>：過去のサイクルでは' + all.length + '回あり、割った後さらに' + rng(all) + '下げ、底まで' + dys(all) + 'かかりました。天井から300日以上たってから割った' + late.length + '回に限ると、底まで' + dys(late) + 'でした。今に当てはめると ' + usd(r.level * (1 + Math.max(...all.map(x => x[2])))) + ' 以下です</li><li><b>今回のサイクルは浅い</b>：6月に同じ形で前の安値を割ったときは、さらに-4%で止まりました。下落率が回を追って浅くなっている流れと合います</li></ul>' +
     '<p class="sub">割った場合は「底は近づくが、値段はまだ深くなりやすい局面」です。どちらの場合も、買うのは買い判定が出てからです。</p>';
+}
+function candles(rows, sx, sy, bw) { // ローソク足：細い線が上ヒゲ・下ヒゲ（高値〜安値）、太い部分が始値〜終値。上げは緑、下げは赤
+  let g = '';
+  rows.forEach((x, i) => {
+    const up = x[4] >= x[1], cx = sx(i), top = sy(Math.max(x[1], x[4])), bot = sy(Math.min(x[1], x[4]));
+    g += '<line x1="' + cx.toFixed(1) + '" x2="' + cx.toFixed(1) + '" y1="' + sy(x[2]).toFixed(1) + '" y2="' + sy(x[3]).toFixed(1) + '" class="' + (up ? 'wk-u' : 'wk-d') + '"/>';
+    g += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1, bot - top).toFixed(1) + '" class="' + (up ? 'cd-u' : 'cd-d') + '"/>';
+  });
+  return g;
+}
+function wickNote(rows, sx, sy, minPct) { // いちばん長い下ヒゲと上ヒゲに印をつける
+  let bl = null, bu = null;
+  rows.forEach((x, i) => { const body = Math.abs(x[4] - x[1]), lw = Math.min(x[1], x[4]) - x[3], uw = x[2] - Math.max(x[1], x[4]);
+    if (lw / x[4] >= minPct && lw >= body * 1.5 && (!bl || lw > bl.w)) bl = { i, w: lw, p: x[3] };
+    if (uw / x[4] >= minPct && uw >= body * 1.5 && (!bu || uw > bu.w)) bu = { i, w: uw, p: x[2] }; });
+  let g = '';
+  if (bl) g += '<text x="' + sx(bl.i).toFixed(1) + '" y="' + (sy(bl.p) + 11).toFixed(1) + '" class="ax wk-lab" text-anchor="middle">下ヒゲ ' + kfmt(bl.p) + '</text>';
+  if (bu) g += '<text x="' + sx(bu.i).toFixed(1) + '" y="' + (sy(bu.p) - 4).toFixed(1) + '" class="ax wk-lab" text-anchor="middle">上ヒゲ ' + kfmt(bu.p) + '</text>';
+  return g;
+}
+function intradayChart() {
+  const m = S.hourly, rows = m && m.rows; if (!rows || rows.length < 24) return '';
+  // 1時間足を4時間足にまとめる（日本時間の9時・13時・17時…で区切る）
+  const buckets = new Map(); rows.forEach(x => { const k = x[0] - (x[0] % (4 * 36e5)); const b = buckets.get(k); if (!b) buckets.set(k, [k, x[1], x[2], x[3], x[4]]); else { b[2] = Math.max(b[2], x[2]); b[3] = Math.min(b[3], x[3]); b[4] = x[4]; } });
+  const R0 = [...buckets.values()].sort((a, b) => a[0] - b[0]).slice(-42), N = R0.length, price = S.price, r = S.rt, need = crossNeed();
+  if (N) { const last = R0[N - 1]; last[4] = price; last[2] = Math.max(last[2], price); last[3] = Math.min(last[3], price); }
+  const lines = [];
+  if (r && (r.retest || r.broke)) { lines.push({ p: r.level, lab: '分かれ目 ' + kfmt(r.level), cls: 'ln-warn' }); lines.push({ p: r.lo, lab: '6月の安値 ' + kfmt(r.lo), cls: 'ln-mute' }); }
+  const tp = trialPos(); if (tp) lines.push({ p: tp.stop, lab: '撤退 ' + kfmt(tp.stop), cls: 'ln-warn' });
+  if (ok(need)) lines.push({ p: need, lab: '試し買いの目安 ' + kfmt(need), cls: 'ln-buy' });
+  let lo = Infinity, hi = -Infinity; R0.forEach(x => { lo = Math.min(lo, x[3]); hi = Math.max(hi, x[2]); });
+  const vis = lines.filter(l => l.p > lo * 0.92 && l.p < hi * 1.10); vis.forEach(l => { lo = Math.min(lo, l.p); hi = Math.max(hi, l.p); });
+  lo *= 0.99; hi *= 1.01;
+  const Wd = 360, Hh = 210, pl = 4, pr = 4, pt = 10, pb = 18, step = (Wd - pl - pr) / N, sx = i => pl + step * (i + 0.5), sy = v => pt + (hi - v) / (hi - lo) * (Hh - pt - pb);
+  let g = '';
+  R0.forEach((x, i) => { if (new Date(x[0]).getUTCHours() === 0) { const X = (sx(i) - step / 2).toFixed(1); g += '<line x1="' + X + '" x2="' + X + '" y1="' + pt + '" y2="' + (Hh - pb) + '" class="grid"/><text x="' + (+X + 2) + '" y="' + (Hh - 5) + '" class="ax">' + md(x[0]) + '</text>'; } });
+  vis.forEach(l => { const y = sy(l.p).toFixed(1); g += '<line x1="' + pl + '" x2="' + (Wd - pr) + '" y1="' + y + '" y2="' + y + '" class="' + l.cls + '"/><text x="' + (pl + 2) + '" y="' + (sy(l.p) - 3).toFixed(1) + '" class="ax">' + l.lab + '</text>'; });
+  g += candles(R0, sx, sy, Math.max(2, step * 0.62)) + wickNote(R0, sx, sy, 0.012);
+  return '<section class="card"><div class="row"><h2>直近7日の動き</h2><span class="sub" style="margin:0">4時間足</span></div><svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="BTCの4時間足のローソク足、直近7日。分かれ目などの水準の線つき">' + g + '</svg>' +
+    '<p class="keys"><span><i class="k-cu"></i>上げ</span><span><i class="k-cd"></i>下げ</span><span>細い線が上ヒゲ・下ヒゲ</span></p>' +
+    '<p class="sub">日付の縦線は朝9時（日足の区切り）。下ヒゲは、いったん売られた後に買い戻された跡です。判定は朝9時の終値で決めるので、ヒゲで線を割っても、それだけでは判定は変わりません。</p></section>';
 }
 function bottomCard() {
   const b = S.bo; if (!b) return '';
@@ -1077,12 +1130,12 @@ function viewJudge() {
   const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
   const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
-  return alarmBanner() + todayCard() + holdCards() + bottomCard() + pickCard() + '<h2 class="sec">時間軸ごとの判定</h2>' +
+  return alarmBanner() + todayCard() + holdCards() + intradayChart() + bottomCard() + pickCard() + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
     flags + cycleCard() + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
     '<section class="card"><div class="row"><h2>価格と予測レンジ</h2><div class="seg" role="group" aria-label="表示期間">' + [[90, '3か月'], [365, '1年'], [1460, '4年']].map(r => '<button data-range="' + r[0] + '" aria-pressed="' + (S.range === r[0]) + '">' + r[1] + '</button>').join('') + '</div></div>' + priceChart() +
-    '<p class="keys"><span><i class="k-px"></i>終値</span><span><i class="k-50"></i>50日線</span><span><i class="k-200"></i>200日線</span><span><i class="k-cone"></i>予測の幅（濃い帯は50%、薄い帯は80%）</span><span><i class="k-zone"></i>エントリー候補</span></p><p class="sub">チャート下の帯は、その日に出ていた' + H.name + '判定です。</p></section>' +
+    '<p class="keys"><span><i class="k-px"></i>終値（3か月表示はローソク足）</span><span><i class="k-50"></i>50日線</span><span><i class="k-200"></i>200日線</span><span><i class="k-cone"></i>予測の幅（濃い帯は50%、薄い帯は80%）</span><span><i class="k-zone"></i>エントリー候補</span></p><p class="sub">チャート下の帯は、その日に出ていた' + H.name + '判定です。</p></section>' +
     '<section class="card"><h2>エントリー候補の価格帯</h2><p class="sub">現値 <span class="num">' + usd(price) + '</span> より下で、テクニカル・出来高・オプション・清算の節目が重なる水準です。●が多いほど根拠が重なっています。</p><ul class="zones">' + below + '</ul>' + (above ? '<h3>上値の節目</h3><ul class="zones">' + above + '</ul>' : '') + '</section>' +
 
     '<section class="card"><h2>データの取得状況</h2><ul class="stat">' + stat + '</ul><p class="sub">判定に使う日足は ' + ymd(S.d.t[S.d.c.length - 1]) + '（UTC）の確定分まで。開いている間は5分ごとに更新します。</p></section>' +
