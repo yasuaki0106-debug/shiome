@@ -3,6 +3,7 @@ on:
   schedule:
     - cron: "30 21 * * 1-5"   # 米国市場の終了後（夏時間）
     - cron: "30 22 * * 1-5"   # 米国市場の終了後（冬時間）
+    - cron: "15 3 * * 2-6"    # 翌朝に確定値で取り直し
   workflow_dispatch:
 permissions:
   contents: write
