@@ -592,10 +592,11 @@ function planTicker(p) { // 今日買う銘柄：判定が20未満のうちは1�
 // 確かめた重要な材料（調べた日付と出どころつき）。期限を過ぎたら出さない
 const PINNED = [
   { sym: 'MSTR', from: Date.UTC(2026, 10, 11), until: Date.UTC(2026, 11, 2), lv: 'warn', text: 'MSCI USA指数から外れます（11/30の引けで実施）。指数に連動するファンドの売りが、11/30の引けにかけて出やすくなります', src: 'The Block 11/11', link: 'https://www.theblock.co/news/markets/2026-11-11-strategy-metaplanet-lose-msci-index-membership-november-reshuffle-438437' },
+  { sym: 'ALL', from: Date.UTC(2026, 10, 10), until: Date.UTC(2026, 11, 10, 20), lv: 'warn', text: '金利：12/9のFOMCで利上げがほぼ確実視されています（先物の織り込みは100%、0.5%の利上げを示唆する理事も）。10月の消費者物価が予想を上回ったため。12/10には11月の消費者物価も出ます', src: 'Mortgage Professional America 11/10', link: 'https://www.mpamag.com/us/mortgage-industry/industry-trends/fed-rate-hike-odds-hit-100-as-waller-floats-bigger-december-move/596880' },
   { sym: 'COIN', from: Date.UTC(2026, 9, 30), until: Date.UTC(2026, 11, 31), lv: 'info', text: '7〜9月期の決算で売上が前年比35%減。その後、モルガン・スタンレーが売り推奨に下げ、目標株価を53%引き下げ', src: 'StockStory・Stock Analysis', link: 'https://stockanalysis.com/stocks/coin/' }
 ];
 function concernsFor(und) {
-  const now = Date.now(), out = PINNED.filter(x => x.sym === und && now >= x.from && now < x.until).map(x => ({ lv: x.lv, text: x.text, src: x.src, link: x.link, t: x.from, pinned: true }));
+  const now = Date.now(), out = PINNED.filter(x => (x.sym === und || x.sym === 'ALL') && now >= x.from && now < x.until).map(x => ({ lv: x.lv, text: x.text, src: x.src, link: x.link, t: x.from, pinned: true }));
   const it = (S.news && S.news.items && S.news.items[und]) || [];
   it.filter(x => x.concern && now - x.t < 10 * DAY).slice(0, 3).forEach(x => out.push({ lv: 'info', text: x.title, src: x.src, link: x.link, t: x.t, tags: x.tags }));
   const ed = S.news && S.news.earn && S.news.earn[und]; if (ed) { const T = Date.parse(ed + 'T21:00:00Z'); if (T > now && T - now < 14 * DAY) out.unshift({ lv: 'warn', text: '決算発表が ' + md(T) + ' に予定されています。発表の前後は大きく動きます', src: 'Nasdaq', t: now }); }
@@ -603,7 +604,7 @@ function concernsFor(und) {
 }
 function concernList(und, max) {
   const cs = concernsFor(und).slice(0, max || 4); if (!cs.length) return '';
-  return '<div class="concern"><b>' + und + ' 系の懸念材料</b><ul>' + cs.map(c => '<li class="c-' + c.lv + '">' + esc(c.text) + '<small>' + (c.link ? '<a href="' + esc(c.link) + '" target="_blank" rel="noopener">' + esc(c.src || '出典') + '</a>' : esc(c.src || '')) + (c.t ? '・' + md(c.t) : '') + '</small></li>').join('') + '</ul><p class="sub">懸念があっても、買いの判定は変えていません（ニュースの影響は過去データで確かめられないため）。気になる場合は「関連株」タブで買う銘柄をもう一方に固定できます。</p></div>';
+  return '<div class="concern"><b>' + und + ' 系と相場全体の懸念材料</b><ul>' + cs.map(c => '<li class="c-' + c.lv + '">' + esc(c.text) + '<small>' + (c.link ? '<a href="' + esc(c.link) + '" target="_blank" rel="noopener">' + esc(c.src || '出典') + '</a>' : esc(c.src || '')) + (c.t ? '・' + md(c.t) : '') + '</small></li>').join('') + '</ul><p class="sub">懸念があっても、買いの判定は変えていません（ニュースの影響は過去データで確かめられないため）。気になる場合は「関連株」タブで買う銘柄をもう一方に固定できます。</p></div>';
 }
 function moneyBox(p) { // 今日の結論に、使う金額と株数を添える
   const b = budget(), t0 = buyTicker(), t = planTicker(p);
