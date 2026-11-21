@@ -251,7 +251,7 @@ function compute() {
   S.zones = E.entryZones(d, S.R.ind, S.price, S.opt, S.liq);
   S.events = allEvents();
   S.prov = null;
-  decide(); computeStocks(); S.up = upside(); S.plan = buildPlan(); S.hold = holdAll(); S.pick = pickStock(); writeLog();
+  decide(); computeStocks(); S.up = upside(); S.plan = buildPlan(); S.bo = bottomOutlook(); S.hold = holdAll(); S.pick = pickStock(); writeLog();
 }
 
 function actsFrom(R) { // スコアの判定に、検証結果・イベント・清算リスクによる引き下げを反映する
@@ -636,7 +636,7 @@ function writeLog() {
   const up = S.up && S.up.type !== 'neutral' ? { t: S.up.type, lid: ok(S.up.lidLv) ? Math.round(S.up.lidLv) : null, tg: ok(S.up.tgt) ? Math.round(S.up.tgt) : null } : null;
   const pk = S.pick ? S.pick.final : null;
   const hv = (S.hold || []).filter(h => ok(h.now)).map(h => ({ s: h.p.sym, a: h.a, px: +h.now.toFixed(2) }));
-  const rec = { k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, hv, pk, cy: S.cyc ? S.cyc.phase : null, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, ev: !!S.ev48, cbp: S.cbp && ok(S.cbp.gap) ? +S.cbp.gap.toFixed(5) : null };
+  const rec = { k: key, t: d.t[n - 1], px: d.c[n - 1], pct, act, pa: pl ? pl.a : null, sp, up, hv, pk, cy: S.cyc ? S.cyc.phase : null, lr: ok(liq.longRisk) && liq.ok ? liq.longRisk : null, sr: ok(liq.shortRisk) && liq.ok ? liq.shortRisk : null, fl: !!liq.flush, sk: ok(opt.skew) ? +opt.skew.toFixed(1) : null, pcr: ok(opt.pcrOI) ? +opt.pcrOI.toFixed(2) : null, bo: S.bo ? { zl: S.bo.zone ? Math.round(S.bo.zone.lo) : null, zh: S.bo.zone ? Math.round(S.bo.zone.hi) : null, e1: S.bo.eta ? dkey(S.bo.eta.from) : null, e2: S.bo.eta ? dkey(S.bo.eta.to) : null } : null, ev: !!S.ev48, cbp: S.cbp && ok(S.cbp.gap) ? +S.cbp.gap.toFixed(5) : null };
   const pv = S.prov ? { a: S.prov.a, f: +S.prov.frac.toFixed(2), s: Math.round(S.prov.pct.s), m: Math.round(S.prov.pct.m), l: Math.round(S.prov.pct.l) } : null;
   if (pv) rec.pv = pv;
   if (!old) { log.push(rec); LS.set('log', log.slice(-900)); return; }
@@ -860,6 +860,54 @@ function provBox() {
     (up ? '置いていかれたくない場合は、確定を待たずに予定の一部だけ先に入れる方法があります。暫定は確定までに元に戻ることもあります。' : '買いを考えていた場合は、確定を待つか、量を減らす判断材料になります。') + '</p></div>';
 }
 const ORDERP = ['skip', 'limit', 'buy'];
+/* ---------- 底と買い場の見込み ---------- */
+// 過去3回の底値圏（半減期から750〜1100日目）で、中期スコアが20以下だった日から「買い好機」が出るまで（research/wait.js）
+const WAIT = { med: 106, q25: 52, q75: 170, dnMed: -0.19, dnQ25: -0.49, pxMed: 0.0, pxQ25: -0.16, pxQ75: 0.29 };
+function bottomOutlook() {
+  const c = S.cyc, L = S._L, ls = S._ls; if (!c || !L || !ls || !S.R) return null;
+  const n = L.c.length, px = L.c[n - 1], peak = c.cur.peak, now = Date.now();
+  const daysTop = Math.floor((now - c.cur.peakT) / DAY), past = c.past;
+  const r = ls.resid[n - 1], w = ls.w200[n - 1], w200 = px / Math.exp(w), atResid = q => px * Math.exp(q - r);
+  // 値段のシナリオ
+  const lowSoFar = c.cur.low, pastDD = past.map(x => x.dd), pastResid = past.map(x => { let k = 0; for (let i = 0; i < n; i++) if (L.t[i] >= x.lowT) { k = i; break; } return ls.resid[k]; });
+  const pastW = past.map(x => { let k = 0; for (let i = 0; i < n; i++) if (L.t[i] >= x.lowT) { k = i; break; } return ok(ls.w200[k]) ? Math.exp(ls.w200[k]) - 1 : NaN; }).filter(ok);
+  const lev = [];
+  lev.push({ p: peak * 0.4, why: '天井から-60%' });
+  if (pastW.length) lev.push({ p: w200 * (1 + Math.min(...pastW)), why: '200週線の' + pc(Math.min(...pastW), 0) + '（前回の底）' });
+  const rMid = pastResid.slice(1).reduce((a, b) => a + b, 0) / Math.max(1, pastResid.length - 1); lev.push({ p: atResid(rMid), why: '長期成長線に対して、直近2回の底と同じ位置' });
+  const below = lev.filter(x => x.p < px * 0.97), above = lev.filter(x => x.p >= px * 0.97);
+  const zone = below.length ? { lo: Math.min(...below.map(x => x.p)), hi: Math.max(...below.map(x => x.p)), lev: below, above } : null;
+  const deep = peak * (1 + Math.max(...pastDD));
+  // 時期
+  const tdays = past.map(x => Math.round((x.lowT - x.peakT) / DAY)), hdays = past.map(x => x.lowDay);
+  const timeDone = daysTop >= Math.max(...tdays) && c.day >= Math.max(...hdays);
+  // 数週間の下値（30日）
+  const fm = S.R.hz.m.fc, near = [];
+  if (fm) { near.push({ p: S.price * (1 + fm.q25), why: '30日以内：似た状況の過去で、4回に1回はここまで下げた' }); near.push({ p: S.price * (1 + fm.q10), why: '30日以内：10回に1回はここまで下げた' }); }
+  const cl = S.liq && S.liq.clusters && S.liq.clusters.below && S.liq.clusters.below[0]; if (cl) near.push({ p: cl.p, why: 'ロング清算の集中帯（推定）。下ヒゲで突きやすい' });
+  if (S.opt && S.opt.putWall) near.push({ p: S.opt.putWall.K, why: 'プット建玉の壁' });
+  // 買い判定までの見込み
+  const mNow = S.R.hz.m.pct, lowScore = ok(mNow) && mNow <= 20;
+  const eta = lowScore ? { from: now + WAIT.q25 * DAY, to: now + WAIT.q75 * DAY, med: now + WAIT.med * DAY } : null;
+  return { px, peak, daysTop, day: c.day, dd: px / peak - 1, w200, wr: Math.exp(w) - 1, valPct: c.valPct, lowSoFar, lowT: c.cur.lowT, zone, deep, tdays, hdays, timeDone, near: near.filter(x => ok(x.p) && x.p < S.price).sort((a, b) => b.p - a.p), mNow, eta };
+}
+function bottomCard() {
+  const b = S.bo; if (!b) return '';
+  const f = t => { const d = new Date(t); return (d.getMonth() + 1) + '月' + (d.getDate() <= 10 ? '上旬' : d.getDate() <= 20 ? '中旬' : '下旬'); };
+  const scen = [
+    ['底はもう付けた', usd(b.lowSoFar) + '（' + md(b.lowT) + '）', b.timeDone ? '時期は過去の底をすべて過ぎている（天井から' + b.daysTop + '日、過去は' + b.tdays.join('・') + '日）' : '時期はまだ過去の底の範囲内'],
+    b.zone ? ['もう一段下げて底', usd(b.zone.lo) + '〜' + usd(b.zone.hi), b.zone.lev.map(x => x.why + ' ' + usd(x.p)).join('、') + (b.zone.above.length ? '。なお' + b.zone.above.map(x => x.why).join('、') + 'の水準（' + b.zone.above.map(x => usd(x.p)).join('、') + '）には、もう届いています' : '')] : ['もう一段下げて底', '—', '過去の底の基準になる水準には、すでにすべて届いています'],
+    ['過去並みの深い下げ', usd(b.deep) + '前後', '天井から' + pc(b.deep / b.peak - 1, 0) + '（過去の底の下落率のうち一番浅い値）。下落率は回を追って浅くなっていて、可能性は低め']
+  ];
+  const near = b.near.slice(0, 4).map(x => '<li><b class="num">' + usd(x.p) + '</b><span class="num dist">' + pc(x.p / S.price - 1) + '</span><span>' + esc(x.why) + '</span></li>').join('');
+  return '<section class="card"><h2>底と買い場の見込み</h2>' +
+    '<p>今は天井から <b class="num">' + pc(b.dd, 0) + '</b>、' + b.daysTop + '日。半減期から' + b.day + '日目。200週線の' + pc(b.wr, 0) + '、長期成長線に対して過去の下位' + pc(b.valPct, 0, false) + 'の安さです。</p>' +
+    '<h3>底の値段のシナリオ</h3><table class="tbl"><tbody>' + scen.map(x => '<tr><th>' + x[0] + '</th><td class="num">' + x[1] + '</td></tr><tr><td colspan="2" class="sub" style="text-align:left;padding-top:0">' + esc(x[2]) + '</td></tr>').join('') + '</tbody></table>' +
+    (near ? '<h3>この先数週間の下値の目安</h3><ul class="clist">' + near + '</ul>' : '') +
+    '<h3>買い判定（買う）が出るまでの見込み</h3>' + (b.eta ? '<p>中期の判定が今と同じくらい弱かった日から、過去3回の底値圏で買い判定が出るまでは、中央値で' + WAIT.med + '日、半分のケースが' + WAIT.q25 + '〜' + WAIT.q75 + '日でした。今日から数えると <b>' + f(b.eta.from) + '〜' + f(b.eta.to) + '</b>（中心は' + f(b.eta.med) + '）です。</p><p class="sub">その間にさらに下げた幅は中央値で' + pc(WAIT.dnMed, 0) + '、悪い方の4回に1回は' + pc(WAIT.dnQ25, 0) + '。買い判定が出た日の値段は、今日の値段と比べて中央値で' + pc(WAIT.pxMed, 0) + '（' + pc(WAIT.pxQ25, 0) + '〜' + pc(WAIT.pxQ75, 0) + '）でした。底で買うのではなく、底を打って上向いたのを確認した値段で買う、という見込みです。</p>' : '<p>中期の判定はすでに弱い水準を抜けています（今は' + Math.round(b.mNow) + '、買い好機は75以上）。買い判定は近いうちに出る可能性があります。上の「今日どうするか」と暫定の枠を毎日見てください。</p>') +
+    '<p class="sub">準備の目安：見込みの時期に入るまでに、予定額と、4回に分けたときの1回分を決めておく。時期に入ったら毎日、朝9時以降に結論を見る。</p>' +
+    '<p class="sub">この見込みは毎朝9時の確定データで計算し直します。根拠は過去3回のサイクルだけなので、時期も値段も幅を持って見てください。毎日の見込みは記録して、後で当たり外れを確かめます。</p></section>';
+}
 function todayCard() {
   const p = S.plan; if (!p) return '';
   const cls = PLAN[p.a][1], t = p.target, lab = planLabel(p.a);
@@ -910,14 +958,14 @@ function viewJudge() {
   const fcRows = E.HORIZONS.map(h => { const f = S.R.hz[h.k].fc; return f ? '<tr><th>' + h.d + '日後</th><td class="num">' + usd(price * (1 + f.q25)) + '〜' + usd(price * (1 + f.q75)) + '</td><td class="num">' + usd(price * (1 + f.q50)) + '</td><td class="num">' + pc(f.up, 0, false) + '</td></tr>' : ''; }).join('');
   const im = S.opt && ok(S.opt.move7) ? '<p class="sub">オプション市場が織り込む変動幅（1標準偏差）：7日で ±' + pc(S.opt.move7, 1, false) + '、30日で ±' + pc(S.opt.move30, 1, false) + '</p>' : '';
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
-  return todayCard() + pickCard() + holdCards() + '<h2 class="sec">時間軸ごとの判定</h2>' +
+  return todayCard() + bottomCard() + pickCard() + holdCards() + '<h2 class="sec">時間軸ごとの判定</h2>' +
     '<section class="rails" aria-label="時間軸ごとの判定">' + E.HORIZONS.filter(h => h.k !== 'd').map(railHTML).join('') + '<p class="legend"><span><i class="z za"></i>見送り</span><span><i class="z zw"></i>様子見</span><span><i class="z zt"></i>打診買い</span><span><i class="z zb"></i>買い好機</span></p></section>' +
     flags + cycleCard() + upsideCard(false) +
     '<section class="card"><h2>' + H.name + 'の判定の内訳</h2><div class="cats">' + cats + '</div>' + facts + '<p class="sub">各要因の重みは、過去4年のデータで ' + H.d + ' 日後の値動きと実際に連動していた度合いから毎回計算し直しています。</p></section>' +
     '<section class="card"><div class="row"><h2>価格と予測レンジ</h2><div class="seg" role="group" aria-label="表示期間">' + [[90, '3か月'], [365, '1年'], [1460, '4年']].map(r => '<button data-range="' + r[0] + '" aria-pressed="' + (S.range === r[0]) + '">' + r[1] + '</button>').join('') + '</div></div>' + priceChart() +
     '<p class="keys"><span><i class="k-px"></i>終値</span><span><i class="k-50"></i>50日線</span><span><i class="k-200"></i>200日線</span><span><i class="k-cone"></i>予測の幅（濃い帯は50%、薄い帯は80%）</span><span><i class="k-zone"></i>エントリー候補</span></p><p class="sub">チャート下の帯は、その日に出ていた' + H.name + '判定です。</p></section>' +
     '<section class="card"><h2>エントリー候補の価格帯</h2><p class="sub">現値 <span class="num">' + usd(price) + '</span> より下で、テクニカル・出来高・オプション・清算の節目が重なる水準です。●が多いほど根拠が重なっています。</p><ul class="zones">' + below + '</ul>' + (above ? '<h3>上値の節目</h3><ul class="zones">' + above + '</ul>' : '') + '</section>' +
-    '<section class="card"><h2>この先の値幅の目安</h2><table class="tbl"><thead><tr><th></th><th>半分が収まった範囲</th><th>中央値</th><th>上昇した割合</th></tr></thead><tbody>' + fcRows + '</tbody></table><p class="sub">いまと同じスコア水準だった過去の日から、その後の値動きを集計したものです。</p>' + im + '</section>' +
+
     '<section class="card"><h2>データの取得状況</h2><ul class="stat">' + stat + '</ul><p class="sub">判定に使う日足は ' + ymd(S.d.t[S.d.c.length - 1]) + '（UTC）の確定分まで。開いている間は5分ごとに更新します。</p></section>' +
     '<p class="disc">過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
 }
