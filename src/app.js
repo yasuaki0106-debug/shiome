@@ -858,14 +858,14 @@ function miniGrid() { // 1か所で全部見えるように：大事な数字を
   const wr = S.bg && S.bg.parts.find(x => /週足RSI/.test(x.nm)); if (wr) add('bottom', '売られすぎ（週足RSI）', wr.now, +wr.now <= 35 ? 'g' : 'n', +wr.now <= 35 ? '過去の底と同じ水準' : '底の水準ではない');
   const fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null; if (fg != null) add('bottom', '恐怖指数', fg, 'n', (fg <= 25 ? '極度の恐怖' : fg >= 75 ? '極度の強欲' : '中間') + '・参考（効き目なし）');
   const zA = (S.zones && S.zones.above || []).map(z => z.items.filter(x => x.kind !== 'opt')).filter(a => a.length)[0], zB = (S.zones && S.zones.below || []).map(z => z.items.filter(x => x.kind !== 'opt')).filter(a => a.length)[0];
-  if (zA) { const p = zA.reduce((a, x) => a + x.p, 0) / zA.length; add('dir', '上の節目', kfmt(p), 'r', pc(p / S.price - 1) + '・上げが止まりやすい'); }
+  if (zA) { const p = zA.reduce((a, x) => a + x.p, 0) / zA.length; add('dir', '上の節目', kfmt(p), 'r', pc(p / S.price - 1) + '・上がってもここで止まりやすい'); }
   if (zB) { const p = zB.reduce((a, x) => a + x.p, 0) / zB.length; add('dir', '下の節目', kfmt(p), 'g', pc(p / S.price - 1) + '・下げが止まりやすい'); }
-  if (S.rt && (S.rt.retest || S.rt.broke)) add('dir', '分かれ目', kfmt(S.rt.level), S.price < S.rt.level ? 'r' : 'n', S.price < S.rt.level ? '今は下・割れたまま' : '今は上・終値で割るか');
+  if (S.rt && (S.rt.retest || S.rt.broke)) add('dir', '分かれ目', kfmt(S.rt.level), S.price < S.rt.level ? 'r' : 'n', S.price < S.rt.level ? '今は下・割れたまま（一段下げの形）' : '今は上・終値で割るかを見る');
   const u = S.up; if (u && ok(u.ratio)) add('dir', '清算の偏り', u.ratio >= 0.6 ? '上に多い' : u.ratio <= 0.4 ? '下に多い' : '上下同じ', 'n', '未検証・参考');
-  const ef = etfState(); if (ef) add('soon', 'ETF（20日）', (ef.s20 < 0 ? '-' : '+') + '$' + (Math.abs(ef.s20) / 1000).toFixed(1) + 'B', ef.s20 < 0 ? 'r' : 'g', '2024年以降で下から' + pc(ef.rank, 0, false));
-  const mm = S.R.hz.m.pct; if (ok(mm)) add('today', '中期の判定', Math.round(mm), mm >= 75 ? 'g' : mm < 20 ? 'r' : 'n', mm >= 75 ? '確認買いの水準' : mm < 20 ? '弱い（2倍は外す水準）' : 'あと' + Math.round(75 - mm) + 'で確認買い');
+  const ef = etfState(); if (ef) add('soon', 'ETF（20日）', (ef.s20 < 0 ? '-' : '+') + '$' + (Math.abs(ef.s20) / 1000).toFixed(1) + 'B', ef.s20 < 0 ? 'r' : 'g', (ef.s20 < 0 ? '売りが続いている・' : '買いが続いている・') + '2024年以降で下から' + pc(ef.rank, 0, false));
+  const mm = S.R.hz.m.pct; if (ok(mm)) add('today', '中期の判定', Math.round(mm), mm >= 75 ? 'g' : mm < 20 ? 'r' : 'n', mm >= 75 ? '上向きを確認・確認買いの水準' : mm < 20 ? 'まだ下げの流れ・2倍は外す水準' : 'あと' + Math.round(75 - mm) + 'で確認買い');
   const now = Date.now(), ev = allEvents().filter(e => e.t > now && e.impact >= 3).sort((a, b) => a.t - b.t)[0]; if (ev) add('events', '次の大きな発表', md(ev.t), 'n', ev.title.replace(/（.*?）/g, ''));
-  return '<section class="minis">' + R.join('') + '</section><p class="mini-key"><span class="mk g"></span>買いの材料　<span class="mk r"></span>注意　<span class="mk n"></span>参考　タップでくわしく</p>';
+  return '<section class="minis">' + R.join('') + '</section><p class="mini-key"><span class="mk g"></span>追い風（上がる材料）　<span class="mk r"></span>向かい風（下がる材料・急がない）　<span class="mk n"></span>どちらでもない　タップでくわしく</p>';
 }
 function alarmBanner() { // 買った玉のどれかにアラームが出ていたら、画面の一番上に出す
   const al = (S.hold || []).filter(h => h.alarm); if (!al.length) return '';
