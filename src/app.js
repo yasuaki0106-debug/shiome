@@ -600,7 +600,7 @@ const PINNED = [
 function concernsFor(und) {
   const now = Date.now(), out = PINNED.filter(x => (x.sym === und || x.sym === 'ALL') && now >= x.from && now < x.until).map(x => ({ lv: x.lv, text: x.text, src: x.src, link: x.link, t: x.from, pinned: true }));
   const it = (S.news && S.news.items && S.news.items[und]) || [];
-  it.filter(x => x.concern && now - x.t < 10 * DAY).slice(0, 3).forEach(x => out.push({ lv: 'info', text: x.title, src: x.src, link: x.link, t: x.t, tags: x.tags }));
+  it.filter(x => x.concern && now - x.t < 10 * DAY).slice(0, 3).forEach(x => out.push({ lv: 'info', text: x.ja || x.title, src: x.src, link: x.link, t: x.t, tags: x.tags }));
   const ed = S.news && S.news.earn && S.news.earn[und]; if (ed) { const T = Date.parse(ed + 'T21:00:00Z'); if (T > now && T - now < 14 * DAY) out.unshift({ lv: 'warn', text: '決算発表が ' + md(T) + ' に予定されています。発表の前後は大きく動きます', src: 'Nasdaq', t: now }); }
   return out;
 }
@@ -1470,8 +1470,8 @@ function viewStocks() {
   if (S.news && S.news.items) {
     const nm = { MSTR: 'MSTR（Strategy）', COIN: 'COIN（Coinbase）', REG: '規制・法律（暗号資産全体）' };
     h += '<h2 class="sec" style="margin-top:22px">ニュース</h2>' + ['MSTR', 'COIN', 'REG'].map(k => { const it = (S.news.items[k] || []).slice(0, 10); if (!it.length) return '';
-      return '<section class="card"><h2>' + nm[k] + '</h2>' + (k !== 'REG' ? concernList(k, 6) : '') + '<ul class="news">' + it.map(x => '<li' + (x.concern ? ' class="nc"' : '') + '><a href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.title) + '</a><div>' + (x.concern ? '<span class="tg tw">懸念</span>' : '') + (x.tags || []).map(g => '<span class="tg">' + esc(g) + '</span>').join('') + '<small>' + esc(x.src || '') + '・' + md(x.t) + '</small></div></li>').join('') + '</ul></section>'; }).join('') +
-      '<p class="sub">見出しはGoogleニュースから毎日取り込んでいます（英語のまま）。種類と「懸念」は、見出しの言葉から自動で付けた目安です。</p>';
+      return '<section class="card"><h2>' + nm[k] + '</h2>' + (k !== 'REG' ? concernList(k, 6) : '') + '<ul class="news">' + it.map(x => '<li' + (x.concern ? ' class="nc"' : '') + '><a href="' + esc(x.link) + '" target="_blank" rel="noopener" title="' + esc(x.title) + '">' + esc(x.ja || x.title) + '</a><div>' + (x.concern ? '<span class="tg tw">懸念</span>' : '') + (x.tags || []).map(g => '<span class="tg">' + esc(g) + '</span>').join('') + '<small>' + esc(x.src || '') + '・' + md(x.t) + '</small></div></li>').join('') + '</ul></section>'; }).join('') +
+      '<p class="sub">見出しはGoogleニュースから毎日取り込み、機械翻訳で日本語にしています（訳がおかしいときは、タップして元の記事を見てください）。種類と「懸念」は、見出しの言葉から自動で付けた目安です。</p>';
   }
   h += planRecord();
   if (!have.length && !['MSTR', 'COIN'].some(s => S.stocks[s])) h += '<section class="card"><p class="muted">株価を読み込んでいます…</p></section>';

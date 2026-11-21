@@ -20,7 +20,7 @@ TAGS = [
   ("ハッキング", r"\b(hack\w*|breach|exploit|stolen|theft)\b"),
 ]
 CONCERN = r"\b(exclu\w*|delet\w*|remov\w*|exit\w*|drop(s|ped)? from|kicked out|downgrade[sd]?|cut[s]? (price )?target|lawsuit|sue[sd]?|charge[sd]?|probe|investigat\w*|ban(s|ned)?|hack\w*|breach|theft|stolen|dilut\w*|offering|plunge[sd]?|slump\w*|miss(es|ed)?|warn\w*|sell rating|underweight|forced sell\w*)\b"
-def parse(q):
+def parse(q, q_key=""):
     x = get("https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": q, "hl": "en-US", "gl": "US", "ceid": "US:en"}))
     root = ET.fromstring(x); out = []
     for it in root.iter("item"):
@@ -28,7 +28,8 @@ def parse(q):
         if src and title.endswith(" - " + src): title = title[: -len(src) - 3]
         try: t = int(email.utils.parsedate_to_datetime(it.findtext("pubDate")).timestamp() * 1000)
         except Exception: t = 0
-        if src.lower().startswith("coinbase") or re.search(r"Price, .* Live Charts", title): continue   # 取引所の銘柄ページなど、ニュースでないもの
+        if src.lower().startswith("coinbase") or re.search(r"Price, .* Live Charts|Tokenized Stock\)", title): continue   # 取引所の銘柄ページなど、ニュースでないもの
+        if q_key == "REG" and not re.search(r"crypto|bitcoin|BTC|stablecoin|digital asset|token", title, re.I): continue   # 暗号資産と関係ない見出し
         tags = [k for k, rx in TAGS if re.search(rx, title, re.I)]
         out.append({"t": t, "title": title, "src": src, "link": link, "tags": tags, "concern": bool(re.search(CONCERN, title, re.I))})
     out.sort(key=lambda r: -r["t"]); seen = set(); res = []
@@ -41,8 +42,9 @@ TR = {}
 def ja(text):
     """見出しを日本語に（Googleの翻訳。失敗したら英語のまま）。同じ見出しは前回の訳を使う"""
     if text in TR: return TR[text]
+    src = re.sub(r"\bStrategy\b(?!\s+(to|for|of)\b)", "MicroStrategy", text)   # 会社名のStrategyが「戦略」と訳されないように
     try:
-        u = "https://translate.googleapis.com/translate_a/single?" + urllib.parse.urlencode({"client": "gtx", "sl": "en", "tl": "ja", "dt": "t", "q": text})
+        u = "https://translate.googleapis.com/translate_a/single?" + urllib.parse.urlencode({"client": "gtx", "sl": "en", "tl": "ja", "dt": "t", "q": src})
         j = json.loads(get(u, 15)); out = "".join(seg[0] for seg in j[0] if seg and seg[0])
         TR[text] = out; time.sleep(0.3); return out
     except Exception as e:
@@ -62,10 +64,10 @@ if os.path.exists(OUT):
 out = {"updated": int(time.time()), "items": {}, "earn": old.get("earn", {})}
 for k, v in old.get("items", {}).items():
     for r in v:
-        if r.get("ja"): TR[r["title"]] = r["ja"]
+        pass   # 訳し方を変えたので、前回の訳は使わず訳し直す
 for k, q in Q.items():
     try:
-        out["items"][k] = parse(q)
+        out["items"][k] = parse(q, k)
         for r in out["items"][k]: r["ja"] = ja(r["title"])
     except Exception as e:
         print("warn news", k, e, file=sys.stderr); out["items"][k] = old.get("items", {}).get(k, [])
