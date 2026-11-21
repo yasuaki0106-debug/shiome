@@ -1659,7 +1659,13 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
     wickNew = l10 < wPrev;
     row(g4, '前の底（終値 ' + kfmt(S.rt.lo) + '・日中 ' + kfmt(wPrev) + '）', S.rt.broke ? '終値で割った' : wickNew ? '日中で割った' : S.rt.retest ? '試している' : '上', !S.rt.broke && !S.rt.retest && !wickNew ? 'ok' : 'ng', (wickNew && !S.rt.broke ? '日中は ' + usd(l10) + ' まで下げて前の底を更新、終値ではまだ。' : '') + '終値で ' + usd(S.rt.level) + '（分かれ目）を割ると、過去は一段下げの形');
   }
-  const mm = S.R.hz.m.pct; row(g4, '中期の判定（上向きの確認）', Math.round(mm), mm >= 75 ? 'ok' : 'ng', '75以上で「上がり始め」（過去の検証で一番安定していた合図）');
+  const mm = S.R.hz.m.pct;
+  // 底の出口：兆し（30日間 終値の新安値なし＋終値が直近1週間の高値を上抜け）と、確認（中期75以上）
+  let q30 = true; for (let k = n - 30; k < n; k++) { let m = Infinity; for (let j = k - 90; j < k; j++) m = Math.min(m, d.c[j]); if (d.c[k] <= m) { q30 = false; break; } }
+  let h7 = 0; for (let j = n - 8; j < n - 1; j++) h7 = Math.max(h7, d.h[j]); const exit1 = q30 && d.c[n - 1] > h7;
+  const g7 = G('底の出口（ここが「底の90日前」の見分け）', '底の近さが高くても、底の前後90日には「底の前」も入ります。底を抜けたかは、この2段階で見ます');
+  row(g7, '兆し：30日間新安値なし＋1週間の高値を終値で上抜け', exit1 ? '点いた' : q30 ? '新安値は止まっている' : 'まだ', exit1 ? 'ok' : 'ng', '過去3回の本物は、底から30〜55日後（底値の+7〜38%）。ただし底値圏で7回のだまし（点いた後60日で-10%以上）があった。2倍にはまだしない');
+  row(g7, '確認：中期の判定75以上', Math.round(mm), mm >= 75 ? 'ok' : 'ng', '過去3回の本物は、底から52〜152日後（底値の+20〜54%）。だましは2回と少ない。ここで1倍の玉を2倍へ');
   // 5. 需給（ETFの時代の構造）
   const g5 = G('需給（ETFの時代の構造）', '現物ETFは2024年から。過去のサイクルにはなかった買い手と売り手なので、効き目は検証できていません');
   const ef = etfState(); if (ef) row(g5, 'ETFの資金の出入り（20日）', (ef.s20 < 0 ? '-' : '+') + '$' + (Math.abs(ef.s20) / 1000).toFixed(1) + 'B', ef.s20 < 0 ? 'ng' : 'ok', '2024年以降で下から' + pc(ef.rank, 0, false) + '。流出が止まって流入に変わるのが、底を付けた後の形');
@@ -1675,7 +1681,7 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   const parts = [[3.0, ok(rsiNow) ? clamp((50 - rsiNow) / (50 - 34)) : 0], [1.2, clamp((1 - growR) / 0.5)], [0.9, S.bg ? S.bg.g : 0], [0.4, clamp((c.day - 600) / (th - 600))]];
   const near = parts.reduce((a, p) => a + p[0] * p[1], 0) / parts.reduce((a, p) => a + p[0], 0);
   const stillFalling = since < 10 || (S.rt && S.rt.broke) || wickNew;
-  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : stillFalling ? (near >= 0.8 ? ['底の近く（まだ安値を更新中）', 'v-wait', '底の近くにいる可能性は高い（底の近さ ' + Math.round(near * 100) + '%）一方で、まだ新しい安値を付けています。底を付けたかどうかは、新しい安値が止まるまで分かりません。'] : ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。']) : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
+  const phase = mm >= 75 ? ['上がり始め', 'v-buy', '上向きを確認しました。1倍の玉を2倍に替える日です。'] : exit1 && !stillFalling ? ['底の出口の兆し', 'v-wait', '新しい安値が30日止まって、1週間の高値を上に抜けました。底を抜けた可能性が出てきましたが、過去は底値圏でだましも多かったので、2倍への切り替えは確認（中期75）を待ちます。'] : stillFalling ? (near >= 0.8 ? ['底の近く（まだ安値を更新中）', 'v-wait', '底の近くにいる可能性は高い（底の近さ ' + Math.round(near * 100) + '%）一方で、まだ新しい安値を付けています。底を付けたかどうかは、新しい安値が止まるまで分かりません。'] : ['底値圏の中の下げの途中', 'v-avoid', '底値圏の時期ですが、まだ新しい安値を付けています。底を付けたかどうかは、まだ分かりません。']) : ['底固め', 'v-wait', '新しい安値が止まって、底を固めている形です。上向きの確認（中期75）を待つ段階です。'];
   // 底の値段の物差し
   const scen = [];
   if (S.rt) scen.push(['今回の直近の安値（日中）', groups[3].rows[1] ? Math.min(...[d.l[n - 1], d.l[n - 2], S.liveRow ? S.liveRow[3] : Infinity].filter(ok)) : NaN]);
@@ -1714,8 +1720,9 @@ function councilCard() { // 大事な判断は、いつも5人（奇数）で意
       V('検証の人（過去のルール）', mm >= 75 ? 'B' : 'A', mm >= 75 ? '中期75以上。2倍に替える日' : '上がり始めの前から2倍にすると、完了した5ケースの平均で約3割少なく終わった'),
       V('気持ちの人（売られすぎ）', fear ? 'B' : 'A', fear ? '極度の悲観の後は大きく戻ることが多い。逆張りで2倍' : '悲観が足りない')] },
     { q: 'MSTR系かCOIN系か', A: 'MSTR系', B: 'COIN系', v: [
-      V('時期の人（サイクル）', 'A', '前回のサイクルでは、底値圏のどの日から買っても、天井までの伸びはMSTRが上だった'),
-      V('形の人（値動き）', scC > scM ? 'B' : 'A', 'その日の点数：MSTR ' + scM + '・COIN ' + scC + (scC > scM ? '。COINの方が割安' : '')),
+      V('時期の人（サイクル）', 'A', '前回のサイクルでは、底値圏の入り口・底・底の出口のどこから買っても、天井までの伸びはMSTRが上（MSTR ×17〜24、COIN ×7〜10）'),
+      (() => { const r = sym => { const v = S.stocks[sym] && S.stocks[sym].vals; if (!v || v.length < 10) return NaN; const k = v.findIndex(x => x[0] >= '2026-11-11'); return k < 0 ? NaN : v[v.length - 1][1] / v[k][1] - 1; }; const m = r('MSTR'), cc = r('COIN'); const side = scC > scM || (ok(m) && ok(cc) && cc > m + 0.05) ? 'B' : 'A';
+        return V('形の人（値動き）', side, 'その日の点数：MSTR ' + scM + '・COIN ' + scC + (ok(m) && ok(cc) ? '。11/11からの値動き：MSTR ' + pc(m, 0) + '・COIN ' + pc(cc, 0) + '（強い方を選ぶ）' : '')); })(),
       V('需給の人（ETF・資金）', cnM > cnC ? 'B' : 'A', '懸念材料：MSTR ' + cnM + '件・COIN ' + cnC + '件' + (cnM > cnC ? '（指数除外・増資・利上げはMSTRに逆風）' : '')),
       V('検証の人（過去のルール）', 'A', '迷ったらMSTR。2021年以降、6か月後にMSTRがCOINを上回った割合63%'),
       (() => { const dd60 = sym => { const v = S.stocks[sym] && S.stocks[sym].vals; if (!v || v.length < 60) return NaN; const a = v.slice(-60).map(x => x[1]); return a[a.length - 1] / Math.max(...a) - 1; }; const m = dd60('MSTR'), cc = dd60('COIN'); const side = ok(m) && ok(cc) ? (m < cc ? 'A' : 'B') : 'A';
