@@ -347,10 +347,15 @@ function planDecision(acts) {
   if (tp && lastClose < tp.stop) { a = 'exit'; why.length = 0; why.push('試し買いの撤退ライン ' + usd(tp.stop) + ' を終値で割りました（' + md(S.d.t[S.d.c.length - 1]) + ' の終値 ' + usd(lastClose) + '）'); }
   // 買い下がり：確認買いの条件がそろっていない日でも、底値圏で90日ぶりの安値なら1回目を買う
   const lad = ladderLots(); let ladder = null;
+  const ladChk = [
+    { ok: inPhase, text: 'サイクルが底値圏〜回復期（今は' + c.name + '、半減期から' + c.day + '日目）' },
+    { ok: !bg || bg.g >= GTH, text: '底らしさが50%以上（今は' + (bg ? Math.round(bg.g * 100) + '%' : '—') + '）' },
+    { ok: ladderStart(), text: 'BTCの終値が90日ぶりの安値（' + md(S.d.t[S.d.t.length - 1]) + 'の終値 ' + usd(S.d.c[S.d.c.length - 1]) + '）' },
+    { ok: !lad.length, text: 'このサイクルの買い下がりがまだ始まっていない（記録 ' + lad.length + '回）' }];
   if (a === 'skip' && inPhase && (!bg || bg.g >= GTH)) {
     if (!lad.length && ladderStart()) { a = 'ladder'; ladder = { step: 1 }; why.length = 0; why.push('底値圏で、BTCの終値が90日ぶりの安値を付けました'); }
   }
-  return { a, why, chk, n, kind: first ? 'first' : 'add', trial, tp, ladder, lad };
+  return { a, why, chk, ladChk, n, kind: first ? 'first' : 'add', trial, tp, ladder, lad };
 }
 function computeProv() { // 暫定：今の値段のまま今日の日足が確定した場合の判定
   S.prov = null;
@@ -567,7 +572,7 @@ function buildPlan() {
     if (sa === 'buy' && ok(an.rz) && an.rz >= 1.5) note.push('この銘柄はBTCに対して割高です。もう一方を優先する材料になります');
     stocks[sym] = { a: sa, now: stockAt(an, price), lim: target ? stockAt(an, target.mid) : NaN, stop: target ? stockAt(an, target.stop) : NaN, lo: rng ? stockAt(an, rng.lo) : NaN, hi: rng ? stockAt(an, rng.hi) : NaN, note };
   });
-  return { a, why, chk: dec.chk, n: dec.n, kind: dec.kind, trial: dec.trial, tp: dec.tp, ladder: dec.ladder, lad: dec.lad || [], target, rng, reach: target ? reachProb(target.mid) : NaN, stocks, sess: usSession(Date.now()) };
+  return { a, why, chk: dec.chk, ladChk: dec.ladChk, n: dec.n, kind: dec.kind, trial: dec.trial, tp: dec.tp, ladder: dec.ladder, lad: dec.lad || [], target, rng, reach: target ? reachProb(target.mid) : NaN, stocks, sess: usSession(Date.now()) };
 }
 const ETF = { MSTU: { und: 'MSTR', L: 2 }, MSTZ: { und: 'MSTR', L: -2 }, CONL: { und: 'COIN', L: 2 }, MSTR: { und: 'MSTR', L: 1 }, COIN: { und: 'COIN', L: 1 } };
 function etfClose(sym, date) { // 元の株の終値と同じ日の終値を使う（日付がずれると2倍の計算が二重になる）
@@ -1362,6 +1367,8 @@ function todayCard() {
   const fd = S.R.hz.d, u = S.up;
   if (u && u.type === 'lid' && p.a !== 'skip' && ok(u.lidLv)) btc.push('上は ' + '<span class="num">' + usd(u.lidLv) + '</span> 付近で蓋をされやすい形です。買った後はそこで一部の利益確定を考えます');
   if (u && u.type === 'squeeze' && ok(u.tgt)) btc.push('踏み上げ型です。上がり始めたら <span class="num">' + usd(u.tgt) + '</span> 付近まで走りやすく、指値が置いていかれることもあります');
+  const ul = a => '<ul class="why2 chks">' + a.map(x => '<li class="' + (x.ok ? 'up' : 'dn') + ' chk">' + esc(x.text) + '</li>').join('') + '</ul>';
+  const ladChk = (p.ladChk || []).length ? ul(p.ladChk) : '';
   const chk = (p.chk || []).length ? '<p class="chk-h">確認買い（残り半分）の条件</p><ul class="why2 chks">' + p.chk.map(x => '<li class="' + (x.ok ? 'up' : 'dn') + ' chk">' + esc(x.text) + '</li>').join('') + '</ul>' : '';
   const tp = p.tp, stopNow = tp ? tp.stop : (p.a === 'trial' ? S.price * (1 - TRIAL_STOP) : NaN);
   const stocksStop = ok(stopNow) ? ['MSTR', 'COIN'].filter(x => S.stocks[x] && S.stocks[x].an).map(x => x + ' ' + usd2(stockAt(S.stocks[x].an, stopNow)) + '、' + (x === 'MSTR' ? 'MSTU' : 'CONL') + ' ' + usd2(etfAt(x === 'MSTR' ? 'MSTU' : 'CONL', stopNow))).join('／') : '';
@@ -1375,7 +1382,8 @@ function todayCard() {
   return '<section class="today">' + cycleStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p>' + ladBox + trialBox + provBox() +
     (rows ? '<details class="more-in"><summary>MSTR・COIN・MSTU・CONLの今の値段</summary>' + rows + '</details>' : '') +
     '<details class="more-in"><summary>金額の内訳と懸念材料</summary>' + moneyBox(p) + '</details>' +
-    '<details class="more-in"><summary>この判定の根拠（確認買いの条件）</summary>' + chk + rec + '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul><p class="sub">買い方：予定額の半分は、底値圏で90日ぶりの安値から4回に分けて買い下がる（-10%ごと）。残り半分は、上向きを確認してから2回。過去に完了した5つのケースでは、どれも以前の買い方より最終額が上でした（+2〜+22%）。</p></details>' +
+    (ladChk ? '<details class="more-in"><summary>買い下がりの条件' + (p.a === 'ladder' ? '（今日の判定の根拠）' : '') + '</summary>' + ladChk + '<p class="sub">買い下がりには、中期の判定は使っていません。この4つがそろった日に始まります。</p></details>' : '') +
+    '<details class="more-in"><summary>確認買い（残り半分）の条件' + (p.a === 'buy' ? '（今日の判定の根拠）' : '') + '</summary>' + chk.replace('<p class="chk-h">確認買い（残り半分）の条件</p>', '') + '<p class="sub">確認買いは、上向きを確かめてから残り半分を使う買い方です。ここでだけ、中期の判定（30日先の見立て）を使います。</p>' + rec + '<ul class="today-btc">' + btc.map(x => '<li>' + x + '</li>').join('') + '</ul><p class="sub">買い方：予定額の半分は、底値圏で90日ぶりの安値から4回に分けて買い下がる（-10%ごと）。残り半分は、上向きを確認してから2回。過去に完了した5つのケースでは、どれも以前の買い方より最終額が上でした（+2〜+22%）。</p></details>' +
     sessionStrip() + '</section>';
 }
 function viewJudge() {
