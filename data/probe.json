@@ -1,0 +1,70 @@
+{
+ "bybit_tickers": {
+  "error": "HTTP Error 403: Forbidden",
+  "cors": null
+ },
+ "bybit_oi": {
+  "error": "HTTP Error 403: Forbidden",
+  "cors": null
+ },
+ "bybit_ratio": {
+  "error": "HTTP Error 403: Forbidden",
+  "cors": null
+ },
+ "okx_oi": {
+  "status": 200,
+  "cors": "https://yasuaki0106-debug.github.io",
+  "body": "{\"code\":\"0\",\"data\":[{\"instId\":\"BTC-USDT-SWAP\",\"instType\":\"SWAP\",\"oi\":\"3363385.54000001708\",\"oiCcy\":\"33633.8554000001708\",\"oiUsd\":\"1963837092.79398997278996\",\"ts\":\"1795230949188\"}],\"msg\":\"\"}"
+ },
+ "okx_fund": {
+  "status": 200,
+  "cors": "https://yasuaki0106-debug.github.io",
+  "body": "{\"code\":\"0\",\"data\":[{\"formulaType\":\"withRate\",\"fundingRate\":\"-0.0000555057502626\",\"fundingTime\":\"1795248000000\",\"impactValue\":\"20000.0000000000000000\",\"instId\":\"BTC-USDT-SWAP\",\"instType\":\"SWAP\",\"interestRate\":\"0.0001000000000000\",\"maxFundingRate\":\"0.00375\",\"method\":\"current_period\",\"minFundingRate\":"
+ },
+ "okx_oihist": {
+  "error": "HTTP Error 400: Bad Request",
+  "cors": null
+ },
+ "okx_ls": {
+  "error": "HTTP Error 400: Bad Request",
+  "cors": null
+ },
+ "coinbase": {
+  "status": 200,
+  "cors": "*",
+  "body": "{\"ask\":\"58294.95\",\"bid\":\"58294.94\",\"volume\":\"23125.93249691\",\"trade_id\":1140604894,\"price\":\"58294.94\",\"size\":\"0.00000002\",\"time\":\"2026-11-21T03:15:49.553221700Z\",\"rfq_volume\":\"332.111211\"}"
+ },
+ "deribit_perp": {
+  "status": 200,
+  "cors": "https://yasuaki0106-debug.github.io",
+  "body": "{\"jsonrpc\":\"2.0\",\"result\":[{\"high\":62267.0,\"low\":57662.5,\"last\":58309.0,\"instrument_name\":\"BTC-PERPETUAL\",\"bid_price\":58302.5,\"ask_price\":58303.0,\"open_interest\":900849340,\"mark_price\":58305.99,\"creation_timestamp\":1795230950076,\"current_funding\":0.0,\"estimated_delivery_price\":58301.92,\"funding_8h\":"
+ },
+ "binance_fapi": {
+  "error": "HTTP Error 451: ",
+  "cors": null
+ },
+ "bitget": {
+  "status": 200,
+  "cors": "*",
+  "body": "{\"code\":\"00000\",\"msg\":\"success\",\"requestTime\":1795230950535,\"data\":{\"openInterestList\":[{\"symbol\":\"BTCUSDT\",\"size\":\"35525.070599999984\"}],\"ts\":\"1795230950537\"}}"
+ },
+ "hyperliquid": {
+  "status": 200,
+  "cors": "*",
+  "btc": {
+   "funding": "0.0000043052",
+   "openInterest": "37463.85592",
+   "prevDayPx": "61948.0",
+   "dayNtlVlm": "5581225528.1892633438",
+   "premium": "-0.0004519975",
+   "oraclePx": "58407.4",
+   "markPx": "58380.0",
+   "midPx": "58380.5",
+   "impactPxs": [
+    "58380.0",
+    "58381.0"
+   ],
+   "dayBaseVlm": "93039.53901"
+  }
+ }
+}
