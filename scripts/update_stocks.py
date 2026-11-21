@@ -1,7 +1,7 @@
 """MSTR・COIN の日足終値を取得して data/stocks.json に保存する（標準ライブラリのみ）。"""
 import json, time, urllib.request, datetime as dt, sys, os
 
-SYMS = ["MSTR", "COIN"]
+SYMS = ["MSTR", "COIN", "MSTU", "MSTZ", "CONL"]
 UA = {"User-Agent": "Mozilla/5.0 (shiome stock updater)"}
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "stocks.json")
 
