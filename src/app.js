@@ -615,6 +615,7 @@ function priceAtBtc(sym, btc) { // BTCがその値段になったときの株価
   const u0 = priceNow(und), u = u0 * (1 + an.beta * (btc / S.price - 1)); if (sym === und) return u;
   const e = ETF[sym], p0 = priceNow(sym); return ok(p0) ? p0 * (1 + e.L * (u / u0 - 1)) : NaN;
 }
+function placedOrders() { const o = LS.get('orders', null); return o && o.rows && o.rows.length ? o : null; }
 function ladderOrders(p) { // 買い下がりの指値：1回目はBTCの直近の終値の2%下に当たる株価、2〜4回目はその-10%・-20%・-30%
   // 検証（research/limit.py）：底値圏でBTCが90日ぶりの安値を付けた日（33日）に、2%下へ指値を置いて3日待つと78%が約定し、翌日に成行で買うより中央値で1.8%安い（平均では差なし）
   const t = planTicker(p), c = S.d.c, btcL = Math.min(c[c.length - 1], S.price) * 0.98, first = priceAtBtc(t, btcL); if (!ok(first)) return null;
@@ -741,21 +742,30 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : ''; items.push({ lv: 'warn', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → ' + (h.a === 'switch' ? '売って ' + und + ' に替える（2倍をやめる）' : h.a === 'sell' ? '売る' : h.alarm) }); });
   if (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial') {
     const t = planTicker(p), per = { buy: b.total * (1 - LAD_SHARE) / MAXBUY, trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
-    const lo = p.a === 'ladder' ? ladderOrders(p) : null;
+    const po = placedOrders(), lo = p.a === 'ladder' && !po ? ladderOrders(p) : null;
     if (b.total > 0 && lo) { const ex = new Date(lo.exp);
       items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる', sub: lo.rows.map(r => r.k + '本目　' + usd2(r.px) + '　' + r.n + '株' + (r.k === 1 ? '（期限 ' + mdUS(lo.exp) + '）' : '')) });
       items.push({ lv: 'info', t: '1本目が ' + mdUS(lo.exp) + ' の引けまでに届かなければ、引けに成行で買う' + (lo.ev ? '（' + lo.ev.title.replace(/（.*?）/g, '') + 'の後まで待つ）' : '') });
-      items.push({ lv: 'info', t: '約定したら「関連株」タブで記録（2〜4本目の値段を出し直します）' }); }
-    else if (b.total > 0) { items.push({ lv: 'buy', t: (p.a === 'buy' ? '確認買い' : '試し買い') + '：' + t + ' を ' + usd(amt) + ' 分' + (ok(n) ? '（約' + n + '株、目安 ' + usd2(px) + '）' : '') + '、その取引時間のうちに買う（指値で待たない）' });
+      items.push({ lv: 'info', t: '4本入れたら、下のボタンを押す（値段を覚えて、変える必要があるときだけ知らせます）', btn: 'ord-set' }); }
+    else if (b.total > 0 && p.a !== 'ladder') { items.push({ lv: 'buy', t: (p.a === 'buy' ? '確認買い' : '試し買い') + '：' + t + ' を ' + usd(amt) + ' 分' + (ok(n) ? '（約' + n + '株、目安 ' + usd2(px) + '）' : '') + '、その取引時間のうちに買う（指値で待たない）' });
       items.push({ lv: 'info', t: '買ったら「関連株」タブで記録する（現金は自動で引かれます）' }); }
-    else items.push({ lv: 'info', t: '「関連株」タブの「資金」に現金を入れる（金額と株数が出ます）' });
+    else if (!(b.total > 0)) items.push({ lv: 'info', t: '「関連株」タブの「資金」に現金を入れる（金額と株数が出ます）' });
+  }
+  const po = placedOrders();
+  if (po) { // 入れた指値の見張り
+    const lads = ladderLots(), f1 = lads[0], now = Date.now();
+    if (!f1 && now > po.exp) items.push({ lv: 'warn', t: '1本目の期限（' + mdUS(po.exp) + '）を過ぎました。届いていなければ、今日の取引の引けに成行で ' + po.t + ' を ' + po.rows[0].n + '株買う' });
+    else if (!f1 && now > po.exp - 30 * 36e5) items.push({ lv: 'warn', t: '今日が1本目の期限（' + mdUS(po.exp) + '）。引けまでに届かなければ、引けに成行で ' + po.rows[0].n + '株' });
+    if (f1) { const base = f1.cost, chg = po.rows.slice(1).map((r, k) => ({ k: k + 2, old: r.px, nw: Math.floor(base * (1 - LAD_STEP * (k + 1)) * 100) / 100, n: r.n })).filter(x => Math.abs(x.nw / x.old - 1) > 0.01 && x.k > lads.length);
+      if (chg.length) items.push({ lv: 'warn', t: '1本目が ' + usd2(base) + ' で約定したので、残りの指値を変える', sub: chg.map(x => x.k + '本目　' + usd2(x.old) + ' → ' + usd2(x.nw) + '　' + x.n + '株') , btn: 'ord-fix' }); }
+    if (!items.some(x => x.lv === 'warn' && /指値|期限/.test(x.t))) items.push({ lv: 'info', t: '入れた指値はそのまま（' + po.t + ' ' + po.rows.map(r => usd2(r.px)).join('・') + '）。変える必要が出たら、ここと通知で知らせます' });
   }
   const lad = p.lad || [];
-  if (lad.length && lad.length < LAD_N && p.a !== 'ladder') { const base = lad[0].cost; items.push({ lv: 'info', t: '買い下がりの残りの指値（' + lad[0].sym + ' ' + [...Array(LAD_N - lad.length)].map((_, k) => usd2(base * (1 - LAD_STEP * (lad.length + k)))).join('・') + '）が入っているか確認する' }); }
+  if (lad.length && lad.length < LAD_N && p.a !== 'ladder' && !po) { const base = lad[0].cost; items.push({ lv: 'info', t: '買い下がりの残りの指値（' + lad[0].sym + ' ' + [...Array(LAD_N - lad.length)].map((_, k) => usd2(base * (1 - LAD_STEP * (lad.length + k)))).join('・') + '）が入っているか確認する' }); }
   const nothing = !items.length;
   if (nothing) items.push({ lv: 'info', t: '今日は売り買いなし。' + (b.cash > 0 ? '現金 ' + usd(b.cash) + ' はそのまま待機' : '次の合図を待つ') });
   const cn = (() => { try { const t = planTicker(p); return concernsFor(ETF[t] ? ETF[t].und : t).length; } catch (e) { return 0; } })();
-  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + '</li>').join('') + '</ol><p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
+  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + (x.btn === 'ord-set' ? '<button class="btn small" data-ord="set">4本入れた</button>' : x.btn === 'ord-fix' ? '<button class="btn small" data-ord="fix">変えた</button>' : '') + '</li>').join('') + '</ol><p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
 }
 function tilesCard() {
   if (!S.R) return '';
@@ -1694,7 +1704,7 @@ document.addEventListener('click', e => {
     const a = LS.get('events', []); a.push({ t: tm, title, impact: +$('#ev-imp').value, kind: 'custom' }); LS.set('events', a); $('#ev-title').value = ''; $('#ev-time').value = ''; S.events = allEvents(); if (S.R) decide(); render();
   }
   else if (t.dataset.delpos != null) { const a = LS.get('pos', []); a.splice(+t.dataset.delpos, 1); LS.set('pos', a); if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); } render(); }
-  else if (t.id === 'bk-make') { const keys = ['pos', 'cash', 'cfg', 'events', 'buys', 'trial', 'log', 'ranges']; const o = { v: 1, at: Date.now() }; keys.forEach(k => { const v = LS.get(k, null); if (v != null) o[k] = v; });
+  else if (t.id === 'bk-make') { const keys = ['pos', 'cash', 'cfg', 'events', 'buys', 'trial', 'log', 'ranges', 'orders']; const o = { v: 1, at: Date.now() }; keys.forEach(k => { const v = LS.get(k, null); if (v != null) o[k] = v; });
     const b = btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); S.bkLink = location.origin + location.pathname + '#restore=' + b; S.bkCopied = false;
     try { navigator.clipboard.writeText(S.bkLink).then(() => { S.bkCopied = true; render(); }, () => render()); } catch (e) { render(); } }
   else if (t.id === 'rs-ok') { const o = S.pendingRestore; if (o) { Object.keys(o).forEach(k => { if (k !== 'v' && k !== 'at') LS.set(k, o[k]); }); if (o.cfg) S.cfg = o.cfg; } S.pendingRestore = null; if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); } location.hash = 'judge'; }
@@ -1714,7 +1724,11 @@ document.addEventListener('click', e => {
       if ((kind === 'buy' || kind === 'trial' || kind === 'ladder') && qty && $('#pos-pay') && $('#pos-pay').checked) setCash(cashBal() - cost * qty);
       LS.set('pos', a); S.recKind = null; if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); writeLog(); } location.hash = 'judge';
   }
-  else if (t.closest && t.closest('.todo li[data-done]') && !t.closest('.ord')) { const k = +t.closest('.todo li[data-done]').dataset.done, key = 'done.' + dkey(Date.now()), a = new Set(LS.get(key, [])); a.has(k) ? a.delete(k) : a.add(k); LS.set(key, [...a]); render(); }
+  else if (t.dataset.ord) {
+    if (t.dataset.ord === 'set') { const lo = ladderOrders(S.plan); if (lo) LS.set('orders', { t: lo.t, rows: lo.rows, exp: lo.exp, at: Date.now() }); }
+    if (t.dataset.ord === 'fix') { const po = placedOrders(), f1 = ladderLots()[0]; if (po && f1) { po.rows = po.rows.map((r, k) => k === 0 ? Object.assign({}, r, { px: f1.cost }) : Object.assign({}, r, { px: Math.floor(f1.cost * (1 - LAD_STEP * k) * 100) / 100 })); LS.set('orders', po); } }
+    render(); }
+  else if (t.closest && t.closest('.todo li[data-done]') && !t.closest('.ord') && !t.closest('button')) { const k = +t.closest('.todo li[data-done]').dataset.done, key = 'done.' + dkey(Date.now()), a = new Set(LS.get(key, [])); a.has(k) ? a.delete(k) : a.add(k); LS.set(key, [...a]); render(); }
   else if (t.closest && t.closest('.tile')) { const go = t.closest('.tile').dataset.go, el = document.getElementById('c-' + go); if (go === 'concern') { const d = document.querySelector('.today .more-in.mb'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } else if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.dataset.rec) { S.recKind = t.dataset.rec === 'trial' ? 'trial' : (S.plan && (S.plan.a === 'ladder' || ((S.plan.lad || []).length && S.plan.a !== 'buy'))) ? 'ladder' : 'buy'; location.hash = 'stocks'; setTimeout(() => { const el = document.getElementById('pos-form'); if (el) el.scrollIntoView(); }, 80); }
   else if (t.id === 'trial-add') { LS.set('trial', { t: Date.now(), btc: Math.round(S.price) }); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
@@ -1723,7 +1737,7 @@ document.addEventListener('click', e => {
   else if (t.id === 'buy-undo') { const a = LS.get('buys', []); a.pop(); LS.set('buys', a); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
   else if (t.id === 'cfg-save') { S.cfg = { tdKey: $('#td-key').value.trim(), src: $('#src').value }; LS.set('cfg', S.cfg); S.stocks = {}; refreshAll(); }
   else if (t.id === 'cfg-reset') {
-    if (t.dataset.sure) { ['daily', 'dvol', 'fund', 'log', 'events', 'cfg', 'stk.MSTR', 'stk.COIN', 'long', 'pos', 'buys', 'ranges', 'trial', 'cash'].forEach(LS.del); location.reload(); }
+    if (t.dataset.sure) { ['daily', 'dvol', 'fund', 'log', 'events', 'cfg', 'stk.MSTR', 'stk.COIN', 'long', 'pos', 'buys', 'ranges', 'trial', 'cash', 'orders'].forEach(LS.del); location.reload(); }
     else { t.dataset.sure = '1'; t.textContent = 'もう一度押すと、記録もすべて消えます'; }
   }
 });

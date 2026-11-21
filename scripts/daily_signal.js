@@ -54,6 +54,18 @@ if (prev && prev.d !== key) {
 const EV = [[Date.UTC(2026, 11, 4, 13, 30), '米雇用統計'], [Date.UTC(2026, 11, 9, 19), 'FOMC'], [Date.UTC(2026, 11, 10, 13, 30), '米CPI'], [Date.UTC(2027, 0, 8, 13, 30), '米雇用統計'], [Date.UTC(2027, 0, 13, 13, 30), '米CPI'], [Date.UTC(2027, 0, 27, 19), 'FOMC'], [Date.UTC(2027, 1, 5, 13, 30), '米雇用統計'], [Date.UTC(2027, 1, 11, 13, 30), '米CPI'], [Date.UTC(2027, 2, 5, 13, 30), '米雇用統計'], [Date.UTC(2027, 2, 10, 13, 30), '米CPI'], [Date.UTC(2027, 2, 17, 18), 'FOMC'], [Date.UTC(2027, 3, 28, 18), 'FOMC'], [Date.UTC(2027, 5, 9, 18), 'FOMC'], [Date.UTC(2027, 6, 28, 18), 'FOMC'], [Date.UTC(2027, 8, 15, 18), 'FOMC'], [Date.UTC(2027, 10, 17, 19), 'FOMC']];
 if (prev && prev.d !== key) EV.forEach(([t, nm]) => { const h = (t - now) / 36e5; if (h > 24 && h <= 48) msgs.push([nm + 'まであと2日', '発表の前後は値が飛びやすく、確認買いは見送りになります。', 'hourglass']); });
 if (process.env.NTFY_TEST) msgs.push(['潮目の通知テスト', 'この通知が届いていれば設定は完了です。大事な合図が出たときに、ここに届きます。今の判定：' + ({ up: '上昇期', top: '天井圏', down: '下落期', bottom: '底値圏', recover: '回復期' })[rec.ph] + '、中期 ' + rec.m + '、底らしさ ' + rec.g + '%' + (rec.lad ? '、買い下がりの合図あり' : ''), 'bell']);
+// 買い下がり1本目の期限の朝に知らせる（アプリの ladderOrders と同じ決め方：開始から3営業日、近くに重要な発表や指数の実施日があればその翌営業日まで延ばす）
+const US_CLOSED = ['2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'];
+const tdays = (from, k) => { let t = from, c = 0; while (c < k) { t += DAY; const dd = new Date(t), w = dd.getUTCDay(), kk = dd.toISOString().slice(0, 10); if (w && w !== 6 && !US_CLOSED.includes(kk)) c++; } return t; };
+if (prev && prev.d !== key) {
+  let st = -1; for (let i = log.length - 1; i >= 0; i--) { if (log[i].lad && (i === 0 || !log[i - 1].lad)) { st = i; break; } }
+  if (st >= 0) {
+    const d0 = Date.parse(log[st].d + 'T00:00:00Z') + DAY; let exp = tdays(d0, 3);
+    const IDX = [[Date.UTC(2026, 10, 30), 'MSTRのMSCI除外']], cand = EV.map(([t, nm]) => [t - (t % DAY), nm]).concat(IDX).filter(([t, nm]) => t > d0 && t < exp + (/MSCI/.test(nm) ? 10 : 3) * DAY).sort((a, b) => b[0] - a[0]);
+    if (cand.length && cand[0][0] + DAY > exp) exp = tdays(cand[0][0], 1);
+    const today = now - (now % DAY); if (exp === today) msgs.push(['今日が買い下がり1本目の期限です', '1本目の指値が今日の引けまでに届かなければ、引けに成行で買ってください（' + log[st].d.slice(5) + 'に始まった買い下がり）。届いていたら、アプリで記録すると残りの指値を出し直します。', 'alarm_clock']);
+  }
+}
 async function send() {
   if (!TOPIC || !msgs.length || process.env.DRY) { console.log('通知', msgs.length, '件', TOPIC ? '' : '（トピック未設定）'); msgs.forEach(m => console.log(' ', m[0], '|', m[1])); return; }
   for (const [title, message, tag] of msgs) {
