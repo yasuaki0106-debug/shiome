@@ -35,6 +35,16 @@ const levOff = MM < 20, levOn = MM >= 75;
 // 前の安値の試し直し（アプリの retestState と同じ）
 let rt = null; { let pk = -1; for (let i = 0; i < n; i++) if (d.t[i] <= cyc.cur.peakT) pk = i; if (pk >= 0 && last - pk >= 120) { let lo = Infinity, li = -1; for (let j = pk; j < last - 59; j++) if (d.c[j] < lo) { lo = d.c[j]; li = j; } let hi = 0; for (let j = li; j < last; j++) hi = Math.max(hi, d.c[j]); const rally = hi / lo - 1; rt = { lo, lv: lo * 0.97, retest: rally >= .3 && price <= lo * 1.05, broke: rally >= .3 && price < lo * 0.97 }; } }
 const rec = { d: key, px: Math.round(price), s: Math.round(MS), m: Math.round(MM), l: Math.round(ML), g: Math.round(g * 100), ph: cyc.phase, day: cyc.day, lad: ladder, conf: confirm, lev: levOff ? 'off' : levOn ? 'on' : 'keep', rt: rt ? (rt.broke ? 'broke' : rt.retest ? 'retest' : null) : null };
+// 見張る節目（1時間ごとの line_watch.js が、抜けたら通知する）
+try {
+  const Z = E.entryZones(d, R.ind, price, null, null), L0 = [];
+  const add = (p, name, kind, why) => { if (p > 0 && isFinite(p) && Math.abs(p / price - 1) < 0.3 && !L0.some(x => Math.abs(x.p / p - 1) < 0.01)) L0.push({ p: Math.round(p), name, kind, why }); };
+  if (rt && (rt.retest || rt.broke)) { add(rt.lv, '分かれ目（前の安値の3%下）', 'split', '日足の終値で割ると、過去は一段下げの形'); add(rt.lo, '前の安値', 'prevlow', '二番底になるかの境目'); }
+  (Z.above || []).slice(0, 2).forEach(z => add(z.mid, '上値の壁', 'wall', [...new Set(z.items.map(x => x.label))].join('・')));
+  (Z.below || []).slice(0, 2).forEach(z => add(z.mid, '下値の支え', 'support', [...new Set(z.items.map(x => x.label))].join('・')));
+  add(R.ind.s20[last], '20日線', 'ma', '短い流れの境目。上に戻ると戻りが本物になりやすい'); add(R.ind.s50[last], '50日線', 'ma', '中くらいの流れの境目'); add(R.ind.s200[last], '200日線', 'ma', '長い流れの境目');
+  fs.writeFileSync(path.join(ROOT, 'data', 'lines.json'), JSON.stringify({ d: key, px: Math.round(price), lines: L0.sort((a, b) => b.p - a.p) }));
+} catch (e) { console.log('lines', e.message); }
 // 記録
 const LOG = path.join(ROOT, 'data', 'signal_log.json'); let log = []; try { log = JSON.parse(fs.readFileSync(LOG, 'utf8')); } catch (e) { log = []; }
 const prev = log.length ? log[log.length - 1] : null;

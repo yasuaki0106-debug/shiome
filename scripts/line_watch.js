@@ -1,0 +1,28 @@
+/* 1時間ごと（live.yml）：BTCの1時間足の終値が、見張っている節目（data/lines.json）を上下に抜けたら通知する。
+   ヒゲではなく1時間足の終値で判定。抜けた方向と、その節目が何かで、判断の材料になる一言を添える */
+const fs = require('fs'), path = require('path'), ROOT = path.join(__dirname, '..'), TOPIC = process.env.NTFY_TOPIC || '';
+const rd = f => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8')); } catch (e) { return null; } };
+const live = rd('research/live.json'), L = rd('data/lines.json'), ST = path.join(ROOT, 'data', 'line_state.json'), st = rd('data/line_state.json') || {};
+if (!live || !L) { console.log('データなし'); process.exit(0); }
+const now = Date.now() / 1000, bars = live.h1.filter(b => b[0] + 3600 <= now);   // 確定した1時間足だけ
+if (!bars.length) process.exit(0);
+const last = bars[bars.length - 1], close = last[4], tkey = String(last[0]);
+if (st.t === tkey) { console.log('同じ足'); process.exit(0); }
+const usd = x => '$' + Math.round(x).toLocaleString('en-US'), msgs = [], side = {};
+L.lines.forEach(l => {
+  const id = l.kind + ':' + l.p, now = close >= l.p ? 'up' : 'dn', was = st.side && st.side[id]; side[id] = now;
+  if (!was || was === now) return;
+  const up = now === 'up', head = 'BTCが ' + usd(l.p) + '（' + l.name + '）を' + (up ? '上に抜けました' : '割りました');
+  const why = { split: up ? '前の安値の試し直しから戻した形です。朝9時の日足で上なら、二番底の見方が残ります' : '朝9時の日足の終値でも下なら、過去は一段下げの形です。買い下がりの指値が届きやすくなります',
+    prevlow: up ? '前の安値の上に戻しました。下げ止まりの初めのサイン' : '前の安値を割りました。分かれ目まで下げやすい位置です',
+    wall: up ? '止められやすい節目を抜けて、戻りが強まっています。2倍に戻すか・確認買いかは、朝9時の判定で確認してください' : '壁の下に押し戻されました。戻りはいったん止められた形です',
+    support: up ? '支えの上に戻しました' : '支えを割りました。下げが続きやすい形です。買い下がりの指値が近づいています',
+    ma: up ? '流れの線の上に戻しました。戻りが本物になりやすいサイン' : '流れの線の下に落ちました' }[l.kind] || '';
+  msgs.push([head, '1時間足の終値 ' + usd(close) + '。' + why + (l.why ? '（' + l.why + '）' : ''), up ? 'chart_with_upwards_trend' : 'chart_with_downwards_trend']);
+});
+fs.writeFileSync(ST, JSON.stringify({ t: tkey, close, side }));
+(async () => {
+  if (!st.side) { console.log('初回なので記録だけ'); return; }
+  if (!TOPIC || process.env.DRY) { msgs.forEach(m => console.log(m[0], '|', m[1])); return; }
+  for (const [title, message, tag] of msgs) { const r = await fetch('https://ntfy.sh/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: TOPIC, title, message, tags: [tag], click: 'https://yasuaki0106-debug.github.io/shiome/', priority: 4 }) }); console.log('ntfy', r.status, title); }
+})();

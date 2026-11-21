@@ -989,6 +989,7 @@ async function refreshAll() {
   }));
   tasks.push(loadOnchain().then(v => { S.oc = v; S.status.oc = { ok: true, name: 'オンチェーン・恐怖指数', note: 'MVRV・マイナー収入・ハッシュレート・恐怖と強欲指数' }; }, () => { S.oc = null; S.status.oc = { ok: false, name: 'オンチェーン・恐怖指数', note: '取得できません。底らしさの一部が出ません' }; }));
   tasks.push(loadLiveStocks().then(v => { S.live = v; S.status.live = { ok: true, name: '株価（リアルタイム）', note: 'MSTR・COINのトークン化株式（Gate、24時間）。MSTU・CONLはその動きの2倍で換算' }; }, () => { S.live = null; S.status.live = { ok: false, name: '株価（リアルタイム）', note: '取得できません。BTCからの換算で表示します' }; }));
+  tasks.push(loadRepoJson('lines.json').then(v => { S.lines = v; }, () => { S.lines = null; }));
   tasks.push(loadRepoJson('review.json').then(v => { S.review = v; }, () => { S.review = null; }));
   tasks.push(loadRepoJson('signal_log.json').then(v => { S.slog = v; }, () => { S.slog = null; }));
   tasks.push(loadRepoJson('etf_flows.json').then(v => { S.etff = v; S.status.etff = { ok: true, name: 'ETFの資金の出入り', note: '米国の現物ビットコインETF（Farside、毎日）' }; }, () => { S.etff = null; }));
@@ -1347,6 +1348,7 @@ function dirCard() {
     return '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="lad" role="img" aria-label="今の値段と、上下の節目">' + g + '</svg>'; })();
   return '<section class="card" id="c-dir"><h2>上がる？下がる？どこで止まる？</h2><p class="dir-sum">' + esc(sum) + '</p>' + ladderSvg +
     '<p class="keys lk"><span><i class="lk-w"></i>壁（止められやすい）</span><span><i class="lk-s"></i>支え（止まりやすい）</span><span><i class="lk-f"></i>燃料・加速（清算で速く動く）</span></p>' +
+    (S.lines && S.lines.lines && S.lines.lines.length ? '<div class="watch"><b>通知で見張っている線</b><ul>' + S.lines.lines.map(l => '<li><span class="num">' + usd(l.p) + '</span><span>' + esc(l.name) + '</span><span class="' + (S.price >= l.p ? 'up' : 'dn') + '">' + (S.price >= l.p ? '今は上' : '今は下') + '</span></li>').join('') + '</ul><p class="sub">BTCの1時間足の終値がこの線を上下に抜けたら、スマホに通知します（ヒゲでは鳴りません）。線は毎朝9時の確定データで引き直します。</p></div>' : '') +
     '<details class="more-in"><summary>節目ごとの株価と理由</summary>' +
     '<table class="tbl sm"><thead><tr><th></th><th>見立て</th><th>上がった割合</th><th>半分のケース</th></tr></thead><tbody>' + hzRow('1週間', fs) + hzRow('1か月', fm) + '</tbody></table><p class="sub">今と似た状況の過去の日の、その後です。1週間の方向の当たりは5割強で、これだけで決められる力はありません。</p>' +
     '<h3>上がったら</h3><ul class="lv">' + ab.slice(0, 4).map(z => row(z, kindUp(z))).join('') + '</ul>' +

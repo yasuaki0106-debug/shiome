@@ -67,6 +67,7 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .todo li[data-done]{cursor:pointer}.todo li.done{text-decoration:line-through;opacity:.45}.todo li.done::marker{content:'✓ '}.todo-hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
 .lad-s{fill:var(--muted);font-size:11px}.lk i{display:inline-block;width:14px;height:0!important;border:0!important;border-top:3px solid!important;background:none!important}.tbl.tmap td{text-align:left}
 .lk .lk-w{border-top-color:var(--avoid)!important}.lk .lk-s{border-top-color:var(--buy)!important}.lk .lk-f{border-top-color:var(--brass)!important}
+.watch{margin:10px 0 0;padding:8px 10px;background:var(--bg);border-radius:6px}.watch>b{font-size:13px}.watch li{display:grid;grid-template-columns:5.5em 1fr auto;gap:8px;font-size:13px;padding:3px 0}.watch .up{color:var(--buy)}.watch .dn{color:var(--avoid)}
 .lad{width:100%;height:auto;margin:6px 0}.lad-ax{stroke:var(--line);stroke-width:2}.lad-t{font-size:12.5px;fill:var(--ink)}.lad-now{font-size:11px;fill:var(--ink);font-weight:700}
 .btn.small{display:inline-block;width:auto;min-height:0;padding:6px 14px;margin-top:6px;font-size:13.5px}
 .todo{border:1px solid var(--line);border-left:5px solid var(--brass);border-radius:6px;padding:10px 12px;margin:0 0 14px;background:var(--surface)}.todo.has-al{border-left-color:var(--avoid)}.todo h2{font-size:15px;margin:0}.todo ol{margin:6px 0 0 20px;font-size:15px;line-height:1.55}.todo li{padding:3px 0}.todo li.t-warn{color:var(--avoid);font-weight:700}.todo li.t-buy{font-weight:700}.todo li.t-info{color:var(--muted);font-size:13.5px}
@@ -1689,6 +1690,7 @@ async function refreshAll() {
   }));
   tasks.push(loadOnchain().then(v => { S.oc = v; S.status.oc = { ok: true, name: 'オンチェーン・恐怖指数', note: 'MVRV・マイナー収入・ハッシュレート・恐怖と強欲指数' }; }, () => { S.oc = null; S.status.oc = { ok: false, name: 'オンチェーン・恐怖指数', note: '取得できません。底らしさの一部が出ません' }; }));
   tasks.push(loadLiveStocks().then(v => { S.live = v; S.status.live = { ok: true, name: '株価（リアルタイム）', note: 'MSTR・COINのトークン化株式（Gate、24時間）。MSTU・CONLはその動きの2倍で換算' }; }, () => { S.live = null; S.status.live = { ok: false, name: '株価（リアルタイム）', note: '取得できません。BTCからの換算で表示します' }; }));
+  tasks.push(loadRepoJson('lines.json').then(v => { S.lines = v; }, () => { S.lines = null; }));
   tasks.push(loadRepoJson('review.json').then(v => { S.review = v; }, () => { S.review = null; }));
   tasks.push(loadRepoJson('signal_log.json').then(v => { S.slog = v; }, () => { S.slog = null; }));
   tasks.push(loadRepoJson('etf_flows.json').then(v => { S.etff = v; S.status.etff = { ok: true, name: 'ETFの資金の出入り', note: '米国の現物ビットコインETF（Farside、毎日）' }; }, () => { S.etff = null; }));
@@ -2047,6 +2049,7 @@ function dirCard() {
     return '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="lad" role="img" aria-label="今の値段と、上下の節目">' + g + '</svg>'; })();
   return '<section class="card" id="c-dir"><h2>上がる？下がる？どこで止まる？</h2><p class="dir-sum">' + esc(sum) + '</p>' + ladderSvg +
     '<p class="keys lk"><span><i class="lk-w"></i>壁（止められやすい）</span><span><i class="lk-s"></i>支え（止まりやすい）</span><span><i class="lk-f"></i>燃料・加速（清算で速く動く）</span></p>' +
+    (S.lines && S.lines.lines && S.lines.lines.length ? '<div class="watch"><b>通知で見張っている線</b><ul>' + S.lines.lines.map(l => '<li><span class="num">' + usd(l.p) + '</span><span>' + esc(l.name) + '</span><span class="' + (S.price >= l.p ? 'up' : 'dn') + '">' + (S.price >= l.p ? '今は上' : '今は下') + '</span></li>').join('') + '</ul><p class="sub">BTCの1時間足の終値がこの線を上下に抜けたら、スマホに通知します（ヒゲでは鳴りません）。線は毎朝9時の確定データで引き直します。</p></div>' : '') +
     '<details class="more-in"><summary>節目ごとの株価と理由</summary>' +
     '<table class="tbl sm"><thead><tr><th></th><th>見立て</th><th>上がった割合</th><th>半分のケース</th></tr></thead><tbody>' + hzRow('1週間', fs) + hzRow('1か月', fm) + '</tbody></table><p class="sub">今と似た状況の過去の日の、その後です。1週間の方向の当たりは5割強で、これだけで決められる力はありません。</p>' +
     '<h3>上がったら</h3><ul class="lv">' + ab.slice(0, 4).map(z => row(z, kindUp(z))).join('') + '</ul>' +

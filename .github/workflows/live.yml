@@ -11,6 +11,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/live_snapshot.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node scripts/line_watch.js
+        continue-on-error: true
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
       - run: |
           git config user.name "shiome-bot"; git config user.email "shiome-bot@users.noreply.github.com"
-          git add research/live.json && git commit -m "今の相場の控え" && git push || true
+          git add research/live.json data/line_state.json; git commit -m "今の相場の控え" && (git push || (git pull --rebase && git push)) || true
