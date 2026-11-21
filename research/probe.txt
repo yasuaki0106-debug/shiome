@@ -1,0 +1,77 @@
+===== preflight token
+HTTP/2 204 
+===== preflight quote
+HTTP/2 204 
+===== preflight register
+HTTP/2 204 
+===== moomoo quote without token
+HTTP/2 401 
+{"code":-12006,"trace_id":"5a81ce6dee773eed7bd0a917794351d6"}
+===== moomoo server-time
+HTTP/2 200 
+{"server_time_ms":"1795231188516"}
+===== moomoo authorize page
+HTTP/2 302 
+Redirecting to https://passport.moomoo.com/?target=https%3A%2F%2Fwebapi.moomoo.com%2Foauth2%2Fauthorize%2Fconfirm%3Fbroker_id%3D1007%26broker_id_sig%3DPFXhkHyOADcqrcVh2LgAjFFxatk_Lk7Tx9NOOM0sETba_X8XKsuQXT4VJc1zh_Uh&amp;type=login&amp;lang=zh-cn&amp;domain=1.
+===== bybit ticker
+HTTP/2 403 
+{
+    error:The Amazon CloudFront distribution is configured to block access from your country
+}
+===== bybit oi
+HTTP/2 403 
+{
+    error:The Amazon CloudFront distribution is configured to block access from your country
+}
+===== bybit ratio
+HTTP/2 403 
+{
+    error:The Amazon CloudFront distribution is configured to block access from your country
+}
+===== okx oi
+HTTP/2 200 
+access-control-allow-origin: https://yasuaki0106-debug.github.io
+{"code":"0","data":[{"instId":"BTC-USDT-SWAP","instType":"SWAP","oi":"3358840.29000001722","oiCcy":"33588.4029000001722","oiUsd":"1958791686.1207600422735","ts":"1795231189130"}],"msg":""}
+===== okx funding
+HTTP/2 200 
+access-control-allow-origin: https://yasuaki0106-debug.github.io
+{"code":"0","data":[{"formulaType":"withRate","fundingRate":"-0.0000551504303585","fundingTime":"1795248000000","impactValue":"20000.0000000000000000","instId":"BTC-USDT-SWAP","instType":"SWAP","interestRate":"0.0001000000000000","maxFundingRate":"0.00375","method":"current_period","minFundingRate":"-0.00375","nextFundingRate":"","nextFundingTime":"1795276800000","premium":"-0.0005331934343485","prevFundingTime":"1795219200000","settFundingRate":"-0.0000594744782406","settState":"settled","ts":"
+===== okx oi hist
+HTTP/2 200 
+{"code":"0","data":[["1795219200000","3363746.1000000171","33637.461000000171","1961067340.0461099693171"],["1795204800000","3299681.98000001557","32996.8198000001557","1942664667.95114916672851"],["1795190400000","3386559.5300000163","33865.595300000163","1982563066.6121395423623"]],"msg":""}
+===== okx ls
+HTTP/2 400 
+{"code":"51000","data":[],"error_message":"","msg":"Parameter Parameter period error，support [5m,1H,1D] error"}
+===== cb ticker
+HTTP/2 200 
+access-control-allow-headers: Content-Type, Accept, cb-session, cb-fp, cb-form-factor
+access-control-allow-methods: GET,POST,DELETE,PUT
+access-control-allow-origin: *
+access-control-expose-headers: cb-before, cb-after, cb-gdpr
+access-control-max-age: 7200
+{"ask":"58245.95","bid":"58245.94","volume":"23161.64471363","trade_id":1140609070,"price":"58245.94","size":"0.00000002","time":"2026-11-21T03:19:49.312568466Z","rfq_volume":"332.144502"}
+===== cb candles
+HTTP/2 200 
+access-control-allow-headers: Content-Type, Accept, cb-session, cb-fp, cb-form-factor
+access-control-allow-methods: GET,POST,DELETE,PUT
+access-control-allow-origin: *
+access-control-expose-headers: cb-before, cb-after, cb-gdpr
+access-control-max-age: 7200
+[[1438732800,282.01,286.25,285.6,282.77,5765.48779667],[1438646400,280.11,286.47,280.95,285.51,5580.22052955],[1438560000,280.27,285.86,282.62,280.95,4741.72910667],[1438473600,277.33,282.62,281.53,282.62,3361.0866893],[1438387200,277.26,285.6,285.2,281.53,3932.44975145]]
+===== binance vision
+HTTP/2 200 
+access-control-allow-origin: *
+access-control-allow-methods: GET, HEAD, OPTIONS
+[[1795132800000,"61986.73000000","62639.52000000","57778.35000000","58951.51000000","38125.92587000",1795219199999,"2290922104.91349340",5686897,"17224.83184000","1037247086.59044420","0"],[1795219200000,"58951.51000000","59248.06000000","58144.08000000","58350.92000000","4719.68379000",1795305599999,"277737971.82951180",508273,"1675.83591000","98656354.75697480","0"]]
+===== binance fapi
+HTTP/2 451 
+{
+  "code": 0,
+  "msg": "Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error."
+}
+===== deribit
+HTTP/2 200 
+access-control-allow-headers: Authorization,User-Agent,Range,X-Requested-With,Content-Type,Partner
+access-control-allow-methods: GET, POST, OPTIONS
+access-control-allow-origin: https://yasuaki0106-debug.github.io
+{"jsonrpc":"2.0","result":{"estimated_delivery_price":58254.4,"index_price":58254.4},"usIn":1795231191111332,"usOut":1795231191111655,"usDiff":323,"testnet":false}
