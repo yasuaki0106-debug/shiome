@@ -63,6 +63,7 @@ main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
 .todo-meta{margin:2px 0 0;font-size:13px;color:var(--muted)}.todo-meta b{color:var(--ink)}.todo-meta .cn{color:var(--avoid)}
 .ord{margin:4px 0 2px;padding:6px 10px;background:var(--bg);border-radius:4px;list-style:none;font-size:14px;font-weight:400}.ord li{padding:2px 0}
 .cseg{position:relative;display:flex;width:100%;min-width:132px;height:10px;border-radius:5px;overflow:visible;gap:1px}.cseg i{display:block;height:100%}.cseg i:first-child{border-radius:5px 0 0 5px}.cseg i:last-of-type{border-radius:0 5px 5px 0}.cs-up{background:#7fb8a8}.cs-top{background:var(--avoid)}.cs-down{background:#d9a28f}.cs-bottom{background:var(--buy)}.cs-recover{background:#9cc7bb}.cseg b{position:absolute;top:-5px;width:3px;height:20px;background:var(--ink);border-radius:2px;transform:translateX(-1px)}.clab{display:flex;gap:1px;width:100%;font-size:9.5px;color:var(--muted);margin-top:3px}.clab span{text-align:center;white-space:nowrap}.tile[data-go="long"] .t-b{flex-direction:column;align-items:stretch;width:100%}
+.gl{padding:4px 14px 10px}.gl dt{font-weight:700;font-size:13.5px;margin-top:10px}.gl dd{margin:2px 0 0;font-size:13px;color:var(--muted);line-height:1.6}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 14px}.tile{display:grid;grid-template-rows:auto 1fr auto;align-items:center;justify-items:start;gap:2px;min-height:96px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);text-align:left;font:inherit;color:var(--ink);cursor:pointer}.t-h{font-size:12px;color:var(--muted)}.t-b{display:flex;gap:10px;align-items:center}.t-f{font-size:11.5px;color:var(--muted)}.tile .big{font-size:26px;line-height:1}.ring{width:40px;height:40px}.rg-bg{fill:none;stroke:var(--soft);stroke-width:4}.rg-fg{fill:none;stroke:var(--brass);stroke-width:4;stroke-linecap:round}.ringv{font-size:18px}.cbar{display:block;width:120px;height:8px;background:var(--soft);border-radius:4px;overflow:hidden}.cbar i{display:block;height:100%;background:var(--brass)}
 .todo li[data-done]{cursor:pointer}.todo li.done{text-decoration:line-through;opacity:.45}.todo li.done::marker{content:'✓ '}.todo-hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
 .lad-s{fill:var(--muted);font-size:11px}.lk i{display:inline-block;width:14px;height:0!important;border:0!important;border-top:3px solid!important;background:none!important}.tbl.tmap td{text-align:left}
@@ -1425,7 +1426,9 @@ function holdOne(p) {
     else if (p.kind === 'trial') { const st = eb * (1 - TRIAL_STOP); line = { btc: st, px: etfAt(p.sym, st), label: '撤退ライン（BTCの終値で買値の10%下）' }; if (lastClose < st) { alarm = '撤退ラインを割りました。この試し分は売ってください'; a = 'sell'; why.length = 0; why.push('試し買いの撤退ライン（BTC ' + usd(st) + '）を、終値で割りました'); } }
     else if (p.kind === 'buy') { const st = eb * (1 - WARN_DD); line = { btc: st, px: etfAt(p.sym, st), label: '想定外ライン（BTCが買ったときの35%下）' }; if (lastClose < st) alarm = '買った後の下げが、過去の買い判定の後の最大（-34%）を超えました。作戦が外れている可能性があります'; }
   }
-  if (!alarm && a === 'switch') alarm = '2倍の分を ' + prefUnd(e.und) + ' に乗り換える合図が出ています';
+  if (!alarm && a === 'switch') alarm = p.keep2x ? null : '2倍の分を ' + prefUnd(e.und) + ' に乗り換える合図が出ています';
+  if (a !== 'switch' && p.keep2x) { try { const all = LS.get('pos', []), k = all.findIndex(x => x.sym === p.sym && x.cost === p.cost && x.qty === p.qty && x.kind === p.kind); if (k >= 0) { delete all[k].keep2x; LS.set('pos', all); } } catch (e2) { /* 次回 */ } }
+  if (a === 'switch' && p.keep2x) why.push('あなたは2倍のまま持つと決めています（' + esc(p.keep2x) + '）。上向きがはっきりしたら（中期' + LEV_ON + '以上）、この表示は消えます');
   if (!alarm && a === 'sell' && e.L > 0) alarm = '売る合図が出ています';
   const pl = now / p.cost - 1, days = p.date ? Math.max(0, Math.round((Date.now() - Date.parse(p.date)) / DAY)) : null;
   let decay = null, undRet = null;
@@ -1471,6 +1474,14 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   const cn = (() => { try { const t = planTicker(p); return concernsFor(ETF[t] ? ETF[t].und : t).length; } catch (e) { return 0; } })();
   return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + (x.btn === 'ord-set' ? '<button class="btn small" data-ord="set">4本入れた</button>' : x.btn === 'ord-fix' ? '<button class="btn small" data-ord="fix">変えた</button>' : '') + '</li>').join('') + '</ol><p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
 }
+function glossary() {
+  const G = [['買い下がり', '底値圏で、下がるたびに分けて買う買い方。予定額の半分を4本の指値（-10%ごと）で'], ['確認買い', '上向きを確かめてから買う買い方。残り半分を2回。中期の判定が75以上で出る'],
+    ['中期の判定（スコア）', '今と似た状況だった過去の日が、その後30日でどう動いたかを点数にしたもの。0〜100。75以上が「買い好機」、20未満は弱い'], ['底らしさ', '5つの指標が「過去の底の水準」までどこまで来たか。100%に近いほど底らしい'],
+    ['2倍・1倍の乗り換え', 'MSTU・CONL（2倍）を、判定が弱い間だけMSTR・COIN（1倍）にしておくこと。売って降りるのではなく、2倍だけ外す'], ['分かれ目', '前の安値の3%下。日足の終値でここを割ると、過去は一段下げの形'],
+    ['壁・支え・燃料', '上がったら止められやすい値段（壁）、下がったら止まりやすい値段（支え）、清算で一気に動きやすい値段（燃料・加速）'], ['想定外ライン', '過去の底値圏でもなかった下げの水準。割ったら作戦を見直す'],
+    ['引けに成行', 'その日の取引の最後の値段で、値段を指定せずに買うこと'], ['MVRV', 'ビットコイン全体の時価が、みんなが買った値段の合計の何倍か。1を割ると、平均で含み損'], ['mNAV', 'MSTRの株の価値が、持っているBTCの価値の何倍か'], ['σ（シグマ）', '値動きの大きさのものさし。1σの中に約7割、2σの中に約95%が収まる']];
+  return '<details class="more"><summary>言葉の説明</summary><dl class="gl">' + G.map(x => '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>').join('') + '</dl></details>';
+}
 function tilesCard() {
   if (!S.R) return '';
   const fs = S.R.hz.s.fc, fm = S.R.hz.m.fc, c = S.cyc, bg = S.bg, p = S.plan || {};
@@ -1493,14 +1504,14 @@ function holdCards() {
   const hs = S.hold || []; if (!hs.length) return '';
   return '<h2 class="sec">買った玉</h2>' + hs.map(h => {
     if (h.p.kind === 'cash') { const [lb, cl] = HOLD[h.a]; return '<div class="plan-stock"><div class="row"><b class="sym">' + usd(h.cash) + '<small>' + esc(h.p.sym) + 'を売ったお金' + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cl + ' plan-v">' + lb + '</b></div><p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p>' + (h.a === 'reinvest' && ok(h.undNow) ? '<dl class="kv"><dt>' + h.und + ' の今の目安</dt><dd class="num">' + usd2(h.undNow) + '（約' + Math.floor(h.cash / h.undNow) + '株）</dd></dl>' : '') + '<p class="sub">買ったら、この記録を削除して、買った株を記録してください。</p></div>'; }
-    const [lab, cls] = HOLD[h.a], e = ETF[h.p.sym], kv = [], kn = h.p.kind === 'ladder' ? '買い下がり' : h.p.kind === 'trial' ? '試し' : h.p.kind === 'buy' ? '確認買い' : '以前からの保有';
+    const [lab, cls] = h.a === 'switch' && h.p.keep2x ? ['2倍のまま（あなたの判断）', 'v-wait'] : HOLD[h.a], e = ETF[h.p.sym], kv = [], kn = h.p.kind === 'ladder' ? '買い下がり' : h.p.kind === 'trial' ? '試し' : h.p.kind === 'buy' ? '確認買い' : '以前からの保有';
     if (h.line && ok(h.line.px)) kv.push([h.line.label, usd2(h.line.px) + (ok(h.line.btc) ? '（BTC ' + usd(h.line.btc) + '）' : '')]);
     if (ok(h.now)) { kv.push(['いまの目安 / 買値', usd2(h.now) + ' / ' + usd2(h.p.cost)]); kv.push(['損益', pc(h.pl) + (h.plUsd != null ? '（' + (h.plUsd < 0 ? '-' : '+') + '$' + Math.abs(Math.round(h.plUsd)).toLocaleString('en-US') + '）' : '')]); }
     if (ok(h.lim)) kv.push(['買い足しの指値', usd2(h.lim)]);
     if (h.days != null) kv.push(['持っている日数', h.days + '日']);
     if (h.decay != null) kv.push([h.decay < 0 ? '2倍の計算より目減りした分' : '2倍の計算より上振れした分', pc(h.decay) + '（' + e.und + 'は' + pc(h.undRet) + '）']);
     if (h.need != null) kv.push(['買値に戻るには', e.und + 'が ' + pc(h.need) + (h.undNeed ? '（' + usd2(h.undNeed) + '）' : '') + ' 以上']);
-    return '<div class="plan-stock' + (h.alarm ? ' alarm' : '') + '"><div class="row"><b class="sym">' + h.p.sym + '<small>' + kn + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cls + ' plan-v">' + lab + '</b></div>' + (h.alarm ? '<p class="alarm-t">アラーム：' + esc(h.alarm) + '</p>' : '') + '<dl class="kv">' + kv.slice(0, 3).map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl><details class="more-in"><summary>理由と詳しい数字</summary><p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p><dl class="kv">' + kv.slice(3).map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl>' + (h.need != null && e.L > 1 ? '<p class="sub">「買値に戻るには」は目減りを無視した最低ラインです。時間がかかるほど、必要な上昇は大きくなります。</p>' : '') + '</details></div>';
+    return '<div class="plan-stock' + (h.alarm ? ' alarm' : '') + '"><div class="row"><b class="sym">' + h.p.sym + '<small>' + kn + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cls + ' plan-v">' + lab + '</b></div>' + (h.alarm ? '<p class="alarm-t">アラーム：' + esc(h.alarm) + '</p>' : '') + '<dl class="kv">' + kv.slice(0, 3).map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl><details class="more-in"><summary>理由と詳しい数字</summary><p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p><dl class="kv">' + kv.slice(3).map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl>' + (h.need != null && e.L > 1 ? '<p class="sub">「買値に戻るには」は目減りを無視した最低ラインです。時間がかかるほど、必要な上昇は大きくなります。</p>' : '') + '</details>' + (h.a === 'switch' ? (h.p.keep2x ? '<button class="link" data-keep="' + h.i + '">2倍のまま持つのをやめる（合図を出し直す）</button>' : '<button class="link" data-keep="' + h.i + '">理解したうえで2倍のまま持つ（毎日の合図を止める）</button>') : '') + '</div>';
   }).join('');
 }
 function cycleStrip() {
@@ -2153,7 +2164,7 @@ function viewJudge() {
     '<p class="keys"><span><i class="k-tr"></i>トレンドの通り道（直近60日）</span><span><i class="k-iv"></i>オプションが織り込む変動幅（細い線が1σ、薄い線が2σ）</span><span><i class="k-px"></i>終値（3か月表示はローソク足）</span><span><i class="k-50"></i>50日線</span><span><i class="k-200"></i>200日線</span><span><i class="k-cone"></i>予測の幅（濃い帯は50%、薄い帯は80%）</span></p><p class="sub">チャート下の帯は、その日に出ていた' + H.name + '判定です。</p></section>' +
 
     '<section class="card"><h2>データの取得状況</h2><ul class="stat">' + stat + '</ul><p class="sub">判定に使う日足は ' + ymd(S.d.t[S.d.c.length - 1]) + '（UTC）の確定分まで。開いている間は5分ごとに更新します。</p></section>' +
-    '</details><p class="disc">過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
+    '</details>' + glossary() + '<p class="disc">過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
 }
 
 function ladderCard() {
@@ -2171,7 +2182,7 @@ function slogCard() {
   const lg = S.slog; if (!lg || !lg.length || !S._L) return '';
   const L = S._L, idx = new Map(L.t.map((t, i) => [dkey(t), i])), f = (d, h) => { const i = idx.get(d); return i != null && i + h < L.c.length ? L.c[i + h] / L.c[i] - 1 : NaN; };
   const ph = { up: '上昇期', top: '天井圏', down: '下落期', bottom: '底値圏', recover: '回復期' };
-  const rows = lg.slice(-20).reverse().map(x => '<tr><th>' + x.d.slice(5).replace('-', '/') + '</th><td>' + (x.lad ? '買い下がり' : x.conf ? '確認買い' : '—') + '</td><td class="num">' + x.m + '</td><td class="num">' + x.g + '%</td><td class="num">' + pc(f(x.d, 7), 0) + '</td><td class="num">' + pc(f(x.d, 30), 0) + '</td></tr>').join('');
+  const rows = lg.slice(-20).reverse().map(x => '<tr><th>' + x.d.slice(5).replace('-', '/') + '</th><td>' + (x.lad ? '買い下がり' : x.conf ? '確認買い' : '—') + '</td><td class="num">' + (x.m == null ? '—' : x.m) + '</td><td class="num">' + (x.g == null ? '—' : x.g + '%') + '</td><td class="num">' + pc(f(x.d, 7), 0) + '</td><td class="num">' + pc(f(x.d, 30), 0) + '</td></tr>').join('');
   return '<section class="card"><h2>毎日の判定の記録（自動）</h2><p>GitHubが毎日、確定した日足で判定を出して記録しています。アプリを開かなかった日も残り、後からその後の値動きと照らし合わせます。</p><div class="xscroll"><table class="tbl sm"><thead><tr><th>日付</th><th>合図</th><th>中期</th><th>底らしさ</th><th>7日後</th><th>30日後</th></tr></thead><tbody>' + rows + '</tbody></table></div><p class="sub">' + lg.length + '日分（' + lg[0].d + '〜）。この記録はBitstampの日足と、MVRVなどのオンチェーンで計算しているので、アプリの画面（Binanceの日足、資金調達率やオプションも使用）とスコアが少し違うことがあります。</p></section>';
 }
 function e2eCard() {
@@ -2243,7 +2254,7 @@ function viewVerify() {
     '<details class="card"><summary>計算のしかた</summary><p>テクニカル9種、出来高4種、オプション2種（Deribit DVOL、2021年以降）、資金調達率2種（Binance先物、2019年以降）、長期サイクル2種（長期成長線と200週線からの乖離。長期の判定だけに使用）の指標を毎日計算します。各指標が過去4年間で「' + h.d + '日後のリターン」とどれだけ連動していたかを相関で測り、それを重みにして合成したものがスコアです。スコアは過去4年の中での順位（0〜100）に直しています。</p><p>重みの計算にはその日より前に結果が確定していたデータしか使わないため、上の成績はすべて「当時知り得た情報だけで出した判定」の結果です。プット・コール比率、スキュー、建玉、清算の集中帯は長期の履歴が公開されていないのでスコアには入れず、警戒フラグとして判定を一段階下げる用途に限っています。</p></details>';
 }
 
-function meter(val, label, level) { return '<div class="meter"><div class="row"><span>' + label + '</span><b class="lvl-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '">' + level + '<span class="num"> ' + val + '</span></b></div><div class="mtrack"><b style="width:' + val + '%" class="m-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '"></b></div></div>'; }
+function meter(val, label, level) { if (!ok(val)) return '<div class="meter"><div class="row"><span>' + label + '</span><b class="muted">データなし</b></div></div>'; return '<div class="meter"><div class="row"><span>' + label + '</span><b class="lvl-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '">' + level + '<span class="num"> ' + val + '</span></b></div><div class="mtrack"><b style="width:' + val + '%" class="m-' + (val >= 65 ? 'hi' : val >= 45 ? 'mid' : 'lo') + '"></b></div></div>'; }
 function viewFlow() {
   if (!S.R) return '';
   const q = S.liq, o = S.opt, price = S.price; let h = '<section class="lead"><h1>需給</h1><p>ETFの資金の出入り、レバレッジの積み上がり、オプション市場の構えを見ます。</p></section>';
@@ -2430,6 +2441,7 @@ document.addEventListener('click', e => {
       if ((kind === 'buy' || kind === 'trial' || kind === 'ladder') && qty && $('#pos-pay') && $('#pos-pay').checked) setCash(cashBal() - cost * qty);
       LS.set('pos', a); S.recKind = null; if (S.R) { S.plan = buildPlan(); S.pick = pickStock(); S.hold = holdAll(); writeLog(); } location.hash = 'judge';
   }
+  else if (t.dataset.keep != null) { const a = LS.get('pos', []), k = +t.dataset.keep; if (a[k]) { if (a[k].keep2x) delete a[k].keep2x; else a[k].keep2x = ymd(Date.now()) + 'に決定'; LS.set('pos', a); S.hold = holdAll(); render(); } }
   else if (t.dataset.ord) {
     if (t.dataset.ord === 'set') { const lo = ladderOrders(S.plan); if (lo) LS.set('orders', { t: lo.t, rows: lo.rows, exp: lo.exp, at: Date.now() }); }
     if (t.dataset.ord === 'fix') { const po = placedOrders(), f1 = ladderLots()[0]; if (po && f1) { po.rows = po.rows.map((r, k) => k === 0 ? Object.assign({}, r, { px: f1.cost }) : Object.assign({}, r, { px: Math.floor(f1.cost * (1 - LAD_STEP * k) * 100) / 100 })); LS.set('orders', po); } }
