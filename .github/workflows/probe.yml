@@ -1,14 +1,33 @@
-name: 接続診断
-on:
-  workflow_dispatch:
-permissions:
-  contents: write
+name: 接続テスト（手動）
+on: workflow_dispatch
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: python scripts/probe.py
-      - run: |
-          git config user.name "shiome-bot"; git config user.email "shiome-bot@users.noreply.github.com"
-          git add data/probe.json; git diff --cached --quiet || (git commit -m "接続診断" && git pull --rebase && git push)
+      - name: probe
+        run: |
+          O="https://yasuaki0106-debug.github.io"
+          p(){ echo "===== $1"; curl -s -m 20 -o /tmp/b -D /tmp/h -H "Origin: $O" "${@:2}"; head -1 /tmp/h; grep -i '^access-control' /tmp/h; head -c 400 /tmp/b; echo; }
+          echo "##### moomoo"
+          echo "== preflight token"; curl -s -m 20 -D - -o /dev/null -X OPTIONS -H "Origin: $O" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type" https://webapi.moomoo.com/oauth2/token | grep -iE '^HTTP|^access-control'
+          echo "== preflight quote"; curl -s -m 20 -D - -o /dev/null -X OPTIONS -H "Origin: $O" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: authorization,content-type" https://webapi.moomoo.com/api/v1.0/quote/stock-quote | grep -iE '^HTTP|^access-control'
+          echo "== preflight register"; curl -s -m 20 -D - -o /dev/null -X OPTIONS -H "Origin: $O" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type" https://webapi.moomoo.com/oauth2/register | grep -iE '^HTTP|^access-control'
+          p "quote without token" -X POST -H "Content-Type: application/json" -d '{"code_list":["US.MSTR"]}' https://webapi.moomoo.com/api/v1.0/quote/stock-quote
+          p "server-time" https://webapi.moomoo.com/api/v1.0/server-time
+          echo "##### bybit"
+          p "bybit ticker" "https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT"
+          p "bybit oi" "https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=4h&limit=3"
+          p "bybit ratio" "https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=4h&limit=3"
+          echo "##### okx"
+          p "okx oi" "https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=BTC-USDT-SWAP"
+          p "okx funding" "https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP"
+          p "okx oi hist" "https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId=BTC-USDT-SWAP&period=4H&limit=3"
+          p "okx ls" "https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=BTC&period=4H"
+          echo "##### coinbase"
+          p "cb ticker" "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
+          p "cb candles" "https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=86400&start=2015-08-01T00:00:00Z&end=2015-08-05T00:00:00Z"
+          echo "##### binance (US runner)"
+          p "binance vision" "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=2"
+          p "binance fapi" "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"
+          echo "##### deribit"
+          p "deribit perp" "https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=BTC&kind=future"
