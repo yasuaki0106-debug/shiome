@@ -1,2 +1,2 @@
 warn translate HTTP Error 429: Too Many Requests
-{'MSTR': 25, 'COIN': 25, 'REG': 25, 'MSTR_JA': 15, 'COIN_JA': 15, 'REG_JA': 2} {}
+{'MSTR': 25, 'COIN': 25, 'REG': 25, 'MSTR_JA': 15, 'COIN_JA': 15, 'REG_JA': 1} {}
