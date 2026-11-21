@@ -849,7 +849,23 @@ function tilesCard() {
     tile('dir', '方向', '<b class="' + c7 + ' big">' + a7 + '</b><b class="' + c30 + ' big">' + a30 + '</b>', '1週間 ' + (fs ? Math.round(fs.up * 100) + '%' : '—') + '・1か月 ' + (fm ? Math.round(fm.up * 100) + '%' : '—')) +
     tile('bottom', '底らしさ', (g != null ? ring(g) + '<b class="ringv num">' + g + '%</b>' : '—'), g == null ? '' : g >= 50 ? '底値圏の水準' : 'まだ高い') +
     tile('long', '4年サイクルの今', '<span class="cseg">' + [[400, 'up'], [200, 'top'], [150, 'down'], [250, 'bottom'], [span - 1000, 'recover']].map(x => '<i class="cs-' + x[1] + '" style="flex:' + x[0] + '"></i>').join('') + '<b style="left:' + (cyc * 100).toFixed(1) + '%"></b></span><span class="clab">' + [[400, '上昇'], [200, '天井'], [150, '下落'], [250, '底'], [span - 1000, '回復']].map(x => '<span style="flex:' + x[0] + '">' + x[1] + '</span>').join('') + '</span>', c ? c.name + '・半減期から' + c.day + '日目' : '—') +
-    tile('concern', '懸念', '<b class="big ' + (cn ? 'v-avoid' : 'v-buy') + '">' + cn + '</b>', und + '系と相場全体') + '</section>';
+    tile('concern', '懸念', '<b class="big ' + (cn ? 'v-avoid' : 'v-buy') + '">' + cn + '</b>', und + '系と相場全体') + '</section>' + miniGrid();
+}
+function miniGrid() { // 1か所で全部見えるように：大事な数字を小さな札で並べる（緑＝買いの材料、赤＝注意、灰＝参考）
+  const R = []; const add = (go, name, val, tone, note) => R.push('<button class="mini m-' + tone + '" data-go="' + go + '"><span class="mn">' + name + '</span><b class="num">' + val + '</b><span class="mt">' + note + '</span></button>');
+  const f1 = S.d && S.d.c.length > 30 ? fcAt(S.d.c.length - 1, 'd') : null, c0 = S.d ? S.d.c[S.d.c.length - 1] : NaN;
+  if (f1) add('soon', '明日の幅', kfmt(c0 * (1 + f1.q10)) + '〜' + kfmt(c0 * (1 + f1.q90)), 'n', '10回に8回はこの中');
+  const wr = S.bg && S.bg.parts.find(x => /週足RSI/.test(x.nm)); if (wr) add('bottom', '売られすぎ（週足RSI）', wr.now, +wr.now <= 35 ? 'g' : 'n', +wr.now <= 35 ? '過去の底と同じ水準' : '底の水準ではない');
+  const fg = S.oc && S.oc.fng && S.oc.fng.length ? S.oc.fng[S.oc.fng.length - 1][1] : null; if (fg != null) add('bottom', '恐怖指数', fg, 'n', (fg <= 25 ? '極度の恐怖' : fg >= 75 ? '極度の強欲' : '中間') + '・参考（効き目なし）');
+  const zA = (S.zones && S.zones.above || []).map(z => z.items.filter(x => x.kind !== 'opt')).filter(a => a.length)[0], zB = (S.zones && S.zones.below || []).map(z => z.items.filter(x => x.kind !== 'opt')).filter(a => a.length)[0];
+  if (zA) { const p = zA.reduce((a, x) => a + x.p, 0) / zA.length; add('dir', '上の節目', kfmt(p), 'r', pc(p / S.price - 1) + '・上げが止まりやすい'); }
+  if (zB) { const p = zB.reduce((a, x) => a + x.p, 0) / zB.length; add('dir', '下の節目', kfmt(p), 'g', pc(p / S.price - 1) + '・下げが止まりやすい'); }
+  if (S.rt && (S.rt.retest || S.rt.broke)) add('dir', '分かれ目', kfmt(S.rt.level), S.price < S.rt.level ? 'r' : 'n', S.price < S.rt.level ? '今は下・割れたまま' : '今は上・終値で割るか');
+  const u = S.up; if (u && ok(u.ratio)) add('dir', '清算の偏り', u.ratio >= 0.6 ? '上に多い' : u.ratio <= 0.4 ? '下に多い' : '上下同じ', 'n', '未検証・参考');
+  const ef = etfState(); if (ef) add('soon', 'ETF（20日）', (ef.s20 < 0 ? '-' : '+') + '$' + (Math.abs(ef.s20) / 1000).toFixed(1) + 'B', ef.s20 < 0 ? 'r' : 'g', '2024年以降で下から' + pc(ef.rank, 0, false));
+  const mm = S.R.hz.m.pct; if (ok(mm)) add('today', '中期の判定', Math.round(mm), mm >= 75 ? 'g' : mm < 20 ? 'r' : 'n', mm >= 75 ? '確認買いの水準' : mm < 20 ? '弱い（2倍は外す水準）' : 'あと' + Math.round(75 - mm) + 'で確認買い');
+  const now = Date.now(), ev = allEvents().filter(e => e.t > now && e.impact >= 3).sort((a, b) => a.t - b.t)[0]; if (ev) add('events', '次の大きな発表', md(ev.t), 'n', ev.title.replace(/（.*?）/g, ''));
+  return '<section class="minis">' + R.join('') + '</section><p class="mini-key"><span class="mk g"></span>買いの材料　<span class="mk r"></span>注意　<span class="mk n"></span>参考　タップでくわしく</p>';
 }
 function alarmBanner() { // 買った玉のどれかにアラームが出ていたら、画面の一番上に出す
   const al = (S.hold || []).filter(h => h.alarm); if (!al.length) return '';
@@ -1825,7 +1841,8 @@ document.addEventListener('click', e => {
     if (t.dataset.ord === 'fix') { const po = placedOrders(), f1 = ladderLots()[0]; if (po && f1) { po.rows = po.rows.map((r, k) => k === 0 ? Object.assign({}, r, { px: f1.cost }) : Object.assign({}, r, { px: Math.floor(f1.cost * (1 - LAD_STEP * k) * 100) / 100 })); LS.set('orders', po); } }
     render(); }
   else if (t.closest && t.closest('.todo li[data-done]') && !t.closest('.ord') && !t.closest('button')) { const k = +t.closest('.todo li[data-done]').dataset.done, key = 'done.' + dkey(Date.now()), a = new Set(LS.get(key, [])); a.has(k) ? a.delete(k) : a.add(k); LS.set(key, [...a]); render(); }
-  else if (t.closest && t.closest('.tile')) { const go = t.closest('.tile').dataset.go, el = document.getElementById('c-' + go); if (go === 'concern') { const d = document.querySelector('.today .more-in.mb'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } else if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  else if (t.closest && t.closest('.mini')) { const go = t.closest('.mini').dataset.go; if (go === 'events') { location.hash = 'events'; return; } const el = go === 'today' ? document.querySelector('.today') : document.getElementById('c-' + go); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  else if (t.closest && t.closest('.tile')) { const go = t.closest('.tile').dataset.go, el = go === 'today' ? document.querySelector('.today') : go === 'events' ? null : document.getElementById('c-' + go); if (go === 'events') { location.hash = 'events'; return; } if (go === 'concern') { const d = document.querySelector('.today .more-in.mb'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } else if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.dataset.rec) { S.recKind = t.dataset.rec === 'trial' ? 'trial' : (S.plan && (S.plan.a === 'ladder' || ((S.plan.lad || []).length && S.plan.a !== 'buy'))) ? 'ladder' : 'buy'; location.hash = 'stocks'; setTimeout(() => { const el = document.getElementById('pos-form'); if (el) el.scrollIntoView(); }, 80); }
   else if (t.id === 'trial-add') { LS.set('trial', { t: Date.now(), btc: Math.round(S.price) }); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
   else if (t.id === 'trial-clear') { LS.del('trial'); if (S.R) { S.plan = buildPlan(); S.hold = holdAll(); } render(); }
