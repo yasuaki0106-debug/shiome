@@ -30,6 +30,8 @@ jobs:
         continue-on-error: true
       - run: python scripts/fetch_onchain.py
         continue-on-error: true
+      - run: python scripts/fetch_news.py
+        continue-on-error: true
       - run: python scripts/update_premium.py
         continue-on-error: true
       - name: 変更があれば保存
