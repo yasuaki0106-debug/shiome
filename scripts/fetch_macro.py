@@ -2,7 +2,7 @@
 import json, os, time, urllib.request, csv, io
 UA = {"User-Agent": "Mozilla/5.0"}
 def yahoo(sym):
-    u = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?range=max&interval=1d"
+    u = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?period1=1388534400&period2=" + str(int(time.time())) + "&interval=1d"
     j = json.loads(urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=60).read())
     r = j["chart"]["result"][0]; ts = r["timestamp"]; cl = r["indicators"]["quote"][0]["close"]
     return [[time.strftime("%Y-%m-%d", time.gmtime(t)), round(c, 4)] for t, c in zip(ts, cl) if c]
