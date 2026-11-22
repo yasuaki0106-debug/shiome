@@ -1482,6 +1482,18 @@ function howMoomoo(items, p) { // その日にやることに合わせた、moom
   return '<details class="more-in hm"><summary>moomooでの入れ方</summary>' + H.map(h => '<p class="hm-h">' + esc(h[0]) + '</p><ol>' + h[1].map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>').join('') + '<p class="sub">逆指値やトリガー注文は使いません（この買い方は損切りを置かない決まりのため）。想定外ラインや節目は、アプリの通知かmoomooの価格アラートで知らせを受けて、自分で判断してください。画面の名前はmoomooの更新で変わることがあります。</p></details>';
 }
 function doneSet() { const k = 'done.' + dkey(Date.now()); return new Set(LS.get(k, [])); }
+const BET_DEFAULT = { o: [[9.20, 64], [8.80, 67]], until: '2026-11-28', addDate: '2026-12-02', addAmt: 1185, stop: 58500 };
+function betItems() {
+  const b = LS.get('bet', null), now = Date.now(), d = S.d, lastC = d ? d.c[d.c.length - 1] : NaN, items = [];
+  if (!b) { if (now < Date.parse('2026-11-29T00:00:00Z')) items.push({ lv: 'info', t: '読みに賭ける分（MSTU）を使うなら：指値2本（$9.20×64株・$8.80×67株、11/28まで）、12/2に約$1,185を追加、BTCの終値$58,500割れでMSTRへ。使うなら下のボタン', btn: 'bet-on' }); return items; }
+  if (b.stopped) return items;
+  if (ok(lastC) && lastC < b.stop) { items.push({ lv: 'alarm', t: 'BTCの終値が ' + usd(b.stop) + ' を割りました（' + usd(lastC) + '）。今夜の通常取引で、MSTUを全部売ってMSTRに替える', btn: 'bet-stop' }); return items; }
+  if (!b.placed && now < Date.parse(b.until + 'T21:00:00Z')) items.push({ lv: 'buy', t: 'MSTUに指値を2本入れる（読みに賭ける分）', sub: b.o.map((x, k) => (k + 1) + '本目　$' + x[0].toFixed(2) + '　' + x[1] + '株') .concat(['期間は' + b.until.slice(5).replace('-', '/') + 'まで。撤退：BTCの朝9時の終値が' + usd(b.stop) + 'を割ったら、MSTUを全部MSTRへ']), btn: 'bet-placed' });
+  const addT = Date.parse(b.addDate + 'T00:00:00Z');
+  if (!b.added && now >= addT && now < addT + 2 * DAY) items.push({ lv: ok(lastC) && lastC >= b.stop ? 'buy' : 'warn', t: 'MSTUを追加（約$' + b.addAmt.toLocaleString('en-US') + '）：' + (ok(lastC) && lastC >= b.stop ? 'BTCの終値 ' + usd(lastC) + ' は撤退の線の上。今夜の通常取引で、気配に近い指値で' : '撤退の線を割っているので、追加しない'), btn: 'bet-added' });
+  if (b.placed && !b.added && now < addT) items.push({ lv: 'info', t: 'MSTUの撤退の線：BTCの朝9時の終値 ' + usd(b.stop) + '（今の終値 ' + usd(lastC) + '）。12/2に約$' + b.addAmt.toLocaleString('en-US') + 'を追加する予定' });
+  return items;
+}
 function planAheadCard() { // 月曜から先の予定を、日付順に。今の持ち物と合図に合わせて出す
   const p = S.plan; if (!p || !S.d) return '';
   const now = Date.now(), wd = ['日', '月', '火', '水', '木', '金', '土'], fmt = t => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + '（' + wd[d.getDay()] + '）'; };
@@ -1503,6 +1515,7 @@ function planAheadCard() { // 月曜から先の予定を、日付順に。今�
 function todoCard() { // 画面を開いて最初に見る場所：今日やることを番号で並べる
   const p = S.plan; if (!p) return '';
   const items = [], al = (S.hold || []).filter(h => h.alarm), b = budget();
+  betItems().forEach(x => items.push(x));
   (S.hold || []).filter(h => h.a === 'relev').forEach(h => items.push({ lv: 'buy', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → 売って ' + LEVOF[prefUnd(h.p.sym)] + ' に替える（上向きを確認したので2倍に戻す）' }));
   al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : ''; items.push({ lv: 'warn', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → ' + (h.a === 'switch' ? '売って ' + und + ' に替える（2倍をやめる）' : h.a === 'sell' ? '売る' : h.alarm) }); });
   if (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial') {
@@ -1532,7 +1545,7 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   const nothing = !items.length;
   if (nothing) items.push({ lv: 'info', t: '今日は売り買いなし。' + (b.cash > 0 ? '現金 ' + usd(b.cash) + ' はそのまま待機' : '次の合図を待つ') });
   const cn = (() => { try { const t = planTicker(p); return concernsFor(ETF[t] ? ETF[t].und : t).length; } catch (e) { return 0; } })();
-  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + (x.btn === 'ord-set' ? '<button class="btn small" data-ord="set">4本入れた</button>' : x.btn === 'ord-fix' ? '<button class="btn small" data-ord="fix">変えた</button>' : x.btn === 'ord-cancel' ? '<button class="btn small" data-ord="cancel">取り消した</button>' : '') + '</li>').join('') + '</ol>' + howMoomoo(items, p) + '<p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
+  return '<section class="todo' + (al.length ? ' has-al' : '') + '" ' + (al.length ? 'role="alert"' : '') + '><div class="row"><h2>今日やること</h2><span class="sub" style="margin:0">' + (S.at ? hm(S.at) + ' 時点' : '') + '</span></div><p class="todo-meta">現金 <b class="num">' + usd(b.cash) + '</b>' + (cn ? '　<span class="cn">懸念 ' + cn + '件</span>' : '') + '</p><ol>' + items.map((x, k) => '<li class="t-' + x.lv + (doneSet().has(k) ? ' done' : '') + '" data-done="' + k + '">' + esc(x.t) + (x.sub ? '<ul class="ord">' + x.sub.map(y => '<li class="num">' + esc(y) + '</li>').join('') + '</ul>' : '') + (x.btn === 'ord-set' ? '<button class="btn small" data-ord="set">4本入れた</button>' : x.btn === 'ord-fix' ? '<button class="btn small" data-ord="fix">変えた</button>' : x.btn === 'ord-cancel' ? '<button class="btn small" data-ord="cancel">取り消した</button>' : x.btn === 'bet-on' ? '<button class="btn small" data-bet="on">この作戦を使う</button>' : x.btn === 'bet-placed' ? '<button class="btn small" data-bet="placed">2本入れた</button>' : x.btn === 'bet-added' ? '<button class="btn small" data-bet="added">追加した</button>' : x.btn === 'bet-stop' ? '<button class="btn small" data-bet="stopped">MSTRに替えた</button>' : '') + '</li>').join('') + '</ol>' + howMoomoo(items, p) + '<p class="todo-hint">終わった項目はタップすると✓が付きます（その日だけ）</p></section>';
 }
 function glossary() {
   const G = [['買い下がり', '底値圏で、下がるたびに分けて買う買い方。予定額の半分を4本の指値（-10%ごと）で'], ['確認買い', '上向きを確かめてから買う買い方。残り半分を2回。中期の判定が75以上で出る'],
@@ -2834,6 +2847,7 @@ document.addEventListener('click', e => {
     if (t.dataset.ord === 'fix') { const po = placedOrders(), f1 = ladderLots()[0]; if (po && f1) { po.rows = po.rows.map((r, k) => k === 0 ? Object.assign({}, r, { px: f1.cost }) : Object.assign({}, r, { px: Math.floor(f1.cost * (1 - LAD_STEP * k) * 100) / 100 })); LS.set('orders', po); } }
     render(); }
   else if (t.closest && t.closest('.todo li[data-done]') && !t.closest('.ord') && !t.closest('button')) { const k = +t.closest('.todo li[data-done]').dataset.done, key = 'done.' + dkey(Date.now()), a = new Set(LS.get(key, [])); a.has(k) ? a.delete(k) : a.add(k); LS.set(key, [...a]); render(); }
+  else if (t.dataset && t.dataset.bet) { const k = t.dataset.bet, b = LS.get('bet', null) || Object.assign({}, BET_DEFAULT); if (k !== 'on') b[k] = true; LS.set('bet', b); render(); }
   else if (t.closest && t.closest('.mini')) { const go = t.closest('.mini').dataset.go; if (go === 'events') { location.hash = 'events'; return; } if (['bottom', 'long', 'week'].includes(go) && S.tab !== 'chart') { location.hash = 'chart'; setTimeout(() => { const el2 = document.getElementById('c-' + go); if (el2) el2.scrollIntoView({ block: 'start' }); }, 80); return; } const el = go === 'today' ? document.querySelector('.today') : document.getElementById('c-' + (go === 'soon' ? 'next7' : go)); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.closest && t.closest('.tile')) { const go = t.closest('.tile').dataset.go, el = go === 'today' ? document.querySelector('.today') : go === 'events' ? null : document.getElementById('c-' + go); if (go === 'events') { location.hash = 'events'; return; } if (['bottom', 'long'].includes(go) && S.tab !== 'chart') { location.hash = 'chart'; setTimeout(() => { const el2 = document.getElementById('c-' + go); if (el2) el2.scrollIntoView({ block: 'start' }); }, 80); return; } if (go === 'concern') { const d = document.querySelector('.today .more-in.mb'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } else if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.dataset.rec) { S.recKind = t.dataset.rec === 'trial' ? 'trial' : (S.plan && (S.plan.a === 'ladder' || ((S.plan.lad || []).length && S.plan.a !== 'buy'))) ? 'ladder' : 'buy'; location.hash = 'stocks'; setTimeout(() => { const el = document.getElementById('pos-form'); if (el) el.scrollIntoView(); }, 80); }
