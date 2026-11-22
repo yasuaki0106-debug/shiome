@@ -757,6 +757,24 @@ function howMoomoo(items, p) { // その日にやることに合わせた、moom
   return '<details class="more-in hm"><summary>moomooでの入れ方</summary>' + H.map(h => '<p class="hm-h">' + esc(h[0]) + '</p><ol>' + h[1].map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>').join('') + '<p class="sub">逆指値やトリガー注文は使いません（この買い方は損切りを置かない決まりのため）。想定外ラインや節目は、アプリの通知かmoomooの価格アラートで知らせを受けて、自分で判断してください。画面の名前はmoomooの更新で変わることがあります。</p></details>';
 }
 function doneSet() { const k = 'done.' + dkey(Date.now()); return new Set(LS.get(k, [])); }
+function planAheadCard() { // 月曜から先の予定を、日付順に。今の持ち物と合図に合わせて出す
+  const p = S.plan; if (!p || !S.d) return '';
+  const now = Date.now(), wd = ['日', '月', '火', '水', '木', '金', '土'], fmt = t => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + '（' + wd[d.getDay()] + '）'; };
+  const items = [], po = placedOrders(), lo = p.a === 'ladder' && !po ? ladderOrders(p) : null, hasConl = (S.hold || []).some(h => h.a === 'switch' && !h.p.keep2x);
+  // 次の平日の朝
+  let t0 = now; for (let k = 0; k < 7; k++) { const d = new Date(t0 + k * DAY); const w = d.getDay(); if (w >= 1 && w <= 5) { t0 = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - 9 * 36e5 + 9 * 36e5; break; } }
+  const first = new Date(now).getDay() >= 1 && new Date(now).getDay() <= 5 ? now : t0;
+  if (lo || hasConl) items.push([first, fmt(first) + ' 朝9時20分以降', (lo ? 'アプリを開いて、MSTRに指値を4本入れて「4本入れた」を押す。' : '') + (hasConl ? '夜23時30分からの通常取引で、CONLを売ってCOINに替える（2倍のまま持つなら、カードのボタンを押す）。' : '')]);
+  const EV = allEvents().filter(e => e.t > now && e.t < now + 30 * DAY && e.impact >= 2).map(e => /MSCI/.test(e.title) ? Object.assign({}, e, { impact: 3, title: e.title.replace(/（.*?）$/, '') + '：指数ファンドの売りがここで出る' }) : e);
+  EV.forEach(e => items.push([e.t, fmt(e.t) + ' ' + String(new Date(e.t).getHours()).padStart(2, '0') + ':' + String(new Date(e.t).getMinutes()).padStart(2, '0'), e.title.replace(/（.*?）$/, '') + (e.impact >= 3 ? '。前後は値が飛びやすい。指値が届いたら、その日のうちに記録' : '')]));
+  US_CLOSED.forEach(k => { const t = Date.parse(k + 'T13:00:00Z'); if (t > now && t < now + 30 * DAY) items.push([t, fmt(Date.parse(k + 'T03:00:00Z')) + ' の夜', '米国株は休場（感謝祭など）。その夜は注文が通らない']); });
+  US_HALF.forEach(k => { const t = Date.parse(k + 'T13:00:00Z'); if (t > now && t < now + 30 * DAY) items.push([t, fmt(Date.parse(k + 'T03:00:00Z')) + ' の夜', '米国株は短縮取引（日本時間の朝3時で終わる）']); });
+  const ex = po ? po.exp : lo ? lo.exp : null;
+  if (ex && !ladderLots().length) items.push([ex - 7 * 36e5, fmt(ex - 9 * 36e5) + ' 夜〜翌朝6時', '1本目の期限の日。届いていなければ、引成（引けに成行）で買う。アプリと通知でも知らせます']);
+  items.sort((a, b) => a[0] - b[0]);
+  const ifs = [['下がったら', '2〜4本目の指値が順に届く。届いたらアプリで記録するだけ。損切りはしない'], ['上がったら', '1本目は期限に成行で買い、2〜4本目は置いたまま。上がり始めの確認（中期75）が出たら、残りの指値を取り消して確認買いと2倍への切り替え。アプリと通知で知らせます'], ['分かれ目（' + (S.rt ? usd(S.rt.level) : '前の底の3%下') + '）を終値で割ったら', '慌てて売らない。買い下がりの指値が届きやすくなる局面。2倍は持たない'], ['12/10以降に条件がそろったら', '「今どこ？」の「2倍の狙い方」の3つ（材料が過ぎた・分かれ目の上・底の出口の兆し）がそろえば、一部をMSTUで狙う。割ったらMSTRへ']];
+  return '<section class="card" id="c-ahead"><h2>これからの予定（あなたの場合）</h2><ol class="ahead">' + items.slice(0, 10).map(x => '<li><b>' + esc(x[1]) + '</b><span>' + esc(x[2]) + '</span></li>').join('') + '</ol><h3>値動きごとの動き方</h3><ul class="wh">' + ifs.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><small>' + esc(x[1]) + '</small></li>').join('') + '</ul><p class="sub">どの場合も、アプリと通知が「今日やること」を出します。毎朝9時20分以降に開いて、上から順にやれば大丈夫です。</p></section>';
+}
 function todoCard() { // 画面を開いて最初に見る場所：今日やることを番号で並べる
   const p = S.plan; if (!p) return '';
   const items = [], al = (S.hold || []).filter(h => h.alarm), b = budget();
@@ -912,6 +930,8 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   // 1. 時期
   const g1 = G('時期（サイクル）', '');
   const lowDays = c.past.map(p => p.lowDay), nextLow = Math.round(trendNext(lowDays)), nextLowT = c.cur.h + nextLow * DAY;
+  { const dTop = Math.round((Date.now() - c.cur.peakT) / DAY); row(g1, '天井からの日数', dTop + '日', dTop >= 364 ? 'ok' : 'ng', '過去の天井から底までは 406・364・378日（説の検証で当たり）。今回の天井は ' + md(c.cur.peakT)); }
+  row(g1, '中間選挙の後', '11/3から' + Math.round((Date.now() - Date.UTC(2026, 10, 3)) / DAY) + '日', 'ref', '参考。過去の底は中間選挙の71・39・13日後。4年サイクルと同じ時期なので、別の理由とは言い切れない');
   row(g1, '半減期から', c.day + '日目', c.day >= Math.min(...lowDays) ? 'ok' : 'ng', '過去の底は ' + lowDays.join('・') + ' 日目と、回を追って遅くなっている。延ばすと今回は ' + nextLow + ' 日目ごろ（' + md(nextLowT) + 'ごろ）');
   // 2. 値段の深さと価値の物差し
   const g2 = G('値段の深さ・価値の物差し', '');
@@ -1737,7 +1757,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + miniGrid() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + next7Card() +
+  return todoCard() + planAheadCard() + miniGrid() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + next7Card() +
     '<a class="to-chart" href="#chart">チャートと振り返り（4時間足・直近7日の答え合わせ・底の見込み・長期チャート・次の天井）→</a>' +
     (info.length ? '<details class="more"><summary>参考の注意（' + info.length + '件）</summary>' + fl(info) + '</details>' : '') +
     glossary() + '<p class="disc">過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
