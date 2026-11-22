@@ -1678,6 +1678,15 @@ function tilesCard() {
     tile('long', '4年サイクルの今', '<span class="cseg">' + [[400, 'up'], [200, 'top'], [150, 'down'], [250, 'bottom'], [span - 1000, 'recover']].map(x => '<i class="cs-' + x[1] + '" style="flex:' + x[0] + '"></i>').join('') + '<b style="left:' + (cyc * 100).toFixed(1) + '%"></b></span><span class="clab">' + [[400, '上昇'], [200, '天井'], [150, '下落'], [250, '底'], [span - 1000, '回復']].map(x => '<span style="flex:' + x[0] + '">' + x[1] + '</span>').join('') + '</span>', c ? c.name + '・半減期から' + c.day + '日目' : '—') +
     tile('concern', '懸念', '<b class="big ' + (cn ? 'v-avoid' : 'v-buy') + '">' + cn + '</b>', und + '系と相場全体') + '</section>' + miniGrid();
 }
+function nasdaqWeekly() { // ナスダックの週足（各週の最後の終値）から、RSI(14)とCCI(14、終値で計算)
+  const r = S.nas; if (!r || r.length < 200) return null;
+  const wk = new Map(); r.forEach(([d, c]) => { const t = Date.parse(d + 'T00:00:00Z'), dd = new Date(t), mon = t - ((dd.getUTCDay() + 6) % 7) * DAY; wk.set(mon, [d, c]); });
+  const W = [...wk.keys()].sort((a, b) => a - b).map(k => wk.get(k)), C = W.map(x => x[1]), n = C.length;
+  let g = 0, l = 0; for (let i = 1; i <= 14; i++) { const ch = C[i] - C[i - 1]; g += Math.max(ch, 0); l += Math.max(-ch, 0); } g /= 14; l /= 14;
+  for (let i = 15; i < n; i++) { const ch = C[i] - C[i - 1]; g = (g * 13 + Math.max(ch, 0)) / 14; l = (l * 13 + Math.max(-ch, 0)) / 14; }
+  const rsi = l > 0 ? 100 - 100 / (1 + g / l) : 100, w = C.slice(-14), m = w.reduce((a, b) => a + b, 0) / 14, md = w.reduce((a, b) => a + Math.abs(b - m), 0) / 14, cci = md > 0 ? (C[n - 1] - m) / (0.015 * md) : 0;
+  return { d: W[n - 1][0], rsi, cci };
+}
 function whereCard() { // 今どこ？：底値圏で一番大事な判断。いくつもの物差しを、6つのまとまりに分けて並べ、段階と「底までの見込み」を出す
   if (!S.R || !S.cyc || !S.d || !S._L || !S._ls) return '';
   const c = S.cyc, d = S.d, n = d.c.length, i = n - 1, L = S._L, ls = S._ls, nL = L.c.length, P = S.price;
@@ -1747,6 +1756,7 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   const g5 = G('需給（ETFの時代の構造）', '現物ETFは2024年から。過去のサイクルにはなかった買い手と売り手なので、効き目は検証できていません');
   const ef = etfState(); if (ef) row(g5, 'ETFの資金の出入り（20日）', (ef.s20 < 0 ? '-' : '+') + '$' + (Math.abs(ef.s20) / 1000).toFixed(1) + 'B', ef.s20 < 0 ? 'ng' : 'ok', '2024年以降で下から' + pc(ef.rank, 0, false) + '。流出が止まって流入に変わるのが、底を付けた後の形');
   if (S.etff && S.etff.flows) { const idx = new Map(Array.from(L.t).map((t, k) => [dkey(t), k])); let u = 0, b = 0; S.etff.flows.forEach(([dd2, f]) => { const k = idx.get(dd2); if (k != null) { u += f; b += f / L.c[k]; } }); if (b > 0) { const cost = u / b; row(g5, 'ETFの買い手の平均の買値（推定）', usd(cost), P < cost ? 'ng' : 'ok', '今は平均の買値の ' + pc(P / cost - 1, 0) + '。含み損の人が多いほど、戻るたびに売りが出やすい（やれやれ売り）'); } }
+  { const nw = nasdaqWeekly(); if (nw) row(g5, 'ナスダックの売られすぎ（週足CCI・RSI）', 'CCI ' + Math.round(nw.cci) + '・RSI ' + Math.round(nw.rsi), nw.cci < -200 ? 'ok' : 'ref', (nw.cci < -200 ? '数年に一度の売られすぎ。' : '') + '2014年以降、週足CCIが-200を下回った7回のうち5回は、半年後にBTCが+29〜116%（中央+46%）。外れた2回（2018年10月、2022年1月）は、BTCがまだ下げ相場の途中で、さらに-38〜41%。BTCとナスダックの月ごとの連動は2020年以降0.55前後（' + nw.d + '時点）'); }
   row(g5, 'Strategy（MSTR）の買い', '弱い', 'ng', '株価が保有BTCの価値に近づき、増資でBTCを買う力が落ちている。前のサイクルの終わりにはなかった大口の買い手が、今は止まりかけている');
   // 6. 参考
   const g6 = G('参考（構造が変わっている可能性）', '');
@@ -2049,6 +2059,7 @@ async function refreshAll() {
   }));
   tasks.push(loadOnchain().then(v => { S.oc = v; S.status.oc = { ok: true, name: 'オンチェーン・恐怖指数', note: 'MVRV・マイナー収入・ハッシュレート・恐怖と強欲指数' }; }, () => { S.oc = null; S.status.oc = { ok: false, name: 'オンチェーン・恐怖指数', note: '取得できません。底らしさの一部が出ません' }; }));
   tasks.push(loadLiveStocks().then(v => { S.live = v; S.status.live = { ok: true, name: '株価（リアルタイム）', note: 'MSTR・COINのトークン化株式（Gate、24時間）。MSTU・CONLはその動きの2倍で換算' }; }, () => { S.live = null; S.status.live = { ok: false, name: '株価（リアルタイム）', note: '取得できません。BTCからの換算で表示します' }; }));
+  tasks.push(loadRepoJson('nasdaq.json').then(v => { S.nas = v && v.rows ? v.rows : null; }, () => { S.nas = null; }));
   tasks.push(loadRepoJson('lines.json?v=' + Math.floor(Date.now() / 6e5)).then(v => { if (v && v.lines) v.lines = v.lines.filter(l => l.kind !== 'round'); S.lines = v; }, () => { S.lines = null; }));
   tasks.push(loadRepoJson('review.json').then(v => { S.review = v; }, () => { S.review = null; }));
   tasks.push(loadRepoJson('signal_log.json').then(v => { S.slog = v; }, () => { S.slog = null; }));
