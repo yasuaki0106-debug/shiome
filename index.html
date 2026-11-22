@@ -1482,13 +1482,18 @@ function howMoomoo(items, p) { // その日にやることに合わせた、moom
   return '<details class="more-in hm"><summary>moomooでの入れ方</summary>' + H.map(h => '<p class="hm-h">' + esc(h[0]) + '</p><ol>' + h[1].map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>').join('') + '<p class="sub">逆指値やトリガー注文は使いません（この買い方は損切りを置かない決まりのため）。想定外ラインや節目は、アプリの通知かmoomooの価格アラートで知らせを受けて、自分で判断してください。画面の名前はmoomooの更新で変わることがあります。</p></details>';
 }
 function doneSet() { const k = 'done.' + dkey(Date.now()); return new Set(LS.get(k, [])); }
-const BET_DEFAULT = { o: [[9.20, 64], [8.80, 67]], until: '2026-11-28', addDate: '2026-12-02', addAmt: 1185, stop: 58500 };
+const BET_DEFAULT = { amt: [590, 590], until: '2026-11-28', addDate: '2026-12-02', addAmt: 1185, stop: 58500 };
+function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（入れたら固定）。1本目は今朝の終値の1.5%下（撤退の線の2.5%上より下には置かない）、2本目は撤退の線の1%上に当たるMSTUの値段
+  if (b.o) return b.o;
+  const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
+  return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
+}
 function betItems() {
   const b = LS.get('bet', null), now = Date.now(), d = S.d, lastC = d ? d.c[d.c.length - 1] : NaN, items = [];
-  if (!b) { if (now < Date.parse('2026-11-29T00:00:00Z')) items.push({ lv: 'info', t: '読みに賭ける分（MSTU）を使うなら：指値2本（$9.20×64株・$8.80×67株、11/28まで）、12/2に約$1,185を追加、BTCの終値$58,500割れでMSTRへ。使うなら下のボタン', btn: 'bet-on' }); return items; }
+  if (!b) { if (now < Date.parse('2026-11-29T00:00:00Z')) { const o = betOrders(BET_DEFAULT); items.push({ lv: 'info', t: '読みに賭ける分（MSTU）を使うなら：指値2本（今の計算で ' + o.map(x => '$' + x[0].toFixed(2) + '×' + x[1] + '株').join('・') + '、11/28まで）、12/2に約$1,185を追加、BTCの終値$58,500割れでMSTRへ。使うなら下のボタン', btn: 'bet-on' }); } return items; }
   if (b.stopped) return items;
   if (ok(lastC) && lastC < b.stop) { items.push({ lv: 'alarm', t: 'BTCの終値が ' + usd(b.stop) + ' を割りました（' + usd(lastC) + '）。今夜の通常取引で、MSTUを全部売ってMSTRに替える', btn: 'bet-stop' }); return items; }
-  if (!b.placed && now < Date.parse(b.until + 'T21:00:00Z')) items.push({ lv: 'buy', t: 'MSTUに指値を2本入れる（読みに賭ける分）', sub: b.o.map((x, k) => (k + 1) + '本目　$' + x[0].toFixed(2) + '　' + x[1] + '株') .concat(['期間は' + b.until.slice(5).replace('-', '/') + 'まで。撤退：BTCの朝9時の終値が' + usd(b.stop) + 'を割ったら、MSTUを全部MSTRへ']), btn: 'bet-placed' });
+  if (!b.placed && now < Date.parse(b.until + 'T21:00:00Z')) { const o = betOrders(b); items.push({ lv: 'buy', t: 'MSTUに指値を2本入れる（読みに賭ける分。値段は今朝9時の確定値で計算、入れたら固定）', sub: o.map((x, k) => (k + 1) + '本目　$' + x[0].toFixed(2) + '　' + x[1] + '株（BTCが' + usd(x[2]) + 'くらいの時）').concat(['期間は' + b.until.slice(5).replace('-', '/') + 'まで。撤退：BTCの朝9時の終値が' + usd(b.stop) + 'を割ったら、MSTUを全部MSTRへ']), btn: 'bet-placed' }); }
   const addT = Date.parse(b.addDate + 'T00:00:00Z');
   if (!b.added && now >= addT && now < addT + 2 * DAY) items.push({ lv: ok(lastC) && lastC >= b.stop ? 'buy' : 'warn', t: 'MSTUを追加（約$' + b.addAmt.toLocaleString('en-US') + '）：' + (ok(lastC) && lastC >= b.stop ? 'BTCの終値 ' + usd(lastC) + ' は撤退の線の上。今夜の通常取引で、気配に近い指値で' : '撤退の線を割っているので、追加しない'), btn: 'bet-added' });
   if (b.placed && !b.added && now < addT) items.push({ lv: 'info', t: 'MSTUの撤退の線：BTCの朝9時の終値 ' + usd(b.stop) + '（今の終値 ' + usd(lastC) + '）。12/2に約$' + b.addAmt.toLocaleString('en-US') + 'を追加する予定' });
@@ -2847,7 +2852,7 @@ document.addEventListener('click', e => {
     if (t.dataset.ord === 'fix') { const po = placedOrders(), f1 = ladderLots()[0]; if (po && f1) { po.rows = po.rows.map((r, k) => k === 0 ? Object.assign({}, r, { px: f1.cost }) : Object.assign({}, r, { px: Math.floor(f1.cost * (1 - LAD_STEP * k) * 100) / 100 })); LS.set('orders', po); } }
     render(); }
   else if (t.closest && t.closest('.todo li[data-done]') && !t.closest('.ord') && !t.closest('button')) { const k = +t.closest('.todo li[data-done]').dataset.done, key = 'done.' + dkey(Date.now()), a = new Set(LS.get(key, [])); a.has(k) ? a.delete(k) : a.add(k); LS.set(key, [...a]); render(); }
-  else if (t.dataset && t.dataset.bet) { const k = t.dataset.bet, b = LS.get('bet', null) || Object.assign({}, BET_DEFAULT); if (k !== 'on') b[k] = true; LS.set('bet', b); render(); }
+  else if (t.dataset && t.dataset.bet) { const k = t.dataset.bet, b = LS.get('bet', null) || Object.assign({}, BET_DEFAULT); if (k === 'placed') b.o = betOrders(b); if (k !== 'on') b[k] = true; LS.set('bet', b); render(); }
   else if (t.closest && t.closest('.mini')) { const go = t.closest('.mini').dataset.go; if (go === 'events') { location.hash = 'events'; return; } if (['bottom', 'long', 'week'].includes(go) && S.tab !== 'chart') { location.hash = 'chart'; setTimeout(() => { const el2 = document.getElementById('c-' + go); if (el2) el2.scrollIntoView({ block: 'start' }); }, 80); return; } const el = go === 'today' ? document.querySelector('.today') : document.getElementById('c-' + (go === 'soon' ? 'next7' : go)); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.closest && t.closest('.tile')) { const go = t.closest('.tile').dataset.go, el = go === 'today' ? document.querySelector('.today') : go === 'events' ? null : document.getElementById('c-' + go); if (go === 'events') { location.hash = 'events'; return; } if (['bottom', 'long'].includes(go) && S.tab !== 'chart') { location.hash = 'chart'; setTimeout(() => { const el2 = document.getElementById('c-' + go); if (el2) el2.scrollIntoView({ block: 'start' }); }, 80); return; } if (go === 'concern') { const d = document.querySelector('.today .more-in.mb'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } else if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   else if (t.dataset.rec) { S.recKind = t.dataset.rec === 'trial' ? 'trial' : (S.plan && (S.plan.a === 'ladder' || ((S.plan.lad || []).length && S.plan.a !== 'buy'))) ? 'ladder' : 'buy'; location.hash = 'stocks'; setTimeout(() => { const el = document.getElementById('pos-form'); if (el) el.scrollIntoView(); }, 80); }
