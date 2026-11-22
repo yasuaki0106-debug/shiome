@@ -763,10 +763,10 @@ function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（�
   const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
   return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
 }
-const P3_DEFAULT = { amt: [1580, 1580, 1570], mstuUntil: '2026-11-28', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
+const P3_DEFAULT = { amt: [1580, 2365, 785], mstuUntil: '2026-11-28', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
 function p3Items() { // 現金を3つに分ける使い方（利用者が選んだ形）。① MSTRを今買う ② MSTUを指値2本（11/28まで、届かなければ28日の夜に気配で）③ 12/2〜12/10に材料の下げで拾う（下げなければ12/10の夜にMSTU）
   const p = LS.get('p3', null), now = Date.now(), d = S.d, lastC = d ? d.c[d.c.length - 1] : NaN, items = [];
-  if (!p) { items.push({ lv: 'info', t: '現金を3つに分ける使い方：① MSTRを今買う（約$1,580） ② MSTUを指値2本（約$1,580） ③ 12/2〜12/10に材料の下げで拾う（約$1,570）。逃げる：BTCの終値$58,500割れでMSTUをMSTRへ。この使い方にするなら下のボタン', btn: 'p3-on' }); return items; }
+  if (!p) { items.push({ lv: 'info', t: '現金を3つに分ける使い方：① MSTRを今買う（約$1,580） ② MSTUを指値2本（現金の半分、約$2,365） ③ 12/2〜12/10に材料の下げで拾う（約$785）。逃げる：BTCの終値$58,500割れでMSTUをMSTRへ。この使い方にするなら下のボタン', btn: 'p3-on' }); return items; }
   const below = ok(lastC) && lastC < p.stop, hasMstu = p.b2 || p.b3;
   if (below && hasMstu && !p.stopped) items.push({ lv: 'alarm', t: 'BTCの朝9時の終値が ' + usd(p.stop) + ' を割りました（' + usd(lastC) + '）。今夜の通常取引で、MSTUを全部売ってMSTRに替える（MSTRは売らない）', btn: 'p3-stopped' });
   if (!p.b1) { const px = priceNow('MSTR'), n = ok(px) && px > 0 ? Math.floor(p.amt[0] / px) : NaN; items.push({ lv: 'buy', t: '① MSTRを買う：約' + (ok(n) ? n + '株' : '$' + p.amt[0]) + '（約$' + p.amt[0].toLocaleString('en-US') + '）' + (ok(px) ? '。今の目安 $' + px.toFixed(2) : ''), sub: ['今夜の通常取引（23:30〜）で、売気配に近い指値で買う。上がり始めに必ず乗っておくための分'], btn: 'p3-b1' }); }
