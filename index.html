@@ -196,6 +196,14 @@ details.card summary{font-weight:700;cursor:pointer}details.card p{font-size:13.
 .tabs a{flex:1;text-align:center;padding:13px 0 11px;font-size:13.5px;color:var(--muted);text-decoration:none;border-top:3px solid transparent;margin-top:-1px;min-height:52px}
 .tabs a[aria-current=page]{color:var(--ink);font-weight:700;border-top-color:var(--ink)}
 @media (prefers-reduced-motion:no-preference){.needle{transition:left .5s cubic-bezier(.2,.8,.2,1)}}
+.wh li{display:block!important;padding:7px 0 7px 18px}.wh li b{display:block;font-weight:700}.wh li .num{display:block;margin-top:1px}.wh small{display:block;margin-top:2px}
+.cv li{display:block!important}.cv li b{display:block}.cv li span{display:block;font-weight:700;font-size:13px}.cv small{display:block}
+.rv li{display:block!important}.rv li b{display:block}.rv li .num{display:block}.rv small{display:block}
+.tbl.wide th,.tbl.wide td{white-space:nowrap}.tbl.wide th:first-child{min-width:8.5em;white-space:normal}
+.xscroll .tbl td,.xscroll .tbl th{white-space:nowrap}.xscroll .tbl th:first-child{white-space:normal;min-width:6em}
+.phase-lab{font-size:17px;font-weight:700;margin:2px 0 6px}.nw{white-space:nowrap;display:inline-block;margin-right:8px}
+.cyc{display:flex;flex-wrap:wrap;gap:2px 10px;justify-content:space-between}.cyc .num{white-space:nowrap}
+.pair .lot>span:first-child{display:block;white-space:normal;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -1694,10 +1702,10 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   if (ok(w2now)) scen.push(['200週線×0.66（2022年型）', w2now * 0.66]);
   if (dd) { const pk = c.cur.peak; scen.push(['天井から' + dd.tgt + '（浅くなる傾向を延ばす）', pk * (1 + parseFloat(dd.tgt) / 100)]); }
   const sc2 = scen.filter(x => ok(x[1])).sort((a, b) => b[1] - a[1]);
-  return '<section class="card" id="c-where"><div class="row"><h2>今どこ？</h2><b class="' + phase[1] + '">' + phase[0] + '</b></div><p>' + phase[2] + '</p>' +
+  return '<section class="card" id="c-where"><h2>今どこ？</h2><p class="phase-lab ' + phase[1] + '">' + phase[0] + '</p><p>' + phase[2] + '</p>' +
     '<div class="near"><span>底の近さ（重みづけ）<br><small style="grid-column:auto">底らしさ（5つの指標）とは別の点数</small></span><b class="num">' + Math.round(near * 100) + '%</b><small>過去の底の日は 84%・100%・99%。この点数が80%以上だった日の71%は、底の前後90日以内でした。全部の物差しがそろうのを待つ必要はありません（過去の底の日も、そろっていない物差しがありました）</small></div>' +
     '<p class="sub">底の近さは「底の前後にいるか」を見る点数で、底を付けたかどうかは値動きの形（新しい安値が止まったか）で確かめます。底の時期の目安は、過去の傾向を延ばすと ' + md(nextLowT) + 'ごろ（今から約' + Math.max(0, Math.round((nextLowT - Date.now()) / DAY)) + '日）。重みは過去3回のサイクルから決めたので、当てはめすぎの心配はあります。</p>' +
-    groups.map(g => '<h3 class="wh-g">' + esc(g.title) + '</h3>' + (g.note ? '<p class="sub" style="margin:0 0 4px">' + esc(g.note) + '</p>' : '') + '<ul class="wh">' + g.rows.map(x => '<li class="' + x.st + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>').join('') +
+    groups.filter(g => g.rows.length).map(g => '<h3 class="wh-g">' + esc(g.title) + '</h3>' + (g.note ? '<p class="sub" style="margin:0 0 4px">' + esc(g.note) + '</p>' : '') + '<ul class="wh">' + g.rows.map(x => '<li class="' + x.st + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>').join('') +
     (sc2.length ? '<h3 class="wh-g">底の値段の物差し</h3><ul class="wh">' + sc2.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><span class="num">' + usd(x[1]) + '</span><small>今から ' + pc(x[1] / P - 1, 0) + '</small></li>').join('') + '</ul><p class="sub">どれが当たるかは分かりません。ETFが入ってからは値動きが穏やかになっていて、浅い方で止まる可能性もあれば、ETFの買い手の含み損が売りを呼んで深くなる可能性もあります。買い下がりの指値（-10%ずつ）は、この幅に備えるためのものです。</p>' : '') +
     '<details class="more-in"><summary>2倍にするのはいつか</summary><p class="sub">過去の検証では、「中期75以上（上がり始め）」で2倍に替えるのが一番安定していました。50や60で早めに替えると、2023年はBTC 1229→637、MSTR 3033→735、COIN 1826→294と大きく悪化しました。セリクラ（大きな下げ＋出来高の急増）や長い下ヒゲの日も、過去の底値圏では、その後90日で上がったのは23〜42%だけで、底の合図にはなっていません。</p></details></section>';
 }
@@ -1757,7 +1765,7 @@ function miniGrid() { // 1か所で全部見えるように：大事な数字を
   const ef = etfState(); if (ef) add('soon', 'ETF（20日）', (ef.s20 < 0 ? '-' : '+') + '$' + (Math.abs(ef.s20) / 1000).toFixed(1) + 'B', ef.s20 < 0 ? 'r' : 'g', (ef.s20 < 0 ? '売りが続いている・' : '買いが続いている・') + '2024年以降で下から' + pc(ef.rank, 0, false));
   const mm = S.R.hz.m.pct; if (ok(mm)) add('today', '中期の判定', Math.round(mm), mm >= 75 ? 'g' : mm < 20 ? 'r' : 'n', mm >= 75 ? '上向きを確認・確認買いの水準' : mm < 20 ? 'まだ下げの流れ・2倍は外す水準' : 'あと' + Math.round(75 - mm) + 'で確認買い');
   const now = Date.now(), ev = allEvents().filter(e => e.t > now && e.impact >= 3).sort((a, b) => a.t - b.t)[0]; if (ev) add('events', '次の大きな発表', md(ev.t), 'n', ev.title.replace(/（.*?）/g, ''));
-  return '<section class="minis">' + R.join('') + '</section><p class="mini-key"><span class="mk g"></span>追い風（上がる材料）　<span class="mk r"></span>向かい風（下がる材料・急がない）　<span class="mk n"></span>どちらでもない　タップでくわしく</p>';
+  return '<section class="minis">' + R.join('') + '</section><p class="mini-key"><span class="nw"><span class="mk g"></span>追い風（上がる材料）</span> <span class="nw"><span class="mk r"></span>向かい風（下がる材料・急がない）</span> <span class="nw"><span class="mk n"></span>どちらでもない</span> <span class="nw">タップでくわしく</span></p>';
 }
 function alarmBanner() { // 買った玉のどれかにアラームが出ていたら、画面の一番上に出す
   const al = (S.hold || []).filter(h => h.alarm); if (!al.length) return '';
@@ -1772,7 +1780,7 @@ function holdCards() {
     if (ok(h.now)) { kv.push(['いまの目安 / 買値', usd2(h.now) + ' / ' + usd2(h.p.cost)]); kv.push(['損益', pc(h.pl) + (h.plUsd != null ? '（' + (h.plUsd < 0 ? '-' : '+') + '$' + Math.abs(Math.round(h.plUsd)).toLocaleString('en-US') + '）' : '')]); }
     if (ok(h.lim)) kv.push(['買い足しの指値', usd2(h.lim)]);
     if (h.days != null) kv.push(['持っている日数', h.days + '日']);
-    if (h.decay != null) kv.push([h.decay < 0 ? '2倍の目減り（実際は計算より下）' : '実際は2倍の計算より上', pc(h.decay) + '（' + e.und + 'の動き ' + pc(h.undRet) + ' の2倍と比べて）']);
+    if (h.decay != null) kv.push(['2倍の計算との差', pc(h.decay) + (h.decay < 0 ? '（目減り）' : '')]);
     if (h.need != null) kv.push(['買値に戻るには', e.und + 'が ' + pc(h.need) + (h.undNeed ? '（' + usd2(h.undNeed) + '）' : '') + ' 以上']);
     return '<div class="plan-stock' + (h.alarm ? ' alarm' : '') + '"><div class="row"><b class="sym">' + h.p.sym + '<small>' + kn + (h.p.date ? '・' + esc(h.p.date.slice(5).replace('-', '/')) : '') + '</small></b><b class="' + cls + ' plan-v">' + lab + '</b></div>' + (h.alarm ? '<p class="alarm-t">アラーム：' + esc(h.alarm) + '</p>' : '') + '<dl class="kv">' + kv.slice(0, 3).map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl><details class="more-in"><summary>理由と詳しい数字</summary><p class="sub" style="margin-top:4px">' + esc(h.why.join('。')) + '</p><dl class="kv">' + kv.slice(3).map(l => '<dt>' + l[0] + '</dt><dd class="num">' + l[1] + '</dd>').join('') + '</dl>' + (h.need != null && e.L > 1 ? '<p class="sub">「買値に戻るには」は目減りを無視した最低ラインです。時間がかかるほど、必要な上昇は大きくなります。</p>' : '') + '</details>' + (h.a === 'switch' ? (h.p.keep2x ? '<button class="link" data-keep="' + h.i + '">2倍のまま持つのをやめる（合図を出し直す）</button>' : '<button class="link" data-keep="' + h.i + '">理解したうえで2倍のまま持つ（毎日の合図を止める）</button>') : '') + '</div>';
   }).join('');
@@ -1787,7 +1795,7 @@ function cycleCard() {
   const rows = c.cyc.map(x => '<tr><th>' + new Date(x.h).getUTCFullYear() + '年</th><td class="num">' + x.peakDay + '</td><td class="num">' + x.lowDay + (x.done ? '' : '※') + '</td><td class="num">' + pc(x.dd, 0) + '</td></tr>').join('');
   const nh = c.nextHalving, f = t => { const d = new Date(t); return d.getFullYear() + '年' + (d.getMonth() + 1) + '月'; };
   return '<section class="card"><div class="row"><h2>ビットコインのサイクル</h2><b class="' + ({ bottom: 'v-buy', recover: 'v-buy', up: 'v-buy', top: 'v-wait', down: 'v-avoid' }[c.phase]) + '">' + c.name + '</b></div>' +
-    '<ul class="why2">' + c.checks.map(x => '<li class="' + (x.ok ? 'up' : 'dn') + ' chk">' + esc(x.text) + '</li>').join('') + '</ul>' +
+    '<h3>底値圏に入る条件（' + c.checks.filter(x => x.ok).length + '/' + c.checks.length + '）</h3><ul class="why2">' + c.checks.map(x => '<li class="' + (x.ok ? 'up' : 'dn') + ' chk">' + esc(x.text) + '</li>').join('') + '</ul><p class="sub">「底値圏に入ったか」の条件です。底を付けたかどうかは、判定タブの「今どこ？」で、もっと厳しい物差しで見ています。</p>' +
     '<table class="tbl"><thead><tr><th>半減期</th><th>天井（日目）</th><th>底（日目）</th><th>下落率</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     '<p class="sub">日数は半減期から数えた日数。※は今のサイクルのここまでの安値で、まだ確定していません。</p><h3>出口の目安</h3><ul class="exit"><li>次の半減期（' + f(nh) + 'ごろの見込み）から400〜550日目、' + f(nh + 400 * DAY) + '〜' + f(nh + 550 * DAY) + 'ごろに分けて売る</li><li>その時期に入ってからBTCが200日線を2週間下回ったら、残りも売る</li><li>レバレッジETFは天井を過ぎて持たない。過去の検証では、売らなかった場合に利益の大半が消えました</li></ul>' +
     '<p class="sub">時期の区切りは、半減期から400日目まで上昇期、600日目まで天井圏、750日目まで下落期、1000日目まで底値圏、その後が回復期です。過去3回のサイクルだけが根拠で、上昇幅は回を追うごとに小さくなっています。次も同じになる保証はありません。</p></section>';
@@ -2373,13 +2381,13 @@ function bottomCard() {
   const P0 = S.plan || {}, c0 = S.cyc, ladn = (P0.lad || []).length, nb0 = P0.n || 0, f2 = t => { const d = new Date(t); return d.getFullYear() + '年' + (d.getMonth() + 1) + '月'; };
   const tmap = c0 ? '<h3>時間軸ごとの今</h3><table class="tbl sm tmap"><tbody>' +
     '<tr><th>今日〜数日</th><td>' + (S.rt && S.rt.broke ? '前の安値を割った' : S.rt && S.rt.retest ? '前の安値を試している（分かれ目 ' + usd(S.rt.level) + '）' : '特になし') + '</td></tr>' +
-    '<tr><th>数週間</th><td>買い下がり ' + ladn + '／4回' + (P0.a === 'ladder' ? '（今日が開始の合図）' : ladn ? '（指値で待つ）' : '（90日ぶりの安値で開始）') + '</td></tr>' +
+    '<tr><th>数週間</th><td>買い下がり ' + ladn + '／4回' + (P0.a === 'ladder' ? '（' + (ladderStartDay() >= 0 ? md(S.d.t[ladderStartDay()]) + 'の合図で、始められる' : '始められる') + '）' : ladn ? '（指値で待つ）' : '（終値が90日ぶりの安値を付けたら開始）') + '</td></tr>' +
     '<tr><th>数か月</th><td>確認買い ' + nb0 + '／2回。' + (b.eta ? '見込みは' + f(b.eta.from) + '〜' + f(b.eta.to) : '中期の判定 ' + Math.round(b.mNow) + '（75で合図）') + '</td></tr>' +
     '<tr><th>数年</th><td>' + c0.name + '（半減期から' + c0.day + '日目）。売り始めの目安は ' + f2(c0.nextHalving + 400 * DAY) + '〜</td></tr></tbody></table>' : '';
   return '<section class="card" id="c-bottom"><div class="row"><h2>底と買い場の見込み</h2><b class="' + sg.cls + '">' + sg.name + '</b></div><p>' + esc(sg.text) + '</p>' + tmap + gauge +
     '<details class="more-in"><summary>底の値段のシナリオ・下値の目安・確認買いの時期</summary><p>今は天井から <b class="num">' + pc(b.dd, 0) + '</b>、' + b.daysTop + '日。半減期から' + b.day + '日目。200週線の' + pc(b.wr, 0) + '、長期成長線に対して過去の下位' + pc(b.valPct, 0, false) + 'の安さです。</p>' +
     '<p class="sub">底の値段の物差し（実現価格、200週線、天井からの下げの傾向など）は、判定タブの「今どこ？」に1か所にまとめています。</p>' +
-    retestBlock() + (near ? '<h3>この先数週間の下値の目安</h3><ul class="clist">' + near + '</ul>' : '') +
+    '<p class="sub">前の安値の試し直しと分かれ目は判定タブの「今どこ？」に、この先7日の値段の幅は「この先7日の見込み」に、まとめています。</p>' +
     '<h3>確認買いが出るまでの見込み</h3>' + (b.eta ? '<p>中期の判定が今と同じくらい弱かった日から、過去3回の底値圏で買い判定が出るまでは、中央値で' + WAIT.med + '日、半分のケースが' + WAIT.q25 + '〜' + WAIT.q75 + '日でした。今日から数えると <b>' + f(b.eta.from) + '〜' + f(b.eta.to) + '</b>（中心は' + f(b.eta.med) + '）です。</p><p class="sub">その間にさらに下げた幅は中央値で' + pc(WAIT.dnMed, 0) + '、悪い方の4回に1回は' + pc(WAIT.dnQ25, 0) + '。買い判定が出た日の値段は、今日の値段と比べて中央値で' + pc(WAIT.pxMed, 0) + '（' + pc(WAIT.pxQ25, 0) + '〜' + pc(WAIT.pxQ75, 0) + '）でした。底で買うのではなく、底を打って上向いたのを確認した値段で買う、という見込みです。</p>' : '<p>中期の判定はすでに弱い水準を抜けています（今は' + Math.round(b.mNow) + '、買い好機は75以上）。買い判定は近いうちに出る可能性があります。上の「今日どうするか」と暫定の枠を毎日見てください。</p>') +
     '<p class="sub">準備の目安：買い下がりは、底値圏で90日ぶりの安値を付けた日に始まります（予定額の半分を4回）。確認買い（残り半分を2回）は、上の時期が目安です。</p>' +
     '<p class="sub">この見込みは毎朝9時の確定データで計算し直します。根拠は過去3回のサイクルだけなので、時期も値段も幅を持って見てください。</p></details></section>';
@@ -2450,8 +2458,8 @@ function viewJudge() {
 }
 
 function ladderCard() {
-  const R = [['今までの方式（試し買い＋確認買い4回）', '5627', '781', '481', '1091', '544', '89', '85'], ['半分買い下がり＋半分確認買い（1倍で比べた場合）', '6131', '842', '499', '1108', '666', '80', '78'], ['全部買い下がり', '6412', '888', '478', '1025', '750', '75', '76']];
-  return '<section class="card"><h2>買い下がりと確認買いの比較</h2><p>予定額100で、次の天井の出口まで持った場合の最終額です。</p><div style="overflow-x:auto"><table class="tbl sm"><thead><tr><th></th><th>BTC 2015</th><th>BTC 2019</th><th>BTC 2023</th><th>MSTR 2023</th><th>COIN 2023</th><th>MSTR 今回</th><th>COIN 今回</th></tr></thead><tbody>' + R.map(x => '<tr><th>' + x[0] + '</th>' + x.slice(1).map(v => '<td class="num">' + v + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>' +
+  const R = [['前の方式', '5627', '781', '481', '1091', '544', '89', '85'], ['半分ずつ（1倍）', '6131', '842', '499', '1108', '666', '80', '78'], ['全部買い下がり', '6412', '888', '478', '1025', '750', '75', '76']];
+  return '<section class="card"><h2>買い下がりと確認買いの比較</h2><p>予定額100で、次の天井の出口まで持った場合の最終額です。</p><div class="xscroll"><table class="tbl sm wide"><thead><tr><th></th><th>BTC 2015</th><th>BTC 2019</th><th>BTC 2023</th><th>MSTR 2023</th><th>COIN 2023</th><th>MSTR 今回</th><th>COIN 今回</th></tr></thead><tbody>' + R.map(x => '<tr><th>' + x[0] + '</th>' + x.slice(1).map(v => '<td class="num">' + v + '</td>').join('') + '</tr>').join('') + '</tbody></table></div><p class="sub">前の方式＝試し買い＋確認買い4回。半分ずつ（1倍）＝予定額の半分を買い下がり、半分を確認買い、どちらも1倍で比べた場合。</p>' +
     '<p class="sub">「今までの方式」は、11月に変える前の買い方（試し買い＋確認買い4回）です。半分ずつにすると、完了した5つのケースすべてで今までの方式を上回りました（+2〜+22%）。一方、今回のサイクルでは今のところ下回っています（6月の安値から買い下がって、いまは含み損になる計算のため）。</p>' +
     '<p class="sub">買い下がりに損切り（最後の買い足しからさらに-15%）を付けると、BTCの2015年は底の直前で損切りになり、最終額が半分以下（6164→2722）になりました。損切りの位置を少し変えるだけで結果が大きく変わったため、買い下がりには損切りを置かず、1回目の買値の半分を割ったらアラームを出す形にしています。</p>' +
     '<p class="sub">128通りの設定を試し、過去のサイクルだけで選んだ設定が次のサイクルでも上位に入ることを確かめています。株の買いを「合図の翌営業日」で計算すると、MSTRでの差はほぼなく、差が大きいのはCOINとBTCです。</p></section>';
@@ -2475,8 +2483,8 @@ function e2eCard() {
 }
 function wfCard() {
   return '<section class="card"><h2>確認買いの数字は、先の情報なしでも選べるか</h2><p>確認買いのルールの数字（何日目から、判定がいくつ以上、何日あけるか、底らしさは何%以上か）を540通り用意し、「それ以前のサイクルだけで一番良かった設定」を選んで、次のサイクルで試しました。</p>' +
-    '<table class="tbl"><thead><tr><th>試したサイクル</th><th>過去だけで選んだ設定</th><th>今の設定</th><th>全候補の真ん中</th></tr></thead><tbody>' +
-    [['2019年の底', '7.1倍・含み損-14%（97位）', '7.1倍・-14%（121位）', '5.8倍・-30%'], ['2023年の底', '5.3倍・-23%（333位）', '4.8倍・-7%（140位）', '4.7倍・-10%'], ['今回（途中）', '-15%（1位）', '-15%（1位）', '-19%']].map(x => '<tr><th>' + x[0] + '</th><td>' + x[1] + '</td><td>' + x[2] + '</td><td>' + x[3] + '</td></tr>').join('') + '</tbody></table>' +
+    '<div class="xscroll"><table class="tbl wide"><thead><tr><th>試したサイクル</th><th>過去だけで選んだ設定</th><th>今の設定</th><th>全候補の真ん中</th></tr></thead><tbody>' +
+    [['2019年の底', '7.1倍・含み損-14%（97位）', '7.1倍・-14%（121位）', '5.8倍・-30%'], ['2023年の底', '5.3倍・-23%（333位）', '4.8倍・-7%（140位）', '4.7倍・-10%'], ['今回（途中）', '-15%（1位）', '-15%（1位）', '-19%']].map(x => '<tr><th>' + x[0] + '</th><td>' + x[1] + '</td><td>' + x[2] + '</td><td>' + x[3] + '</td></tr>').join('') + '</tbody></table></div>' +
     '<p class="sub">倍率は、買った平均値から次の天井の出口ルールまで（BTC）。順位は、そのサイクルでの540通り中の位置です。</p>' +
     '<p>分かったことは3つです。数字を細かく最適化しても、次のサイクルで一番になるとは限りません（2023年は333位でした）。一方、どの設定でも結果は大きくは変わらず、効いているのは数字ではなく「底値圏まで待つ」「上向きを確認してから買う」という骨組みです。そして今回のサイクルは、どの設定でも今のところ含み損です。</p>' +
     '<p class="sub">毎日のスコア（短期・中期・長期）は、もともとこの方式です。各指標の重みを「その日までに結果が出ていたデータ」だけで毎日決め直し、翌日以降で試すことを、全期間で繰り返しています。検証タブの成績は、すべてその結果です。</p></section>';
@@ -2585,7 +2593,7 @@ function toolsCard() { // 調べ役：このアプリで見られないものを
     ['Strategy（公式）', 'https://www.strategy.com/', 'MSTRの保有BTC、mNAV（株の価値÷保有BTCの価値）、借入や優先株', 'mNAVが1倍を割ると、増資でBTCを買いにくくなります。このアプリでは自動で取れないので、ここで見てください'],
     ['CME FedWatch', 'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html', '次のFOMCで金利がどうなるかの、市場の織り込み', '利上げ・利下げの見込みが変わると、発表の前から値段が動きます'],
     ['Glassnode Studio', 'https://studio.glassnode.com/', 'MVRVなどオンチェーン指標のチャート（一部無料）', 'このアプリの「底らしさ」の元になっている指標を、長い期間のチャートで見られます'],
-    ['TradingView', 'https://www.tradingview.com/chart/', 'MSTR・COIN・MSTU・CONLとBTCの、リアルタイムのチャート', 'このアプリの株価は換算した目安です。正確な値段と、細かい足はここかmoomooで'],
+    ['TradingView', 'https://www.tradingview.com/chart/', 'MSTR・COIN・MSTU・CONLとBTCの、リアルタイムのチャート', 'このアプリの株価は24時間取引のトークン化株式の値段か、BTCからの換算です。正確な値段と細かい足は、ここかmoomooで'],
     ['moomooの価格アラート', '', '買い下がりの指値や、想定外ラインの株価', '玉のカードに出ている値段を、moomooのアラートに入れておくと、アプリを閉じていても気づけます']
   ];
   return '<section class="card"><h2>外の使えるツール</h2><p>このアプリで自動では取れないものを、無料で見られる場所です。</p><ul class="tools">' + T.map(x => '<li><b>' + (x[1] ? '<a href="' + x[1] + '" target="_blank" rel="noopener">' + x[0] + '</a>' : x[0]) + '</b><span>' + x[2] + '</span><small>' + x[3] + '</small></li>').join('') + '</ul></section>';
@@ -2613,7 +2621,7 @@ function viewEvents() {
   return '<section class="lead"><h1>控えているイベント</h1><p>重要度●●●の発表の48時間前から、確認買いは見送りにします。時刻はこの端末の現地時間です。</p></section>' +
     (BUILTIN.filter(e => e.t > now).length < 4 ? '<section class="card"><p>内蔵しているFOMC・雇用統計・CPIの予定が残りわずかです。新しい年の日程を入れ直す必要があります。</p></section>' : '') +
     '<section class="card"><ul class="events">' + li + '</ul><p class="sub">FOMCと米雇用統計・CPIは、FRBと米労働統計局が2026年11月時点で公表している予定です。日程は変更されることがあります。オプション満期は毎月最終金曜（17時 日本時間）を自動で計算しています。</p></section>' +
-    '<section class="card"><h2>イベントを追加する</h2><p class="sub">MSTR・COINの決算日など、発表されたら追加してください。</p><div class="form"><label>内容<input id="ev-title" type="text" placeholder="例：MSTR 決算発表" maxlength="40"></label><label>日時<input id="ev-time" type="datetime-local"></label><label>重要度<select id="ev-imp"><option value="3">●●● 判定を下げる</option><option value="2">●● 表示のみ</option><option value="1">● 表示のみ</option></select></label><button class="btn" id="ev-add">イベントを追加する</button></div></section>' + toolsCard();
+    '<section class="card"><h2>イベントを追加する</h2><p class="sub">MSTR・COINの決算日など、発表されたら追加してください。</p><div class="form"><label>内容<input id="ev-title" type="text" placeholder="例：MSTR 決算発表" maxlength="40"></label><label>日時<input id="ev-time" type="datetime-local"></label><label>重要度<select id="ev-imp"><option value="3">●●● 大きく動く（確認買いを48時間前から見送る）</option><option value="2">●● 表示のみ</option><option value="1">● 表示のみ</option></select></label><button class="btn" id="ev-add">イベントを追加する</button></div></section>' + toolsCard();
 }
 
 function planRecord() {
@@ -2645,7 +2653,7 @@ function viewStocks() {
     const pi = S.pendingImport, nm = { buy: '確認買い', ladder: '買い下がり', trial: '試し', old: '以前からの保有', cash: '売ったお金' };
     h += '<section class="card" style="border:2px solid var(--buy)"><h2>記録の取り込み</h2>' + (pi.length ? (pi.some(x => x.r) ? '<p>' + [...new Set(pi.filter(x => x.r).map(x => x.sym))].join('・') + ' の今までの記録を消して、次の内容に置き換えます。</p>' : '<p>次の記録を、この端末に取り込みます。</p>') + '<ul class="pair">' + pi.map(x => '<li><span><b>' + x.sym + '</b>　' + nm[x.kind] + '</span><span class="num">' + (x.kind === 'cash' ? usd(x.cost) : usd2(x.cost) + ' × ' + x.qty + '株') + (x.date ? '　' + esc(x.date) : '') + '</span></li>').join('') + '</ul><button class="btn" id="imp-ok">取り込む</button><button class="btn ghost" id="imp-no">やめる</button>' : '<p class="muted">リンクの中身を読めませんでした。</p><button class="btn ghost" id="imp-no">閉じる</button>') + '</section>';
   }
-  h += '<section class="card" id="fund"><h2>資金</h2><dl class="kv"><dt>現金（買うために用意している額）</dt><dd class="num">' + usd(cashBal()) + '</dd></dl><div class="form"><label>現金を直す（ドル）<input id="cash-set" type="number" inputmode="decimal" step="0.01" placeholder="' + cashBal() + '"></label><button class="btn ghost" id="cash-save">現金を直す</button><label>買う銘柄<select id="buy-tk">' + [['MSTU', 'MSTU（MSTRの2倍）'], ['CONL', 'CONL（COINの2倍）'], ['MSTR', 'MSTR'], ['COIN', 'COIN'], ['auto', '状況で選ぶ（「どっちを買うか」の結果の2倍）']].map(x => '<option value="' + x[0] + '"' + (((S.cfg && S.cfg.buy) || 'auto') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></label><button class="btn ghost" id="tk-save">買う銘柄を決める</button></div><p class="sub">買った玉を記録すると、その金額が現金から自動で引かれます。売ったときは、玉の「売った」に受取額を入れると現金に足されます。</p></section>';
+  h += '<section class="card" id="fund"><h2>資金</h2><dl class="kv"><dt>現金（買うために用意している額）</dt><dd class="num">' + usd(cashBal()) + '</dd></dl><div class="form"><label>現金を直す（ドル）<input id="cash-set" type="number" inputmode="decimal" step="0.01" placeholder="' + cashBal() + '"></label><button class="btn ghost" id="cash-save">現金を直す</button><label>買う銘柄<select id="buy-tk">' + [['MSTU', 'MSTU（MSTRの2倍）'], ['CONL', 'CONL（COINの2倍）'], ['MSTR', 'MSTR'], ['COIN', 'COIN'], ['auto', '状況で選ぶ（5人の会議で決める）']].map(x => '<option value="' + x[0] + '"' + (((S.cfg && S.cfg.buy) || 'auto') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></label><button class="btn ghost" id="tk-save">買う銘柄を決める</button></div><p class="sub">買った玉を記録すると、その金額が現金から自動で引かれます。売ったときは、玉の「売った」に受取額を入れると現金に足されます。</p></section>';
   const recK = S.recKind || (S.plan && S.plan.a !== 'buy' && (S.plan.a === 'ladder' || (S.plan.lad || []).length) ? 'ladder' : 'buy'), recT = S.plan ? planTicker(S.plan) : buyTicker();
   h += '<section class="card" id="pos-form"><h2>買った玉を記録する</h2>' + (pos.length ? '<ul class="pair">' + pos.map((p, i) => '<li class="lot"><span><b>' + p.sym + '</b>　' + (p.kind === 'cash' ? '売ったお金' : p.kind === 'ladder' ? '買い下がり' : p.kind === 'trial' ? '試し' : p.kind === 'buy' ? '確認買い' : '以前からの保有') + '　<span class="num">' + (p.kind === 'cash' ? usd(p.cost) : usd2(p.cost) + (p.qty ? ' × ' + p.qty + '株' : '')) + (p.date ? '　' + esc(p.date) : '') + '</span></span><span class="lot-act">' + (p.kind !== 'cash' ? '<input type="number" inputmode="decimal" id="q-' + i + '" placeholder="残りの株数" value="' + (p.qty || '') + '"><button class="link" data-qty="' + i + '">株数を直す</button>' : '') + '<input type="number" inputmode="decimal" id="s-' + i + '" placeholder="受取額$"><button class="link" data-sell="' + i + '">売った</button><button class="link" data-delpos="' + i + '">記録だけ消す</button></span></li>').join('') + '</ul>' : '<p class="muted">まだ記録がありません。買うたびに1つずつ記録すると、玉ごとに撤退ラインと「持ち続ける／乗り換える／売る」が判定タブに常に出て、割ったときは一番上にアラームが出ます。</p>') +
     '<div class="form"><label>種類<select id="pos-kind"><option value="ladder"' + (recK === 'ladder' ? ' selected' : '') + '>買い下がり（-10%ごとに4回まで）</option><option value="buy"' + (recK === 'buy' ? ' selected' : '') + '>確認買い（買い判定で買った）</option><option value="old">以前から持っている（アラームなし）</option></select></label><label>銘柄<select id="pos-sym">' + ['MSTU', 'CONL', 'MSTR', 'COIN', 'MSTZ'].map(x => '<option' + (recT === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label><label>平均の買値（ドル）<input id="pos-cost" type="number" inputmode="decimal" step="0.01" placeholder="例：25.40"></label><label>株数（空欄でも可）<input id="pos-qty" type="number" inputmode="decimal" placeholder="例：100"></label><label>買った日（空欄なら今日）<input id="pos-date" type="date"></label><label style="flex-direction:row;display:flex;gap:8px;align-items:center"><input id="pos-pay" type="checkbox" checked style="width:auto;min-height:0"> 現金から差し引く</label><button class="btn" id="pos-add">この玉を記録する</button></div><p class="sub">この端末の中だけに保存されます。株式併合があった銘柄は、moomooに表示されている今の平均取得単価を入れてください。</p></section>';
