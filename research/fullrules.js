@@ -104,7 +104,7 @@ function full(k,name){ // 今のアプリのルールをすべて：買い下が
   const buy=(amt,ai,two)=>{ if(two) u2+=amt/A2.px[ai]; else u1+=amt/A0.px[ai]; cash-=amt; };
   for(let i=a;i<=ex;i++){ const ai=cur[i]; if(ai<0) continue; const nxt=name==='BTC'?ai:Math.min(ai+1,A0.px.length-1);
     // 守り
-    if(M[i]<20&&u2>0){ u1+=u2*A2.px[ai]/A0.px[ai]; u2=0; } else if(M[i]>=75&&u1>0){ u2+=u1*A0.px[ai]/A2.px[ai]; u1=0; }
+    if(M[i]<20&&u2>0){ const sx=name==='BTC'?ai:Math.min(ai+1,A0.px.length-1); u1+=u2*A2.px[sx]/A0.px[sx]; u2=0; } else if(M[i]>=75&&u1>0){ const sx=name==='BTC'?ai:Math.min(ai+1,A0.px.length-1); u2+=u1*A0.px[sx]/A2.px[sx]; u1=0; }
     if(i<=b){ const g=gauge(i,k), okg=!(g===g)||g>=GTH;
       if(!started&&okg&&c[i]<=low90(i)*1.001){ started=true; ladN=1; base=A0.px[nxt]; buy(12.5,nxt,!(M[i]<20)); }
       else if(started&&!cancelled&&ladN<4&&A0.px[ai]<=base*(1-0.1*ladN)){ buy(12.5,ai,!(M[i]<20)); ladN++; }
