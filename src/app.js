@@ -289,9 +289,10 @@ const MAXBUY = 2, ADD_GAP = 14, GTH = 0.50, TRIAL_STOP = 0.10;
 // 買い下がり（research/final.js）：予定額の半分を4回に分け、90日ぶりの終値安値で1回目、その後は1回目の買値の-10%・-20%・-30%で買い足す。残り半分は確認買い2回
 const LAD_N = 4, LAD_STEP = 0.10, LAD_SHARE = 0.5, LAD_WARN = 0.5;
 function ladderLots() { const c = S.cyc, from = c ? c.cur.h + 750 * DAY : 0; return lots().filter(p => p.kind === 'ladder' && lotTime(p) >= from).sort((a, b) => lotTime(a) - lotTime(b)); }
-function ladderStart() { // 開始の合図：直近の確定した終値が、90日ぶりの安値
-  const c = S.d.c, n = c.length; let m = Infinity; for (let j = n - 91; j < n; j++) m = Math.min(m, c[j]); return c[n - 1] <= m * 1.001;
+function ladderStartDay() { // 開始の合図：直近10日のうちに、確定した終値が90日ぶりの安値を付けた日（その日を返す）。まだ始めていない人は、合図から10日以内なら始めてよい（検証では、合図の当日に始めた場合と結果は同じ。research/ladwin.js）
+  const c = S.d.c, n = c.length; for (let k = n - 1; k >= n - 10 && k >= 91; k--) { let m = Infinity; for (let j = k - 90; j <= k; j++) m = Math.min(m, c[j]); if (c[k] <= m * 1.001) return k; } return -1;
 }
+function ladderStart() { return ladderStartDay() >= 0; }
 function trialSignal(R) { // 試し買いの合図：直近20日に90日ぶりの安値（終値）を付け、その後20日線を上抜いた。上抜きから3日以内で、まだ3%以上離れていない
   const d = S.d, n = d.c.length, c = d.c, s20 = (R || S.R).ind.s20;
   for (let i = n - 1; i >= n - 3 && i > 100; i--) {
@@ -350,7 +351,7 @@ function planDecision(acts) {
   const ladChk = [
     { ok: inPhase, text: 'サイクルが底値圏〜回復期（今は' + c.name + '、半減期から' + c.day + '日目）' },
     { ok: !bg || bg.g >= GTH, text: '底らしさが50%以上（今は' + (bg ? Math.round(bg.g * 100) + '%' : '—') + '）' },
-    { ok: ladderStart(), text: 'BTCの終値が90日ぶりの安値（' + md(S.d.t[S.d.t.length - 1]) + 'の終値 ' + usd(S.d.c[S.d.c.length - 1]) + '）' },
+    (() => { const k = ladderStartDay(); return { ok: k >= 0, text: k >= 0 ? 'BTCの終値が90日ぶりの安値（' + md(S.d.t[k]) + 'の終値 ' + usd(S.d.c[k]) + '）。合図から10日以内なら始められる' : '直近10日に、BTCの終値の90日ぶりの安値がない' }; })(),
     { ok: !lad.length, text: 'このサイクルの買い下がりがまだ始まっていない（記録 ' + lad.length + '回）' }];
   if (a === 'skip' && inPhase && (!bg || bg.g >= GTH)) {
     if (!lad.length && ladderStart()) { a = 'ladder'; ladder = { step: 1 }; why.length = 0; why.push('底値圏で、BTCの終値が90日ぶりの安値を付けました'); }
@@ -979,7 +980,7 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
   if (dd) { const pk = c.cur.peak; scen.push(['天井から' + dd.tgt + '（浅くなる傾向を延ばす）', pk * (1 + parseFloat(dd.tgt) / 100)]); }
   const sc2 = scen.filter(x => ok(x[1])).sort((a, b) => b[1] - a[1]);
   return '<section class="card" id="c-where"><div class="row"><h2>今どこ？</h2><b class="' + phase[1] + '">' + phase[0] + '</b></div><p>' + phase[2] + '</p>' +
-    '<div class="near"><span>底の近さ（重みづけ）</span><b class="num">' + Math.round(near * 100) + '%</b><small>過去の底の日は 84%・100%・99%。この点数が80%以上だった日の71%は、底の前後90日以内でした。全部の物差しがそろうのを待つ必要はありません（過去の底の日も、そろっていない物差しがありました）</small></div>' +
+    '<div class="near"><span>底の近さ（重みづけ）<br><small style="grid-column:auto">底らしさ（5つの指標）とは別の点数</small></span><b class="num">' + Math.round(near * 100) + '%</b><small>過去の底の日は 84%・100%・99%。この点数が80%以上だった日の71%は、底の前後90日以内でした。全部の物差しがそろうのを待つ必要はありません（過去の底の日も、そろっていない物差しがありました）</small></div>' +
     '<p class="sub">底の近さは「底の前後にいるか」を見る点数で、底を付けたかどうかは値動きの形（新しい安値が止まったか）で確かめます。底の時期の目安は、過去の傾向を延ばすと ' + md(nextLowT) + 'ごろ（今から約' + Math.max(0, Math.round((nextLowT - Date.now()) / DAY)) + '日）。重みは過去3回のサイクルから決めたので、当てはめすぎの心配はあります。</p>' +
     groups.map(g => '<h3 class="wh-g">' + esc(g.title) + '</h3>' + (g.note ? '<p class="sub" style="margin:0 0 4px">' + esc(g.note) + '</p>' : '') + '<ul class="wh">' + g.rows.map(x => '<li class="' + x.st + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>').join('') +
     (sc2.length ? '<h3 class="wh-g">底の値段の物差し</h3><ul class="wh">' + sc2.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><span class="num">' + usd(x[1]) + '</span><small>今から ' + pc(x[1] / P - 1, 0) + '</small></li>').join('') + '</ul><p class="sub">どれが当たるかは分かりません。ETFが入ってからは値動きが穏やかになっていて、浅い方で止まる可能性もあれば、ETFの買い手の含み損が売りを呼んで深くなる可能性もあります。買い下がりの指値（-10%ずつ）は、この幅に備えるためのものです。</p>' : '') +
