@@ -1282,6 +1282,14 @@ function reachProb(target) {
   for (let i = a; i < n; i++) { m++; if (d.l[i] / d.c[i - 1] - 1 <= dist) hit++; }
   return m ? hit / m : NaN;
 }
+function btcAtTime(ts) { // その時刻（秒）のBTC：1時間足の終値の一番近いもの
+  const h = S.btcH; if (!h || !h.length) return NaN; let best = null, bd = Infinity; h.forEach(x => { const d = Math.abs(x[0] + 3600 - ts); if (d < bd) { bd = d; best = x; } }); return best && bd < 3 * 3600 ? best[4] : NaN;
+}
+function calibrateAnchors() { // 換算の基準を、米国の実際の最新の株価（取引時間外も含む）と、その時刻のBTCに合わせる
+  if (!S.q) return;
+  ['MSTR', 'COIN'].forEach(u => { const an = S.stocks[u] && S.stocks[u].an, q = S.q[u]; if (!an || !q || !ok(q.px)) return; const b = btcAtTime(q.t); if (!ok(b)) return;
+    if (an.qT === q.t || q.t * 1000 <= Date.parse(an.date + 'T20:00:00Z')) return; an.px0 = an.px0 || an.px; an.btcAt0 = an.btcAt0 || an.btcAt; an.px = q.px; an.btcAt = b; an.qT = q.t; });
+}
 function stockAt(an, btc) { return an.px * (1 + an.beta * (btc / an.btcAt - 1)); }
 function buildPlan() {
   const price = S.price, dec = planDecision(S.act);
@@ -1307,7 +1315,7 @@ function etfClose(sym, date) { // 元の株の終値と同じ日の終値を使�
   return null;
 }
 function etfAt(sym, btc) { // BTCがその値段のときのETFの目安
-  const e = ETF[sym], an = S.stocks[e.und] && S.stocks[e.und].an, lc = an ? etfClose(sym, an.date) : null; if (!an || !lc) return NaN;
+  const e = ETF[sym], an = S.stocks[e.und] && S.stocks[e.und].an, lc = an ? (an.qT && S.q && S.q[sym] ? [null, S.q[sym].px] : etfClose(sym, an.date)) : null; if (!an || !lc) return NaN;
   const und = stockAt(an, btc) / an.px - 1; return lc[1] * Math.max(0.05, 1 + e.L * und);
 }
 const HOLD = { reinvest: ['1倍で買う', 'v-buy'], relevbuy: ['2倍で買い直す', 'v-buy'], cashwait: ['現金で待つ', 'v-wait'], hold: ['持ち続ける', 'v-buy'], add: ['買い足し可', 'v-buy'], trim: ['一部売る', 'v-wait'], sell: ['売る', 'v-avoid'], switch: ['1倍に乗り換える', 'v-wait'], relev: ['2倍に戻せる', 'v-buy'], na: ['判定できません', 'v-na'] };
@@ -2072,7 +2080,7 @@ async function refreshAll() {
     S.status.agg = { ok: !miss.length, name: '建玉の合算', note: got.join('・') + (miss.length ? '（' + miss.join('・') + ' は取得できず）' : '') };
   }));
   tasks.push(loadOnchain().then(v => { S.oc = v; S.status.oc = { ok: true, name: 'オンチェーン・恐怖指数', note: 'MVRV・マイナー収入・ハッシュレート・恐怖と強欲指数' }; }, () => { S.oc = null; S.status.oc = { ok: false, name: 'オンチェーン・恐怖指数', note: '取得できません。底らしさの一部が出ません' }; }));
-  tasks.push(loadLiveStocks().then(v => { S.live = v; S.status.live = { ok: true, name: '株価（リアルタイム）', note: 'MSTR・COINのトークン化株式（Gate、24時間）。MSTU・CONLはその動きの2倍で換算' }; }, () => { S.live = null; S.status.live = { ok: false, name: '株価（リアルタイム）', note: '取得できません。BTCからの換算で表示します' }; }));
+  tasks.push(loadLiveStocks().then(v => { S.live = v; S.status.live = { ok: true, name: '株価（リアルタイム）', note: 'MSTR・COINのトークン化株式（Gate、24時間）。MSTU・CONLはその動きの2倍で換算。指値の計算の基準は、米国の実際の最新の株価（取引時間外も含む、1時間ごと）' }; }, () => { S.live = null; S.status.live = { ok: false, name: '株価（リアルタイム）', note: '取得できません。BTCからの換算で表示します' }; }));
   tasks.push(loadRepoJson('nasdaq.json').then(v => { S.nas = v && v.rows ? v.rows : null; }, () => { S.nas = null; }));
   tasks.push(loadRepoJson('lines.json?v=' + Math.floor(Date.now() / 6e5)).then(v => { if (v && v.lines) v.lines = v.lines.filter(l => l.kind !== 'round'); S.lines = v; }, () => { S.lines = null; }));
   tasks.push(loadRepoJson('review.json').then(v => { S.review = v; }, () => { S.review = null; }));
@@ -2093,11 +2101,13 @@ async function refreshAll() {
       else S.stocks[sym] = { err: '株価データがまだ用意されていません（毎日の自動取得を待っています）' };
     }
   })());
+  tasks.push(loadRepoJson('quotes.json').then(v => { S.q = v && v.q ? v.q : null; }, () => { S.q = null; }));
+  tasks.push(jget('research/live.json?t=' + Math.floor(Date.now() / 6e5), 15000).then(v => { S.btcH = v && v.h1 ? v.h1 : null; }, () => { S.btcH = null; }));
   await Promise.allSettled(tasks);
   { const er = ['MSTR', 'COIN'].filter(s => S.stocks[s] && S.stocks[s].err), old = S.stkLast ? (Date.now() - Date.parse(S.stkLast)) / DAY : 0;
     S.stkStale = !er.length && old > 5.5;
     S.status.stk = { ok: !er.length && !S.stkStale, name: '関連株（MSTR・COIN）', note: er.length ? er.join('・') + '：' + S.stocks[er[0]].err : S.stkSrc + (S.stkStale ? '。株価の自動取得が ' + Math.floor(old) + ' 日止まっています' : '') }; }
-  try { compute(); } catch (e) { S.fatal = '計算中にエラーが起きました：' + e.message; }
+  try { compute(); calibrateAnchors(); } catch (e) { S.fatal = '計算中にエラーが起きました：' + e.message; }
   S.loading = false; S.at = Date.now(); render();
   setTimeout(() => { try { computeProv(); if (S.prov) { writeLog(); render(); } } catch (e) { S.prov = null; } }, 50);
 }
