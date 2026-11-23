@@ -773,8 +773,8 @@ function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（�
   const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
   return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
 }
-const P3_DEFAULT = { amt: [1580, 2365, 785], mstuUntil: '2026-11-27', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
-function p3Plan() { const v = LS.get('p3', null); if (v) return v; return Date.now() < Date.parse('2026-12-11T00:00:00Z') ? Object.assign({ start: '2026-11-23' }, P3_DEFAULT) : null; }
+const P3_DEFAULT = { amt: [1521, 2357, 582],   /* 2026-11-23：実際の注文（MSTR 19株×$80.07、MSTU 118株×$9.98・127株×$9.29）と、実際の現金$4,460.30に合わせた */ mstuUntil: '2026-11-27', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
+function p3Plan() { const v = LS.get('p3', null); if (v) return Object.assign({}, v, { amt: P3_DEFAULT.amt }); return Date.now() < Date.parse('2026-12-11T00:00:00Z') ? Object.assign({ start: '2026-11-23' }, P3_DEFAULT) : null; }
 function p3Items() { // 現金を3つに分ける使い方（利用者が選んだ形）。① MSTRを今買う ② MSTUを指値2本（11/28まで、届かなければ28日の夜に気配で）③ 12/2〜12/10に材料の下げで拾う（下げなければ12/10の夜にMSTU）
   const now = Date.now(), p = p3Plan(), d = S.d, lastC = d ? d.c[d.c.length - 1] : NaN, items = [];
   if (!p) return items;
@@ -789,7 +789,7 @@ function p3Items() { // 現金を3つに分ける使い方（利用者が選ん�
     else if (now < Date.parse(p.addTo + 'T00:00:00Z') + DAY) items.push({ lv: 'info', t: '② MSTUの約$' + p.amt[1].toLocaleString('en-US') + 'のうち届かなかった分は、③と一緒に12/2〜12/10に使う' }); }
   const a0 = Date.parse(p.addFrom + 'T00:00:00Z'), a1 = Date.parse(p.addTo + 'T00:00:00Z') + DAY;
   if (!p.b3 && now >= a0 && now < a1) items.push({ lv: below ? 'warn' : 'buy', t: (below ? '③ 残りのお金（約$' + p.amt[2].toLocaleString('en-US') + '＋①②で届かなかった分）：BTCが逃げる線の下なので、MSTUではなくMSTRで拾う' : '③ 残りのお金（約$' + p.amt[2].toLocaleString('en-US') + '＋①②で届かなかった分）：材料（12/1の指数除外・12/9の利上げ）で下げた日は、その夜に買う（①の分はMSTR、②③の分はMSTU）。下げなければ12/10の夜に買う'), btn: 'p3-b3' });
-  if (!p.b3 && now < a0) items.push({ lv: 'info', t: '③ 残り約$' + p.amt[2].toLocaleString('en-US') + 'は、12/2〜12/10に使う予定（材料の下げで拾う）。逃げる線：BTCの朝9時の終値 ' + usd(p.stop) + '（今の終値 ' + usd(lastC) + '）' });
+  if (!p.b3 && now < a0) items.push({ lv: 'info', t: '③ 残り約$' + p.amt[2].toLocaleString('en-US') + '（実際の額はmoomooの買付余力で確認）は、12/2〜12/10に使う予定（材料の下げで拾う）。逃げる線：BTCの朝9時の終値 ' + usd(p.stop) + '（今の終値 ' + usd(lastC) + '）' });
   return items;
 }
 function betItems() {
