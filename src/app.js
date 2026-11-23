@@ -763,7 +763,8 @@ function p4Adjust(h) { // 11/23からの形：2倍の玉は、中期の判定で
   return h;
 }
 function howMoomoo(items, p) { // その日にやることに合わせた、moomooでの注文の入れ方
-  if (p4On()) return '<details class="more-in hm"><summary>moomooでの入れ方（逃げる線を割った日だけ）</summary><ol><li>その夜の米国の通常取引（日本時間23:30〜）で、MSTUを買気配に近い指値で売る</li><li>売れたらすぐ、受け取った金額でMSTRを売気配に近い指値で買う</li><li>CONLも同じように売って、COINを買う（ASSTは売らない）</li><li>終わったら、関連株タブで記録を直す</li></ol><p class="sub">夜間取引（朝10時〜）は気配の差が開きやすいので、通常取引の時間に。成行は使わない。</p></details>';
+  if (p4On() && S.d && S.d.c[S.d.c.length - 1] >= P4.stop) return '';
+  if (p4On()) return '<details class="more-in hm" open><summary>moomooでの入れ方（今日やること）</summary><ol><li>その夜の米国の通常取引（日本時間23:30〜）で、MSTUを買気配に近い指値で売る</li><li>売れたらすぐ、受け取った金額でMSTRを売気配に近い指値で買う</li><li>CONLも同じように売って、COINを買う（ASSTは売らない）</li><li>終わったら、関連株タブで記録を直す</li></ol><p class="sub">夜間取引（朝10時〜）は気配の差が開きやすいので、通常取引の時間に。成行は使わない。</p></details>';
   if (p3Plan()) { const P = p3Plan(), H2 = [['① MSTRと ② MSTUの指値', ['注文方法「指値」、値段と株数は「今日やること」のとおり', '取引時間「24時間取引」（平日の朝10時からの夜間取引でも約定する）', '期間「期間指定（GTD）」で、期限を米国の' + P.mstuUntil.slice(5).replace('-', '/') + 'に', '「本日中」で入れると、その日の米国20時（日本時間の朝10時）で消えて、夜間に引き継がれない', '入れたら「今日やること」のボタンを押す']], ['③ 12/2〜12/10に買う時', ['米国の通常取引（日本時間23:30〜）で、売気配に近い指値（成行は使わない）']], ['逃げる時（BTCの終値が' + usd(P.stop) + 'を割った日）', ['その夜の通常取引で、MSTUを買気配に近い指値で売り、売れたらすぐMSTRを売気配に近い指値で買う']]];
     return '<details class="more-in hm"><summary>moomooでの入れ方</summary>' + H2.map(h => '<p class="hm-h">' + esc(h[0]) + '</p><ol>' + h[1].map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>').join('') + '<p class="sub">画面の名前はmoomooの更新で変わることがあります。</p></details>'; }
   const H = [], lo = p && p.a === 'ladder' && !placedOrders() ? ladderOrders(p) : null, po = placedOrders();
@@ -781,6 +782,7 @@ function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（�
   const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
   return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
 }
+const APP_VER = 'v112';
 const P4 = { from: '2026-11-23', stop: 58500, mstuCost: 12.52, mstuBE: 64500, asst: { q: 22, c: 17.33 } };   /* 2026-11-23：現金を全部使って、MSTU 325株（平均$12.52）・CONL 4,369株（平均$4.48）・ASST 22株（平均$17.33）を持つ形に。逃げる線はBTCの朝9時の終値$58,500（割ったらMSTU→MSTR、CONL→COIN） */
 function p4On() { return Date.now() >= Date.parse(P4.from + 'T00:00:00Z'); }
 const P3_DEFAULT = { amt: [1521, 2357, 582],   /* 2026-11-23：実際の注文（MSTR 19株×$80.07、MSTU 118株×$9.98・127株×$9.29）と、実際の現金$4,460.30に合わせた */ mstuUntil: '2026-11-27', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
@@ -1857,7 +1859,7 @@ function viewJudge() {
   return todoCard() + planAheadCard() + miniGrid() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + next7Card() +
     '<a class="to-chart" href="#chart">チャートと振り返り（4時間足・直近7日の答え合わせ・底の見込み・長期チャート・次の天井）→</a>' +
     (info.length ? '<details class="more"><summary>参考の注意（' + info.length + '件）</summary>' + fl(info) + '</details>' : '') +
-    glossary() + '<p class="disc">過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
+    glossary() + '<p class="disc">（アプリの版：' + APP_VER + '）過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
 }
 
 function ladderCard() {
