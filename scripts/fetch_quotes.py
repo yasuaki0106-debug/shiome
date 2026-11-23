@@ -3,7 +3,7 @@
 import json, os, time, urllib.request
 UA = {"User-Agent": "Mozilla/5.0"}
 out = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "q": {}}
-for s in ["MSTR", "MSTU", "COIN", "CONL"]:
+for s in ["MSTR", "MSTU", "COIN", "CONL", "ASST"]:
     try:
         u = f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?range=2d&interval=5m&includePrePost=true"
         j = json.loads(urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=30).read())

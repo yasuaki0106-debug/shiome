@@ -1479,8 +1479,16 @@ function holdOne(p) {
   const lim = a === 'add' && plan && plan.target ? etfAt(p.sym, plan.target.mid) : NaN;
   return { a, why, now, pl, plUsd: p.qty ? (now - p.cost) * p.qty : null, days, decay, undRet, need, undNeed: need != null && an ? stockAt(an, S.price) * (1 + need) : null, lim, alarm, line, eb };
 }
-function holdAll() { migrateCash(); return LS.get('pos', []).map((p, i) => Object.assign({ i, p }, holdOne(p))); }
+function holdAll() { migrateCash(); return LS.get('pos', []).map((p, i) => p4Adjust(Object.assign({ i, p }, holdOne(p)))); }
+function p4Adjust(h) { // 11/23からの形：2倍の玉は、中期の判定ではなく、逃げる線（BTCの朝9時の終値$58,500）で判断する
+  if (!p4On() || !ETF[h.p.sym] || ETF[h.p.sym].L !== 2 || !S.d) return h;
+  const c = S.d.c[S.d.c.length - 1], und = ETF[h.p.sym].und;
+  if (c < P4.stop) return Object.assign(h, { a: 'switch', alarm: true, why: ['BTCの朝9時の終値（' + usd(c) + '）が逃げる線 ' + usd(P4.stop) + ' を割りました。今夜の通常取引で、' + h.p.sym + 'を売って' + und + 'に替えます'] });
+  if (h.a === 'switch' || h.a === 'cashwait') return Object.assign(h, { a: 'hold', alarm: false, why: ['あなたが決めた形：2倍のまま持つ。逃げる線はBTCの朝9時の終値 ' + usd(P4.stop) + '（今の終値 ' + usd(c) + '、あと ' + pc(P4.stop / c - 1) + '）。割ったら' + und + 'に替える'].concat((h.why || []).slice(0, 1).map(x => '参考：アプリの決まりでは ' + x)) });
+  return h;
+}
 function howMoomoo(items, p) { // その日にやることに合わせた、moomooでの注文の入れ方
+  if (p4On()) return '<details class="more-in hm"><summary>moomooでの入れ方（逃げる線を割った日だけ）</summary><ol><li>その夜の米国の通常取引（日本時間23:30〜）で、MSTUを買気配に近い指値で売る</li><li>売れたらすぐ、受け取った金額でMSTRを売気配に近い指値で買う</li><li>CONLも同じように売って、COINを買う（ASSTは売らない）</li><li>終わったら、関連株タブで記録を直す</li></ol><p class="sub">夜間取引（朝10時〜）は気配の差が開きやすいので、通常取引の時間に。成行は使わない。</p></details>';
   if (p3Plan()) { const P = p3Plan(), H2 = [['① MSTRと ② MSTUの指値', ['注文方法「指値」、値段と株数は「今日やること」のとおり', '取引時間「24時間取引」（平日の朝10時からの夜間取引でも約定する）', '期間「期間指定（GTD）」で、期限を米国の' + P.mstuUntil.slice(5).replace('-', '/') + 'に', '「本日中」で入れると、その日の米国20時（日本時間の朝10時）で消えて、夜間に引き継がれない', '入れたら「今日やること」のボタンを押す']], ['③ 12/2〜12/10に買う時', ['米国の通常取引（日本時間23:30〜）で、売気配に近い指値（成行は使わない）']], ['逃げる時（BTCの終値が' + usd(P.stop) + 'を割った日）', ['その夜の通常取引で、MSTUを買気配に近い指値で売り、売れたらすぐMSTRを売気配に近い指値で買う']]];
     return '<details class="more-in hm"><summary>moomooでの入れ方</summary>' + H2.map(h => '<p class="hm-h">' + esc(h[0]) + '</p><ol>' + h[1].map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>').join('') + '<p class="sub">画面の名前はmoomooの更新で変わることがあります。</p></details>'; }
   const H = [], lo = p && p.a === 'ladder' && !placedOrders() ? ladderOrders(p) : null, po = placedOrders();
@@ -1498,8 +1506,10 @@ function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（�
   const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
   return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
 }
+const P4 = { from: '2026-11-23', stop: 58500, mstuCost: 12.52, mstuBE: 64500, asst: { q: 22, c: 17.33 } };   /* 2026-11-23：現金を全部使って、MSTU 325株（平均$12.52）・CONL 4,369株（平均$4.48）・ASST 22株（平均$17.33）を持つ形に。逃げる線はBTCの朝9時の終値$58,500（割ったらMSTU→MSTR、CONL→COIN） */
+function p4On() { return Date.now() >= Date.parse(P4.from + 'T00:00:00Z'); }
 const P3_DEFAULT = { amt: [1521, 2357, 582],   /* 2026-11-23：実際の注文（MSTR 19株×$80.07、MSTU 118株×$9.98・127株×$9.29）と、実際の現金$4,460.30に合わせた */ mstuUntil: '2026-11-27', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
-function p3Plan() { const v = LS.get('p3', null); if (v) return Object.assign({}, v, { amt: P3_DEFAULT.amt }); return Date.now() < Date.parse('2026-12-11T00:00:00Z') ? Object.assign({ start: '2026-11-23' }, P3_DEFAULT) : null; }
+function p3Plan() { if (p4On()) return null; const v = LS.get('p3', null); if (v) return Object.assign({}, v, { amt: P3_DEFAULT.amt }); return Date.now() < Date.parse('2026-12-11T00:00:00Z') ? Object.assign({ start: '2026-11-23' }, P3_DEFAULT) : null; }
 function p3Items() { // 現金を3つに分ける使い方（利用者が選んだ形）。① MSTRを今買う ② MSTUを指値2本（11/28まで、届かなければ28日の夜に気配で）③ 12/2〜12/10に材料の下げで拾う（下げなければ12/10の夜にMSTU）
   const now = Date.now(), p = p3Plan(), d = S.d, lastC = d ? d.c[d.c.length - 1] : NaN, items = [];
   if (!p) return items;
@@ -1536,7 +1546,8 @@ function planAheadCard() { // 月曜から先の予定を、日付順に。今�
   let t0 = now; for (let k = 0; k < 7; k++) { const d = new Date(t0 + k * DAY); const w = d.getDay(); if (w >= 1 && w <= 5) { t0 = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - 9 * 36e5 + 9 * 36e5; break; } }
   const first = new Date(now).getDay() >= 1 && new Date(now).getDay() <= 5 ? now : t0;
   const P3 = p3Plan();
-  if (P3) {
+  if (p4On()) { /* 全部買った後：予定は材料の日付だけ */ }
+  else if (P3) {
     if (!P3.b1 || !P3.b2) items.push([first, fmt(first) + ' 朝9時20分以降', 'アプリの「今日やること」の値段で、① MSTRの指値と ② MSTUの指値2本を入れる（24時間取引・期間指定で' + P3.mstuUntil.slice(5).replace('-', '/') + 'まで）。入れたらボタンを押す' + (hasConl ? '。CONLはそのまま持つなら、CONLのカードの「2倍のまま持つ」を押す' : '')]);
     items.push([Date.parse(P3.mstuUntil + 'T13:30:00Z'), fmt(Date.parse(P3.mstuUntil + 'T03:00:00Z')) + ' の夜（短縮取引、朝3時まで）', '①②の指値の期限（米国の' + P3.mstuUntil.slice(5).replace('-', '/') + '）。届かなかった分は、③と一緒に12/2〜12/10に回す']);
     items.push([Date.parse(P3.addFrom + 'T00:00:00Z'), fmt(Date.parse(P3.addFrom + 'T03:00:00Z')) + '〜' + P3.addTo.slice(5).replace('-', '/'), '③の時期。材料で下げた日に、その夜に買う（①の分はMSTR、②③の分はMSTU）']);
@@ -1547,15 +1558,19 @@ function planAheadCard() { // 月曜から先の予定を、日付順に。今�
   US_CLOSED.forEach(k => { const t = Date.parse(k + 'T13:00:00Z'); if (t > now && t < now + 30 * DAY) items.push([t, fmt(Date.parse(k + 'T03:00:00Z')) + ' の夜', '米国株は休場（感謝祭など）。その夜は注文が通らない']); });
   US_HALF.forEach(k => { const t = Date.parse(k + 'T13:00:00Z'); if (P3 && k === P3.mstuUntil) return; if (t > now && t < now + 30 * DAY) items.push([t, fmt(Date.parse(k + 'T03:00:00Z')) + ' の夜', '米国株は短縮取引（日本時間の朝3時で終わる）']); });
   const ex = po ? po.exp : lo ? lo.exp : null;
-  if (!P3 && ex && !ladderLots().length) items.push([ex - 7 * 36e5, fmt(ex - 9 * 36e5) + ' 夜〜翌朝6時', '1本目の期限の日。届いていなければ、引成（引けに成行）で買う。アプリと通知でも知らせます']);
+  if (!p4On() && !P3 && ex && !ladderLots().length) items.push([ex - 7 * 36e5, fmt(ex - 9 * 36e5) + ' 夜〜翌朝6時', '1本目の期限の日。届いていなければ、引成（引けに成行）で買う。アプリと通知でも知らせます']);
   items.sort((a, b) => a[0] - b[0]);
-  const ifs = P3 ? [['下がったら', '①MSTRと②MSTUの指値が届く。届いたら「今日やること」のボタンを押すだけ'], ['上がったら', '指値は届かない。その分は12/2〜12/10に回して、材料で下げなければ12/10の夜に買う。上がり始めの確認（中期75）が出たら、MSTRも全部MSTUへ'], ['BTCの朝9時の終値が' + usd(P3.stop) + 'を割ったら', 'その夜に、MSTUを全部MSTRに替える（MSTRは売らない）。アプリに警報が出る'], ['横ばいなら', '指値を置いたまま待つ。12/10の夜までに使い切る']] : [['下がったら', '2〜4本目の指値が順に届く。届いたらアプリで記録するだけ。損切りはしない'], ['上がったら', '1本目は期限に成行で買い、2〜4本目は置いたまま。上がり始めの確認（中期75）が出たら、残りの指値を取り消して確認買いと2倍への切り替え。アプリと通知で知らせます'], ['分かれ目（' + (S.rt ? usd(S.rt.level) : '前の底の3%下') + '）を終値で割ったら', '慌てて売らない。買い下がりの指値が届きやすくなる局面。2倍は持たない'], ['12/10以降に条件がそろったら', '「今どこ？」の「2倍の狙い方」の3つ（材料が過ぎた・分かれ目の上・直前20日の高値の上抜け）がそろえば、一部をMSTUで狙う。割ったらMSTRへ']];
+  const ifs = p4On() ? [['BTCの朝9時の終値が' + usd(P4.stop) + 'を割ったら', 'その夜の通常取引で、MSTU→MSTR、CONL→COINに替える（ASSTは売らない）。アプリと通知で知らせる'], ['上がったら', '何もしない。BTCが約' + usd(P4.mstuBE) + 'を超えると、MSTUが買値に戻る目安。上がり始めの確認（中期75）が出ても、もう2倍なのでやることはない'], ['揉み合いなら', '何もしない。値段を見すぎない'], ['天井の時期（2029年ごろの見込み）', 'アプリの出口の合図で、分けて売る']] : P3 ? [['下がったら', '①MSTRと②MSTUの指値が届く。届いたら「今日やること」のボタンを押すだけ'], ['上がったら', '指値は届かない。その分は12/2〜12/10に回して、材料で下げなければ12/10の夜に買う。上がり始めの確認（中期75）が出たら、MSTRも全部MSTUへ'], ['BTCの朝9時の終値が' + usd(P3.stop) + 'を割ったら', 'その夜に、MSTUを全部MSTRに替える（MSTRは売らない）。アプリに警報が出る'], ['横ばいなら', '指値を置いたまま待つ。12/10の夜までに使い切る']] : [['下がったら', '2〜4本目の指値が順に届く。届いたらアプリで記録するだけ。損切りはしない'], ['上がったら', '1本目は期限に成行で買い、2〜4本目は置いたまま。上がり始めの確認（中期75）が出たら、残りの指値を取り消して確認買いと2倍への切り替え。アプリと通知で知らせます'], ['分かれ目（' + (S.rt ? usd(S.rt.level) : '前の底の3%下') + '）を終値で割ったら', '慌てて売らない。買い下がりの指値が届きやすくなる局面。2倍は持たない'], ['12/10以降に条件がそろったら', '「今どこ？」の「2倍の狙い方」の3つ（材料が過ぎた・分かれ目の上・直前20日の高値の上抜け）がそろえば、一部をMSTUで狙う。割ったらMSTRへ']];
   return '<section class="card" id="c-ahead"><h2>これからの予定（あなたの場合）</h2><ol class="ahead">' + items.slice(0, 10).map(x => '<li><b>' + esc(x[1]) + '</b><span>' + esc(x[2]) + '</span></li>').join('') + '</ol><h3>値動きごとの動き方</h3><ul class="wh">' + ifs.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><small>' + esc(x[1]) + '</small></li>').join('') + '</ul><p class="sub">どの場合も、アプリと通知が「今日やること」を出します。毎朝9時20分以降に開いて、上から順にやれば大丈夫です。</p></section>';
 }
 function todoCard() { // 画面を開いて最初に見る場所：今日やることを番号で並べる
   const p = S.plan; if (!p) return '';
   const items = [], al = (S.hold || []).filter(h => h.alarm), b = budget();
   const p3on = !!p3Plan();
+  if (p4On()) { const c = S.d.c[S.d.c.length - 1], qa = S.q && S.q.ASST ? S.q.ASST.px : NaN;
+    if (c < P4.stop) items.push({ lv: 'alarm', t: 'BTCの朝9時の終値が逃げる線 ' + usd(P4.stop) + ' を割りました（' + usd(c) + '）。今夜の通常取引で、MSTU→MSTR、CONL→COINに替える' });
+    else items.push({ lv: 'info', t: '今日は何もしなくていい日です。持っているものはそのまま。逃げる線：BTCの朝9時の終値 ' + usd(P4.stop) + '（今の終値 ' + usd(c) + '、あと ' + pc(P4.stop / c - 1) + '）', sub: ['MSTUの買値（平均$' + P4.mstuCost.toFixed(2) + '）に戻る目安：BTC 約' + usd(P4.mstuBE) + (S.price >= P4.mstuBE ? '（今は超えている）' : '（今から ' + pc(P4.mstuBE / S.price - 1) + '）'), 'ASST 22株（平均$' + P4.asst.c.toFixed(2) + (ok(qa) ? '、最新 $' + qa.toFixed(2) : '') + '）は逃げる線でも売らない', '上がり始めの確認（中期75）が出ても、もう2倍なのでやることはない。売るのは天井の時期（アプリが知らせる）'] });
+  }
   p3Items().forEach(x => items.push(x)); if (!p3on && LS.get('bet', null)) betItems().forEach(x => items.push(x));
   (S.hold || []).filter(h => h.a === 'relev').forEach(h => items.push({ lv: 'buy', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → 売って ' + LEVOF[prefUnd(h.p.sym)] + ' に替える（上向きを確認したので2倍に戻す）' }));
   al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : '';
@@ -1563,7 +1578,7 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
   if (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial') {
     const t = planTicker(p), per = { buy: b.cash / Math.max(1, MAXBUY - (p.n || 0)), trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
     const po = placedOrders(), lo = p.a === 'ladder' && !po ? ladderOrders(p) : null;
-    if (p3on && p.a === 'ladder') {} else if (b.total > 0 && lo) { const ex = new Date(lo.exp);
+    if ((p3on || p4On()) && ['ladder', 'buy', 'trial'].includes(p.a)) {} else if (b.total > 0 && lo) { const ex = new Date(lo.exp);
       items.push({ lv: 'buy', t: lo.t + ' に指値を4本入れる', sub: lo.rows.map(r => r.k + '本目　' + usd2(r.px) + '　' + r.n + '株' + (r.k === 1 ? '　期限あり' : '　期限なし')) });
       items.push({ lv: 'info', t: '入れるのは朝9時20分以降。値段は今朝9時の確定値で決めていて、今日のあいだは変わりません。moomooの24時間取引なら、平日の朝10時からの夜間取引でも約定します' });
       items.push({ lv: 'info', t: '1本目の期限：' + mdUS(lo.exp) + 'の引け（日本時間 ' + closeJST(lo.exp).replace(/ 0?(\d+):00$/, ' 朝$1時') + '）。届かなければ、引けに成行で買う' + (lo.ev ? '。' + lo.ev.title.replace(/（.*?）/g, '').replace(/^(MSTR)、/, '$1の') + 'の翌営業日まで待つため、少し先の期限です' : '') });
@@ -1869,7 +1884,7 @@ function miniGrid() { // 1か所で全部見えるように：大事な数字を
   if (zB) { const p = zB.reduce((a, x) => a + x.p, 0) / zB.length; add('dir', '下の節目', kfmt(p), 'g', pc(p / S.price - 1) + '・下げが止まりやすい'); }
   if (S.rt && (S.rt.retest || S.rt.broke)) add('dir', '分かれ目', kfmt(S.rt.level), S.price < S.rt.level ? 'r' : 'n', S.price < S.rt.level ? '今は下・割れたまま（一段下げの形）' : '今は上・終値で割るかを見る');
   const ef = etfState(); if (ef) add('soon', 'ETF（20日）', (ef.s20 < 0 ? '-' : '+') + '$' + (Math.abs(ef.s20) / 1000).toFixed(1) + 'B', ef.s20 < 0 ? 'r' : 'g', (ef.s20 < 0 ? '売りが続いている・' : '買いが続いている・') + '2024年以降で下から' + pc(ef.rank, 0, false));
-  const mm = S.R.hz.m.pct; if (ok(mm)) add('today', '中期の判定', Math.round(mm), mm >= 75 ? 'g' : mm < 20 ? 'r' : 'n', mm >= 75 ? '上向きを確認・確認買いの水準' : mm < 20 ? 'まだ下げの流れ・2倍は外す水準' : 'あと' + Math.round(75 - mm) + 'で確認買い');
+  const mm = S.R.hz.m.pct; if (ok(mm)) add('today', '中期の判定', Math.round(mm), mm >= 75 ? 'g' : mm < 20 ? 'r' : 'n', mm >= 75 ? '上向きを確認・確認買いの水準' : mm < 20 ? (p4On() ? 'まだ下げの流れ（あなたは逃げる線$58,500で判断）' : 'まだ下げの流れ・2倍は外す水準') : 'あと' + Math.round(75 - mm) + 'で確認買い');
   const now = Date.now(), ev = allEvents().filter(e => e.t > now && e.impact >= 3).sort((a, b) => a.t - b.t)[0]; if (ev) add('events', '次の大きな発表', md(ev.t), 'n', ev.title.replace(/（.*?）/g, ''));
   return '<section class="minis">' + R.join('') + '</section><p class="mini-key"><span class="nw"><span class="mk g"></span>追い風（上がる材料）</span> <span class="nw"><span class="mk r"></span>向かい風（下がる材料・急がない）</span> <span class="nw"><span class="mk n"></span>どちらでもない</span> <span class="nw">タップでくわしく</span></p>';
 }
