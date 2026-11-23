@@ -782,7 +782,7 @@ function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（�
   const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
   return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
 }
-const APP_VER = 'v112';
+const APP_VER = 'v113';
 const P4 = { from: '2026-11-23', stop: 58500, mstuCost: 12.52, mstuBE: 64500, asst: { q: 22, c: 17.33 } };   /* 2026-11-23：現金を全部使って、MSTU 325株（平均$12.52）・CONL 4,369株（平均$4.48）・ASST 22株（平均$17.33）を持つ形に。逃げる線はBTCの朝9時の終値$58,500（割ったらMSTU→MSTR、CONL→COIN） */
 function p4On() { return Date.now() >= Date.parse(P4.from + 'T00:00:00Z'); }
 const P3_DEFAULT = { amt: [1521, 2357, 582],   /* 2026-11-23：実際の注文（MSTR 19株×$80.07、MSTU 118株×$9.98・127株×$9.29）と、実際の現金$4,460.30に合わせた */ mstuUntil: '2026-11-27', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
@@ -1000,6 +1000,41 @@ function nasdaqWeekly() { // ナスダックの週足（各週の最後の終値
   for (let i = 15; i < n; i++) { const ch = C[i] - C[i - 1]; g = (g * 13 + Math.max(ch, 0)) / 14; l = (l * 13 + Math.max(-ch, 0)) / 14; }
   const rsi = l > 0 ? 100 - 100 / (1 + g / l) : 100, w = C.slice(-14), m = w.reduce((a, b) => a + b, 0) / 14, md = w.reduce((a, b) => a + Math.abs(b - m), 0) / 14, cci = md > 0 ? (C[n - 1] - m) / (0.015 * md) : 0;
   return { d: W[n - 1][0], rsi, cci };
+}
+function flowNowCard() { // 相場の中身：直近の上げ下げは何だったか（建玉）、本物の買いは来ているか（ETF・Coinbase）、清算はどこに残っていそうか（推定）
+  const hist = S.okx && S.okx.hist ? S.okx.hist.map(x => [x[0] > 1e11 ? x[0] : x[0] * 1000, x[1]]).concat(ok(S.okx.oi) ? [[S.okx.t, S.okx.oi]] : []) : [];
+  if (hist.length < 10 || !S.d) return '';
+  const H = (S.btcH || []).map(x => [x[0] * 1000, x[2], x[3], x[4]]), d = S.d, now = Date.now();
+  const dayIdx = t => { const k = dkey(t); for (let i = d.t.length - 1; i >= 0; i--) if (dkey(d.t[i]) === k) return i; return -1; };
+  const pxAt = t => { let best = null, bd = Infinity; H.forEach(x => { const dd = Math.abs(x[0] + 36e5 - t); if (dd < bd) { bd = dd; best = x; } }); if (best && bd < 3 * 36e5) return best[3]; const i = dayIdx(t); return i >= 0 ? d.c[i] : S.price; };
+  const extAfter = t => { let hi = S.price, lo = S.price; H.forEach(x => { if (x[0] >= t) { hi = Math.max(hi, x[1]); lo = Math.min(lo, x[2]); } }); for (let i = 0; i < d.t.length; i++) if (d.t[i] + DAY > t && d.t[i] < (H.length ? H[0][0] : now)) { hi = Math.max(hi, d.h[i]); lo = Math.min(lo, d.l[i]); } return [hi, lo]; };
+  // 1. 直近24時間：値段と建玉
+  const last = hist[hist.length - 1], prev = hist.reduce((b, x) => Math.abs(x[0] - (last[0] - DAY)) < Math.abs(b[0] - (last[0] - DAY)) ? x : b, hist[0]);
+  const oc = last[1] / prev[1] - 1, p0 = pxAt(prev[0]), pc24 = S.price / p0 - 1;
+  let spike = null;
+  const hr = H.filter(x => x[0] > now - 1.5 * DAY); for (let k = 1; k < hr.length; k++) { const r = hr[k][3] / hr[k - 1][3] - 1; if (r >= 0.03 && (!spike || r > spike.r)) spike = { r, t: hr[k][0] }; }
+  const kind = pc24 >= 0.01 ? (oc <= -0.02 ? ['売りの買い戻しで上がった', '値段が上がりながら建玉が減った。売っていた人の買い戻し・清算が中心で、新しい買いが続いているわけではない。燃料が尽きると戻りやすい'] : oc >= 0.02 ? ['新しい買いで上がった', '値段も建玉も増えた。新しく買う人が入ってきている'] : ['現物の買いで上がった', '建玉はあまり動かず、先物の賭けではなく現物の買いが中心']) : pc24 <= -0.01 ? (oc <= -0.02 ? ['買いの手じまい・清算で下がった', '値段が下がりながら建玉が減った。借金で買っていた人の損切り・清算'] : oc >= 0.02 ? ['新しい売りで下がった', '値段が下がりながら建玉が増えた。新しく売る人が入ってきている'] : ['現物の売りで下がった', '建玉はあまり動かず、現物の売りが中心']) : ['大きな動きなし', '値段は横ばい'];
+  const rows = [];
+  rows.push(['直近24時間', pc(pc24) + '（建玉 ' + pc(oc, 0) + '）', kind[0], kind[1] + (spike ? '。' + md(spike.t) + ' ' + String(new Date(spike.t + 36e5).getHours()).padStart(2, '0') + '時台に1時間で' + pc(spike.r) + 'の急な上げがあった' : '')]);
+  // 2. 本物の買いは来ているか
+  const F = (S.etff && S.etff.flows) || [], f5 = F.slice(-5).reduce((a, x) => a + x[1], 0), fl = F.length ? F[F.length - 1] : null;
+  if (F.length) rows.push(['米国のETF', '直近5日 ' + (f5 < 0 ? '-' : '+') + '$' + Math.abs(Math.round(f5)) + 'M', f5 < 0 ? 'まだ売り' : '流入', '最新（' + fl[0].slice(5).replace('-', '/') + '）' + (fl[1] < 0 ? '-' : '+') + '$' + Math.abs(Math.round(fl[1])) + 'M。過去の底では、値段が安値から+6〜12%戻った後に流入に戻っていた']);
+  if (S.cb && S.cb.days) { const ps = []; for (let i = d.c.length - 4; i < d.c.length; i++) { const k = dkey(d.t[i]); if (ok(S.cb.days[k])) ps.push(S.cb.days[k] / d.c[i] - 1); }
+    if (ps.length >= 2) rows.push(['Coinbaseの価格差（米国の現物の買い）', ps.map(x => pc(x, 2)).join(' → '), ps[ps.length - 1] > 0 ? '買いが強い' : ps[ps.length - 1] > ps[0] ? 'まだ売り。ただ改善' : 'まだ売り', 'プラスになれば、米国の現物の買いが戻った合図']); }
+  // 3. 清算の推定：建玉が増えた時の値段に、10倍・20倍の買い（上げの時）か売り（下げの時）が入ったとして、まだ届いていない清算の位置
+  const cl = {}; let tot = 0;
+  for (let k = 1; k < hist.length; k++) { if (hist[k][0] < now - 7 * DAY) continue; const dOI = hist[k][1] - hist[k - 1][1]; if (dOI <= 0) continue;
+    const p1 = pxAt(hist[k][0]), pp = pxAt(hist[k - 1][0]), long = p1 >= pp, [hiA, loA] = extAfter(hist[k][0]);
+    [10, 20].forEach(L => { const lv = long ? p1 * (1 - 0.9 / L) : p1 * (1 + 0.9 / L); if (long ? loA <= lv : hiA >= lv) return; const key = Math.round(lv / 500) * 500; cl[key] = (cl[key] || 0) + dOI / 2; tot += dOI / 2; }); }
+  const ks = Object.keys(cl).map(Number), up = ks.filter(k => k > S.price), dn = ks.filter(k => k < S.price), wU = up.reduce((a, k) => a + cl[k], 0), wD = dn.reduce((a, k) => a + cl[k], 0);
+  const near = (arr, dir) => { const big = arr.filter(k => cl[k] >= tot * 0.08).sort((a, b) => dir > 0 ? a - b : b - a); return big[0]; };
+  const nu = near(up, 1), nd = near(dn, -1);
+  let liqTxt = '', liqDir = '';
+  if (tot > 0) { liqTxt = (nd ? '下：' + usd(nd) + 'あたり（' + pc(nd / S.price - 1, 0) + '）' : '下：近くに目立った集まりなし') + '／' + (nu ? '上：' + usd(nu) + 'あたり（' + pc(nu / S.price - 1, 0) + '）' : '上：近くに目立った集まりなし');
+    const dD = nd ? S.price / nd - 1 : Infinity, dU = nu ? nu / S.price - 1 : Infinity; liqDir = dD < dU ? '下の集まりの方が近い。一度ヒゲで下を試してから、上に向かうことがある' : dU < dD ? '上の集まりの方が近い。上に引っぱられやすい' : 'どちらも遠い';
+    rows.push(['清算が残っていそうな所（推定）', liqTxt, liqDir, '直近7日に建玉が増えた時の値段に、10倍・20倍の賭けが入ったとして、まだ値段が届いていない清算の位置を集めたもの。上の分 ' + Math.round(wU / (wU + wD || 1) * 100) + '%・下の分 ' + Math.round(wD / (wU + wD || 1) * 100) + '%。正確な地図はCoinGlassの清算ヒートマップで']); }
+  return '<section class="card" id="c-flownow"><h2>相場の中身（買いか売りか・清算の方向）</h2><ul class="wh">' + rows.map(r => '<li class="ref"><b>' + esc(r[0]) + '</b><span class="num">' + esc(r[1]) + '</span><small><b>' + esc(r[2]) + '</b>。' + esc(r[3]) + '</small></li>').join('') + '</ul>' +
+    (p4On() ? '<p class="sub"><b>大事：</b>逃げる線は「朝9時の終値」です。清算の集まりまでヒゲで一瞬下げても、終値で $58,500 の上に戻れば、替える必要はありません（11/21も日中に$55,106まで下げて、終値では戻した）。</p>' : '') + '</section>';
 }
 function whereCard() { // 今どこ？：底値圏で一番大事な判断。いくつもの物差しを、6つのまとまりに分けて並べ、段階と「底までの見込み」を出す
   if (!S.R || !S.cyc || !S.d || !S._L || !S._ls) return '';
@@ -1856,7 +1891,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + planAheadCard() + miniGrid() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + next7Card() +
+  return todoCard() + planAheadCard() + miniGrid() + flowNowCard() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + next7Card() +
     '<a class="to-chart" href="#chart">チャートと振り返り（4時間足・直近7日の答え合わせ・底の見込み・長期チャート・次の天井）→</a>' +
     (info.length ? '<details class="more"><summary>参考の注意（' + info.length + '件）</summary>' + fl(info) + '</details>' : '') +
     glossary() + '<p class="disc">（アプリの版：' + APP_VER + '）過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
