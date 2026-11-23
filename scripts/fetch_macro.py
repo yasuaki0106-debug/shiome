@@ -8,7 +8,7 @@ def yahoo(sym):
     return [[time.strftime("%Y-%m-%d", time.gmtime(t)), round(c, 4)] for t, c in zip(ts, cl) if c]
 import urllib.parse
 out = {}
-for k, s in [("NASDAQ", "^IXIC"), ("SP500", "^GSPC"), ("GOLD", "GC=F"), ("DXY", "DX-Y.NYB"), ("NVDA", "NVDA")]:
+for k, s in [("NASDAQ", "^IXIC"), ("SP500", "^GSPC"), ("GOLD", "GC=F"), ("DXY", "DX-Y.NYB"), ("NVDA", "NVDA"), ("VIX", "^VIX"), ("US10Y", "^TNX")]:
     try: out[k] = yahoo(s); print(k, len(out[k]))
     except Exception as e: print("warn", k, e)
 try:
