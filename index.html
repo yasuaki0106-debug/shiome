@@ -1554,7 +1554,7 @@ function planAheadCard() { // 月曜から先の予定を、日付順に。今�
     items.push([Date.parse(P3.addTo + 'T13:00:00Z'), fmt(Date.parse(P3.addTo + 'T03:00:00Z')) + ' 夜', 'まだ買えていないお金があれば、ここで全部買う（置いていかれないため）']);
   } else if (lo || hasConl) items.push([first, fmt(first) + ' 朝9時20分以降', (lo ? 'アプリを開いて、MSTRに指値を4本入れて「4本入れた」を押す。' : '') + (hasConl ? '夜23時30分からの通常取引で、CONLを売ってCOINに替える（2倍のまま持つなら、カードのボタンを押す）。' : '')]);
   const EV = allEvents().filter(e => e.t > now && e.t < now + 30 * DAY && e.impact >= 2).map(e => /MSCI/.test(e.title) ? Object.assign({}, e, { impact: 3, title: e.title.replace(/（.*?）$/, '') + '：指数ファンドの売りがここで出る' }) : e);
-  EV.forEach(e => items.push([e.t, fmt(e.t) + ' ' + String(new Date(e.t).getHours()).padStart(2, '0') + ':' + String(new Date(e.t).getMinutes()).padStart(2, '0'), e.title.replace(/（.*?）$/, '') + (e.impact >= 3 ? '。前後は値が飛びやすい。指値が届いたら、その日のうちに記録' : '')]));
+  EV.forEach(e => items.push([e.t, fmt(e.t) + ' ' + String(new Date(e.t).getHours()).padStart(2, '0') + ':' + String(new Date(e.t).getMinutes()).padStart(2, '0'), e.title.replace(/（.*?）$/, '') + (e.impact >= 3 ? (p4On() ? '。前後は値が飛びやすい（逃げる線に近づいたら通知）' : '。前後は値が飛びやすい。指値が届いたら、その日のうちに記録') : '')]));
   US_CLOSED.forEach(k => { const t = Date.parse(k + 'T13:00:00Z'); if (t > now && t < now + 30 * DAY) items.push([t, fmt(Date.parse(k + 'T03:00:00Z')) + ' の夜', '米国株は休場（感謝祭など）。その夜は注文が通らない']); });
   US_HALF.forEach(k => { const t = Date.parse(k + 'T13:00:00Z'); if (P3 && k === P3.mstuUntil) return; if (t > now && t < now + 30 * DAY) items.push([t, fmt(Date.parse(k + 'T03:00:00Z')) + ' の夜', '米国株は短縮取引（日本時間の朝3時で終わる）']); });
   const ex = po ? po.exp : lo ? lo.exp : null;
@@ -1818,9 +1818,9 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
     '<div class="near"><span>底の近さ（重みづけ）<br><small style="grid-column:auto">底らしさ（5つの指標）とは別の点数</small></span><b class="num">' + Math.round(near * 100) + '%</b><small>過去の底の日は 84%・100%・99%。この点数が80%以上だった日の71%は、底の前後90日以内でした。全部の物差しがそろうのを待つ必要はありません（過去の底の日も、そろっていない物差しがありました）</small></div>' +
     '<p class="sub">底の近さは「底の前後にいるか」を見る点数で、底を付けたかどうかは値動きの形（新しい安値が止まったか）で確かめます。底の時期の目安は、過去の傾向を延ばすと ' + md(nextLowT) + 'ごろ（今から約' + Math.max(0, Math.round((nextLowT - Date.now()) / DAY)) + '日）。重みは過去3回のサイクルから決めたので、当てはめすぎの心配はあります。</p>' +
     groups.filter(g => g.rows.length).map(g => '<h3 class="wh-g">' + esc(g.title) + '</h3>' + (g.note ? '<p class="sub" style="margin:0 0 4px">' + esc(g.note) + '</p>' : '') + '<ul class="wh">' + g.rows.map(x => '<li class="' + x.st + '"><b>' + esc(x.nm) + '</b><span class="num">' + esc(String(x.now)) + '</span><small>' + esc(x.why) + '</small></li>').join('') + '</ul>').join('') +
-    (sc2.length ? '<h3 class="wh-g">底の値段の物差し</h3><ul class="wh">' + sc2.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><span class="num">' + usd(x[1]) + '</span><small>今から ' + pc(x[1] / P - 1, 0) + '</small></li>').join('') + '</ul><p class="sub">どれが当たるかは分かりません。ETFが入ってからは値動きが穏やかになっていて、浅い方で止まる可能性もあれば、ETFの買い手の含み損が売りを呼んで深くなる可能性もあります。買い下がりの指値（-10%ずつ）は、この幅に備えるためのものです。</p>' : '') +
+    (sc2.length ? '<h3 class="wh-g">底の値段の物差し</h3><ul class="wh">' + sc2.map(x => '<li class="ref"><b>' + esc(x[0]) + '</b><span class="num">' + usd(x[1]) + '</span><small>今から ' + pc(x[1] / P - 1, 0) + '</small></li>').join('') + '</ul><p class="sub">どれが当たるかは分かりません。ETFが入ってからは値動きが穏やかになっていて、浅い方で止まる可能性もあれば、ETFの買い手の含み損が売りを呼んで深くなる可能性もあります。' + (p4On() ? '' : '買い下がりの指値（-10%ずつ）は、この幅に備えるためのものです。') + '</p>' : '') +
     (() => { // 途中から始める人の「2倍の狙い撃ち（守りつき）」。決まりではなく、選べる作戦として、今の状況と過去のデータを並べる
-      if (!S.rt || mm >= 75) return '';
+      if (!S.rt || mm >= 75 || p4On()) return '';
       const now = Date.now(), evs = allEvents().filter(e => e.impact >= 3 && e.t > now && e.t < now + 21 * DAY).concat(INDEX_EVENTS.filter(x => x.effT > now).map(x => ({ t: x.effT, title: x.sym + 'の' + x.name })));
       const lastEv = evs.sort((x, y) => y.t - x.t)[0], evDone = !lastEv, above = d.c[n - 1] > S.rt.level;
       const st = [['大きな材料（指数除外・FOMC・CPI）が過ぎた', evDone, lastEv ? md(lastEv.t) + 'の' + lastEv.title.replace(/（.*?）/g, '') + 'まで待つ' : '過ぎた'], ['終値が分かれ目（' + usd(S.rt.level) + '）の上', above, '今の終値 ' + usd(d.c[n - 1])], ['上抜け（30日間 安値の更新なし＋直前20日の高値の上抜け）', exit2, exit2 ? '点いた' : '線は ' + usd(h20)]];
@@ -1864,11 +1864,12 @@ function councilCard() { // 大事な判断は、いつも5人（奇数）で意
         return V('気持ちの人（売られすぎ）', side, '直近60営業日の高値からの下げ：MSTR ' + pc(m, 0) + '・COIN ' + pc(cc, 0) + '。より投げられている方を拾う'); })()] }];
   // 票の重み：買い始めと1倍・2倍は、過去の検証で確かめた決まり（検証の人）を3票にする（合計7票、奇数）。1人1票だと、過去のサイクルで今のルールに勝ったのは5回中2回で、結果のぶれが大きかった（research/council_bt4.js）。銘柄は長い検証ができないので1人1票
   const wOf = (x, v) => (x.q !== 'MSTR系かCOIN系か' && /検証の人/.test(v.who)) ? 3 : 1;
+  if (p4On()) D.splice(0, 1);
   const out = D.map(x => { const a = x.v.filter(v => v.side === 'A').reduce((t, v) => t + wOf(x, v), 0), tot = x.v.reduce((t, v) => t + wOf(x, v), 0), b = tot - a, win = a > b ? 'A' : 'B'; return Object.assign(x, { a, b, win }); });
-  const newC = out[2].win === 'A' ? 'MSTR' : 'COIN'; if (S.council !== newC) { S.council = newC; setTimeout(() => { S.plan = buildPlan(); S.hold = holdAll(); render(); }, 0); }
-  return '<section class="card" id="c-council"><h2>5人の会議</h2><p class="sub" style="margin-top:0">大事な判断は、見る物差しの違う5人に意見を出させて、多い方に決めます。買い始めと1倍・2倍は、過去のデータで確かめた決まりを持つ「検証の人」を3票（合計7票）にしています。銘柄は1人1票です。どちらも奇数なので必ず決まります。</p>' +
+  const qS = out.find(x => x.q === 'MSTR系かCOIN系か'), newC = qS && qS.win === 'A' ? 'MSTR' : 'COIN'; if (S.council !== newC) { S.council = newC; setTimeout(() => { S.plan = buildPlan(); S.hold = holdAll(); render(); }, 0); }
+  return '<section class="card" id="c-council"><h2>5人の会議</h2>' + (p4On() ? '<p class="sub" style="margin-top:0"><b>参考：あなたは11/23に、2倍で持ち、逃げる線（BTCの朝9時の終値 ' + usd(P4.stop) + '）で判断すると決めています。下の会議の結果より、その決まりを優先します。</b></p>' : '') + '<p class="sub" style="margin-top:0">大事な判断は、見る物差しの違う5人に意見を出させて、多い方に決めます。買い始めと1倍・2倍は、過去のデータで確かめた決まりを持つ「検証の人」を3票（合計7票）にしています。銘柄は1人1票です。どちらも奇数なので必ず決まります。</p>' +
     out.map(x => '<div class="cq"><div class="row"><b>' + esc(x.q) + '</b><b class="' + (x.win === 'A' ? 'v-buy' : 'v-wait') + '">' + esc(x.win === 'A' ? x.A : x.B) + '（' + Math.max(x.a, x.b) + '対' + Math.min(x.a, x.b) + '）</b></div><details class="more-in"><summary>5人の意見</summary><ul class="cv">' + x.v.map(v => '<li class="' + (v.side === x.win ? 'win' : 'lose') + '"><b>' + esc(v.who) + '</b><span>' + esc(v.side === 'A' ? x.A : x.B) + (wOf(x, v) > 1 ? '（' + wOf(x, v) + '票）' : '') + '</span><small>' + esc(v.why) + '</small></li>').join('') + '</ul></details></div>').join('') +
-    '<p class="sub">票の差が小さいときは、負けた側の心配も残っているということです。「状況で選ぶ」設定のとき、新しく買う銘柄はこの会議の結果に従います（今日やることの指値も同じ銘柄）。会議の結果は毎朝9時の確定データで出し直します。</p></section>';
+    '<p class="sub">票の差が小さいときは、負けた側の心配も残っているということです。' + (p4On() ? '' : '「状況で選ぶ」設定のとき、新しく買う銘柄はこの会議の結果に従います（今日やることの指値も同じ銘柄）。') + '会議の結果は毎朝9時の確定データで出し直します。</p></section>';
 }
 function miniGrid() { // 1か所で全部見えるように：大事な数字を小さな札で並べる（緑＝買いの材料、赤＝注意、灰＝参考）
   const R = []; const add = (go, name, val, tone, note) => R.push('<button class="mini m-' + tone + '" data-go="' + go + '"><span class="mn">' + name + '</span><b class="num">' + val + '</b><span class="mt">' + note + '</span></button>');
@@ -2550,6 +2551,9 @@ function todayCard() {
     const rest = []; for (let k = done; k < LAD_N; k++) rest.push(usd2(base * (1 - LAD_STEP * k)) + '（-' + (LAD_STEP * 100 * k) + '%）');
     ladBox = '<div class="prov chg pu"><b>買い下がり中：' + done + '／4回（' + sym + '、1回目 ' + usd2(base) + '）</b><p>' + (rest.length ? '残りの指値：' + rest.join('、') + '。1本 ' + usd(b0.total * LAD_SHARE / LAD_N) + ' ずつ。約定したら「買い下がり」で記録してください。' : '4回とも買い終えました。あとは持ち続けて、確認買いと出口の合図を待ちます。') + '</p></div>'; }
   const buys = cycleBuys(), rec = '<div class="buyrec"><span>買い下がり <b class="num">' + (p.lad || []).length + '</b>／4、確認買い <b class="num">' + buys.length + '</b>／2' + (buys.length ? '（最後は ' + md(buys[buys.length - 1].t) + '、BTC ' + usd(buys[buys.length - 1].btc) + '）' : '') + '</span><span><button class="link" data-rec="buy">買った玉を記録する</button></span></div>';
+  if (p4On()) { const c = S.d.c[S.d.c.length - 1];
+    return '<section class="today">' + cycleStrip() + '<h1 class="' + (c < P4.stop ? 'v-avoid' : 'v-buy') + '">' + (c < P4.stop ? '1倍に替える日' : '持ち続ける') + '</h1><p class="today-lead">' + (c < P4.stop ? 'BTCの朝9時の終値が逃げる線を割りました。今夜の通常取引で、MSTU→MSTR、CONL→COINに替えます。' : '現金はもう使い切っていて、新しく買うものはありません。BTCの朝9時の終値が ' + usd(P4.stop) + ' を割らない限り、MSTU・CONL・ASSTはそのまま持ちます。') + '</p>' +
+      (rows ? '<details class="more-in"><summary>MSTR・COIN・MSTU・CONLの今の値段</summary>' + rows + '</details>' : '') + sessionStrip() + '</section>'; }
   return '<section class="today">' + cycleStrip() + '<h1 class="' + cls + '">' + lab + '</h1><p class="today-lead">' + lead + '</p>' + ladBox + trialBox + provBox() +
     (rows ? '<details class="more-in"><summary>MSTR・COIN・MSTU・CONLの今の値段</summary>' + rows + '</details>' : '') +
     '<details class="more-in mb"><summary>金額の内訳と懸念材料</summary>' + moneyBox(p) + '</details>' +
