@@ -1571,11 +1571,11 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
     if (c < P4.stop) items.push({ lv: 'alarm', t: 'BTCの朝9時の終値が逃げる線 ' + usd(P4.stop) + ' を割りました（' + usd(c) + '）。今夜の通常取引で、MSTU→MSTR、CONL→COINに替える' });
     else items.push({ lv: 'info', t: '今日は何もしなくていい日です。持っているものはそのまま。逃げる線：BTCの朝9時の終値 ' + usd(P4.stop) + '（今の終値 ' + usd(c) + '、あと ' + pc(P4.stop / c - 1) + '）', sub: ['MSTUの買値（平均$' + P4.mstuCost.toFixed(2) + '）に戻る目安：BTC 約' + usd(P4.mstuBE) + (S.price >= P4.mstuBE ? '（今は超えている）' : '（今から ' + pc(P4.mstuBE / S.price - 1) + '）'), 'ASST 22株（平均$' + P4.asst.c.toFixed(2) + (ok(qa) ? '、最新 $' + qa.toFixed(2) : '') + '）は逃げる線でも売らない', '上がり始めの確認（中期75）が出ても、もう2倍なのでやることはない。売るのは天井の時期（アプリが知らせる）'] });
   }
-  p3Items().forEach(x => items.push(x)); if (!p3on && LS.get('bet', null)) betItems().forEach(x => items.push(x));
+  p3Items().forEach(x => items.push(x)); if (!p3on && !p4On() && LS.get('bet', null)) betItems().forEach(x => items.push(x));
   (S.hold || []).filter(h => h.a === 'relev').forEach(h => items.push({ lv: 'buy', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → 売って ' + LEVOF[prefUnd(h.p.sym)] + ' に替える（上向きを確認したので2倍に戻す）' }));
   al.forEach(h => { const und = ETF[h.p.sym] ? prefUnd(ETF[h.p.sym].und) : '';
     if (p3on && h.a === 'switch') { items.push({ lv: 'info', t: h.p.sym + ' はそのまま持つと決めたなら、' + h.p.sym + 'のカードの「理解したうえで2倍のまま持つ」を押してください（押すまでこの表示が出ます）' }); return; } items.push({ lv: 'warn', t: h.p.sym + (h.p.qty ? ' ' + h.p.qty.toLocaleString('en-US') + '株' : '') + ' → ' + (h.a === 'switch' ? '売って ' + und + ' に替える（2倍をやめる）' : h.a === 'sell' ? '売る' : h.alarm) }); });
-  if (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial') {
+  if (!p4On() && (p.a === 'ladder' || p.a === 'buy' || p.a === 'trial')) {
     const t = planTicker(p), per = { buy: b.cash / Math.max(1, MAXBUY - (p.n || 0)), trial: b.total / 8, ladder: b.total * LAD_SHARE / LAD_N }[p.a], amt = Math.min(per, b.cash), px = priceNow(t), n = ok(px) && px > 0 ? Math.floor(amt / px) : NaN;
     const po = placedOrders(), lo = p.a === 'ladder' && !po ? ladderOrders(p) : null;
     if ((p3on || p4On()) && ['ladder', 'buy', 'trial'].includes(p.a)) {} else if (b.total > 0 && lo) { const ex = new Date(lo.exp);
@@ -1588,7 +1588,7 @@ function todoCard() { // 画面を開いて最初に見る場所：今日やる�
       items.push({ lv: 'info', t: '買ったら「関連株」タブで記録する（現金は自動で引かれます）' }); }
     else if (!(b.total > 0)) items.push({ lv: 'info', t: '「関連株」タブの「資金」に現金を入れる（金額と株数が出ます）' });
   }
-  const po = placedOrders();
+  const po = p4On() ? null : placedOrders();
   if (po) { // 入れた指値の見張り
     const lads = ladderLots(), f1 = lads[0], now = Date.now();
     if (!f1 && now > po.exp) items.push({ lv: 'warn', t: '1本目の期限（' + mdUS(po.exp) + '）を過ぎました。届いていなければ、今日の取引の引けに成行で ' + po.t + ' を ' + po.rows[0].n + '株買う' });
