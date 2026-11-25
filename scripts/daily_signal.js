@@ -51,7 +51,7 @@ try {
   if (!L0.some(x => x.kind === 'user')) L0.push({ p: 64500, name: 'MSTUの買値の目安（BTC約$64,500）', kind: 'user', why: '超えるとMSTU（平均$12.52）が買値に戻る目安' });   // 近くの線があっても必ず入れる
   // キリのいい値段は入れない（2020年以降の日足で、5千・1万ドル刻みの値段は半端な値段と比べて止まりやすくなかった）
   add(R.ind.s20[last], '20日線', 'ma', '短い流れの境目。上に戻ると戻りが本物になりやすい'); add(R.ind.s50[last], '50日線', 'ma', '中くらいの流れの境目'); add(R.ind.s200[last], '200日線', 'ma', '長い流れの境目');
-  fs.writeFileSync(path.join(ROOT, 'data', 'lines.json'), JSON.stringify({ d: key, px: Math.round(price), lines: L0.sort((a, b) => b.p - a.p) }));
+  if (!process.env.SIGNAL_NOLOG) fs.writeFileSync(path.join(ROOT, 'data', 'lines.json'),   // 試しに動かすとき（SIGNAL_NOLOG）は書き出さない：自動の点検や手元の試しで、本物の見張る線を上書きしないため JSON.stringify({ d: key, px: Math.round(price), lines: L0.sort((a, b) => b.p - a.p) }));
 } catch (e) { console.log('lines', e.message); }
 // 記録
 const LOG = path.join(ROOT, 'data', 'signal_log.json'); let log = []; try { log = JSON.parse(fs.readFileSync(LOG, 'utf8')); } catch (e) { log = []; }
