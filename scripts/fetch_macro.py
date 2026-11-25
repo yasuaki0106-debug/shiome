@@ -15,4 +15,8 @@ try:
     t = urllib.request.urlopen(urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL", headers=UA), timeout=60).read().decode()
     out["M2"] = [[r[0], float(r[1])] for r in csv.reader(io.StringIO(t)) if r and r[0][:2] in ("19", "20") and r[1] not in ("", ".")]; print("M2", len(out["M2"]))
 except Exception as e: print("warn M2", e)
+try:
+    j = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.alternative.me/fng/?limit=0&format=json", headers=UA), timeout=60).read())
+    out["FNG"] = sorted([[time.strftime("%Y-%m-%d", time.gmtime(int(x["timestamp"]))), int(x["value"])] for x in j["data"]]); print("FNG", len(out["FNG"]))
+except Exception as e: print("warn FNG", e)
 json.dump(out, open(os.path.join(os.path.dirname(__file__), "..", "research", "macro.json"), "w"), separators=(",", ":"))
