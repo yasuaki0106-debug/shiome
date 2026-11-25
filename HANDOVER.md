@@ -129,6 +129,7 @@
 ## 公開の手順の事故と決まり（2026-11-24、重要）
 - 事故：手元で daily_signal を DRY で動かすと、手元の古い日足で data/lines.json を書き出す。それを git add -A でまとめて公開したため、ボットが毎日更新した見張る線（lines.json）を、古い線で上書きしていた（02dc834、c323df0、6e60641、af63b35 など）。上書きの後の1時間ごとの見張りでは、線の名前が変わって通知が出ないことがあった
 - 直し：最新の日足で lines.json を作り直し、line_state の上下を今の値段で記録し直した
+- 2026-11-25：公開は /home/claude/btc/publish.sh（全スクリプトの文法、自動の点検、data/ の変更の取り消しを通った時だけ、名指しのファイルを公開）。行の途中の // コメントで行の残りを消してしまう書き間違いを2回起こしたので、コメントは /* */ か別の行に
 - 2026-11-25：本当の原因の一つは、自動の点検（selftest.py）が試しに daily_signal を動かして、手元の data/lines.json を古い日足で書き換えていたこと。SIGNAL_NOLOG の時は lines.json を書き出さないように直した
 - 決まり：公開のときは git add -A を使わない。index.html・sw.js・src/・scripts/・research/・HANDOVER.md・.github/ だけを足す。data/ は、意図して直すときだけ、そのファイルを名指しで足す。daily_signal を手元で試すときは、/tmp にコピーした場所で動かす
 
