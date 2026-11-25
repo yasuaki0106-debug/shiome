@@ -782,7 +782,7 @@ function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（�
   const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
   return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
 }
-const APP_VER = 'v114';
+const APP_VER = 'v115';
 const P4 = { from: '2026-11-23', stop: 58500, mstuCost: 12.52, mstuBE: 64500, asst: { q: 22, c: 17.33 } };   /* 2026-11-23：現金を全部使って、MSTU 325株（平均$12.52）・CONL 4,369株（平均$4.48）・ASST 22株（平均$17.33）を持つ形に。逃げる線はBTCの朝9時の終値$58,500（割ったらMSTU→MSTR、CONL→COIN） */
 function p4On() { return Date.now() >= Date.parse(P4.from + 'T00:00:00Z'); }
 const P3_DEFAULT = { amt: [1521, 2357, 582],   /* 2026-11-23：実際の注文（MSTR 19株×$80.07、MSTU 118株×$9.98・127株×$9.29）と、実際の現金$4,460.30に合わせた */ mstuUntil: '2026-11-27', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
@@ -1000,6 +1000,28 @@ function nasdaqWeekly() { // ナスダックの週足（各週の最後の終値
   for (let i = 15; i < n; i++) { const ch = C[i] - C[i - 1]; g = (g * 13 + Math.max(ch, 0)) / 14; l = (l * 13 + Math.max(-ch, 0)) / 14; }
   const rsi = l > 0 ? 100 - 100 / (1 + g / l) : 100, w = C.slice(-14), m = w.reduce((a, b) => a + b, 0) / 14, md = w.reduce((a, b) => a + Math.abs(b - m), 0) / 14, cci = md > 0 ? (C[n - 1] - m) / (0.015 * md) : 0;
   return { d: W[n - 1][0], rsi, cci };
+}
+function turnCard() { // 底から反転までの位置：底らしさ（底の水準にどこまで近いか）と中期の判定（上向きに変わったか）の、毎日の変化
+  const bg = S.bg; if (!bg || !bg.hist || bg.hist.length < 20 || !S.R) return '';
+  const pct = S.R.hz.m.sc.pct, mIdx = new Map(Array.from(S.d.t).map((t, i) => [dkey(t), i]));
+  const H = bg.hist.slice(-60).map(([t, g, c]) => { const i = mIdx.get(dkey(t)); return { t, g: g * 100, m: i != null && ok(pct[i]) ? pct[i] : NaN, c }; }).filter(x => ok(x.m));
+  if (H.length < 10) return '';
+  const cur = H[H.length - 1], wkAgo = H[Math.max(0, H.length - 8)];
+  const stage = cur.m >= 75 ? 3 : cur.m >= 20 && cur.m - wkAgo.m >= 10 && cur.g >= 60 ? 2 : cur.g >= 70 ? 1 : 0;
+  const ST = [['下げの途中', '底の水準にはまだ遠い'], ['底の近く', '底らしさが70%以上。値段は底の水準に近い'], ['反転の始まり', '中期の判定が20を超えて、1週間で10以上上がった。上向きに変わりかけている'], ['上がり始め', '中期の判定が75以上。上向きを確認']];
+  const steps = ST.map((x, k) => '<div class="ts' + (k < stage ? ' done' : k === stage ? ' now' : '') + '"><b>' + (k + 1) + '. ' + x[0] + '</b></div>').join('');
+  // 図：底らしさ（茶）と中期の判定（緑）、0〜100
+  const Wd = 340, Hh = 150, pl = 26, pr = 8, pt = 8, pb = 16, N = H.length, sx = i => pl + i / (N - 1) * (Wd - pl - pr), sy = v => pt + (100 - v) / 100 * (Hh - pt - pb);
+  let g = '<rect x="' + pl + '" y="' + sy(100) + '" width="' + (Wd - pl - pr) + '" height="' + (sy(70) - sy(100)) + '" class="tz-bot"/><rect x="' + pl + '" y="' + sy(100) + '" width="' + (Wd - pl - pr) + '" height="' + (sy(75) - sy(100)) + '" class="tz-up"/>';
+  [0, 25, 50, 75, 100].forEach(v => { g += '<line x1="' + pl + '" x2="' + (Wd - pr) + '" y1="' + sy(v) + '" y2="' + sy(v) + '" class="grid"/><text x="2" y="' + (sy(v) + 3) + '" class="ax">' + v + '</text>'; });
+  const line = (k, cls) => '<polyline fill="none" class="' + cls + '" points="' + H.map((x, i) => sx(i).toFixed(1) + ',' + sy(x[k]).toFixed(1)).join(' ') + '"/>';
+  g += line('g', 'tl-g') + line('m', 'tl-m') + '<circle cx="' + sx(N - 1) + '" cy="' + sy(cur.g) + '" r="3" class="tl-gd"/><circle cx="' + sx(N - 1) + '" cy="' + sy(cur.m) + '" r="3" class="tl-md"/>';
+  g += '<text x="' + pl + '" y="' + (Hh - 3) + '" class="ax">' + md(H[0].t) + '</text><text x="' + (Wd - pr) + '" y="' + (Hh - 3) + '" class="ax" text-anchor="end">' + md(cur.t) + '</text>';
+  const tbl = H.slice(-7).reverse().map(x => '<tr><th>' + md(x.t) + '</th><td class="num">' + kfmt(x.c) + '</td><td class="num">' + Math.round(x.g) + '%</td><td class="num">' + Math.round(x.m) + '</td></tr>').join('');
+  return '<section class="card" id="c-turn"><h2>底から反転までの位置</h2><div class="tsteps">' + steps + '</div><p><b>今は「' + ST[stage][0] + '」</b>：' + ST[stage][1] + '。底らしさ ' + Math.round(cur.g) + '%（1週間前 ' + Math.round(wkAgo.g) + '%）、中期の判定 ' + Math.round(cur.m) + '（1週間前 ' + Math.round(wkAgo.m) + '）。</p>' +
+    '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="底らしさと中期の判定の毎日の変化">' + g + '</svg><p class="keys"><span><i class="k-tg"></i>底らしさ（値段が下がるほど上がる）</span><span><i class="k-tm"></i>中期の判定（75で上がり始め）</span></p>' +
+    '<div class="xscroll"><table class="tbl sm"><thead><tr><th>日</th><th>BTC</th><th>底らしさ</th><th>中期</th></tr></thead><tbody>' + tbl + '</tbody></table></div>' +
+    '<p class="sub">流れの見方：底らしさが上がる（底に近づく）→ 横ばいのまま中期の判定が上がり始める（反転の始まり）→ 中期が75に届く（上がり始め）。底らしさは値段が下がると上がり、戻ると下がるので、「底を付けた」の合図は中期の判定の方で見ます。</p></section>';
 }
 function flowNowCard() { // 相場の中身：直近の上げ下げは何だったか（建玉）、本物の買いは来ているか（ETF・Coinbase）、清算はどこに残っていそうか（推定）
   const hist = S.okx && S.okx.hist ? S.okx.hist.map(x => [x[0] > 1e11 ? x[0] : x[0] * 1000, x[1]]).concat(ok(S.okx.oi) ? [[S.okx.t, S.okx.oi]] : []) : [];
@@ -1597,21 +1619,22 @@ function bottomGauge() {
   let mx = 0; const dd = C.map(x => { mx = Math.max(mx, x); return x / mx - 1; });
   const w2 = Array.from(ls.w200, x => Math.exp(x));
   const SER = [['MVRV（時価総額÷実現時価総額）', mvrv, 0.60, x => x.toFixed(2)], ['マイナー収入（1年平均比）', mr.map((x, i) => x / mr365[i]), 0.63, x => x.toFixed(2)], ['週足RSI', wrsi, 0.59, x => x.toFixed(0)], ['天井からの下落', dd, 0.56, x => pc(x, 0)], ['200日線比', C.map((x, i) => x / m200[i]), 0.45, x => x.toFixed(2)]];
-  const pk = at(c.cur.peakT), lows = c.past.map(p => at(p.lowT)).filter(i => i >= 0), i0 = n - 1, parts = []; let tot = 0, ws = 0;
+  const pk = at(c.cur.peakT), lows = c.past.map(p => at(p.lowT)).filter(i => i >= 0), i0 = n - 1, parts = [], used = []; let tot = 0, ws = 0;
   SER.forEach(([nm, a, w, fmt]) => {
     const bots = lows.map(i => a[i]).filter(ok), now = a[i0], top = a[pk]; if (!bots.length || !ok(now) || !ok(top)) return;
     // 回を追って底が浅くなっている指標は、その縮み方を次の回まで延ばした値を目標にする（直線で延長。延ばした方が穏やかなときだけ使う）
     let tgt = Math.max(...bots), trend = null;
     if (bots.length >= 3) { const k = bots.length, xs = bots.map((_, j) => j), mx = (k - 1) / 2, my = bots.reduce((a2, b2) => a2 + b2, 0) / k; let sxy = 0, sxx = 0; xs.forEach((x, j) => { sxy += (x - mx) * (bots[j] - my); sxx += (x - mx) ** 2; }); const pred = my + sxy / sxx * (k - mx); if (pred > tgt && pred < top) { trend = pred; tgt = pred; } }
     if (!(top > tgt)) return;
-    const p = Math.min(1, Math.max(0, (top - now) / (top - tgt))); tot += p * w; ws += w;
+    const p = Math.min(1, Math.max(0, (top - now) / (top - tgt))); tot += p * w; ws += w; used.push([a, w, top, tgt]);
     parts.push({ nm, p, now: fmt(now), bots: bots.map(fmt).join('・'), tgt: fmt(tgt), trend: trend != null });
   });
   const extra = [];
   if (ok(w2[i0])) extra.push('200週線比 ' + w2[i0].toFixed(2) + '。過去の底の目安として有名ですが、点いたのは2022年だけで、時点ごとの検証で安定しなかったため、底らしさから外しました');
   if (ok(fng[i0])) extra.push('恐怖と強欲指数 ' + fng[i0] + (ok(f30[i0]) ? '（30日平均 ' + Math.round(f30[i0]) + '）' : '') + '。極度の恐怖（25以下）は底の近く以外でもよく出るため、底らしさには入れていません');
   if (ok(h30[i0]) && ok(h60[i0])) extra.push('ハッシュレートの30日平均は60日平均の' + pc(h30[i0] / h60[i0] - 1, 1) + (h30[i0] < h60[i0] ? '（マイナーの撤退中。回復すると「ハッシュリボン」の買いの合図）' : ''));
-  return ws ? { g: tot / ws, parts, extra } : null;
+  const hist = []; for (let i = Math.max(pk, n - 120); i < n; i++) { let t2 = 0, w2s = 0; used.forEach(([a, w, top, tgt]) => { if (ok(a[i])) { t2 += Math.min(1, Math.max(0, (top - a[i]) / (top - tgt))) * w; w2s += w; } }); if (w2s) hist.push([t[i], t2 / w2s, C[i]]); }
+  return ws ? { g: tot / ws, parts, extra, hist } : null;
 }
 function stageOf() { // まだ／準備／買い の3段階
   const p = S.plan, m = S.R.hz.m.pct, ph = S.cyc ? S.cyc.phase : null, inPhase = ph === 'bottom' || ph === 'recover';
@@ -1891,7 +1914,7 @@ function viewJudge() {
   const stat = Object.keys(S.status).map(k => { const s = S.status[k]; return '<li class="' + (s.ok ? 'ok' : 'ng') + '"><b>' + s.name + '</b><span>' + esc(s.note || '') + '</span></li>'; }).join('');
   const warn = S.flags.filter(f => f.lv === 'warn'), info = S.flags.filter(f => f.lv !== 'warn');
   const fl = a => a.length ? '<ul class="flags">' + a.map(f => '<li class="f-' + f.lv + '"><b>' + f.src + '</b><span>' + esc(f.text) + '</span><i>' + lv[f.lv] + '</i></li>').join('') + '</ul>' : '';
-  return todoCard() + planAheadCard() + miniGrid() + flowNowCard() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + next7Card() +
+  return todoCard() + planAheadCard() + miniGrid() + turnCard() + flowNowCard() + whereCard() + councilCard() + todayCard() + fl(warn) + holdCards() + dirCard() + next7Card() +
     '<a class="to-chart" href="#chart">チャートと振り返り（4時間足・直近7日の答え合わせ・底の見込み・長期チャート・次の天井）→</a>' +
     (info.length ? '<details class="more"><summary>参考の注意（' + info.length + '件）</summary>' + fl(info) + '</details>' : '') +
     glossary() + '<p class="disc">（アプリの版：' + APP_VER + '）過去データの統計にもとづく目安で、将来の値動きを保証するものではありません。投資の判断はご自身の責任で行ってください。</p>';
