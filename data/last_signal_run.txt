@@ -1,2 +1,2 @@
-{"d":"2026-11-24","px":59744,"s":6,"m":17,"l":99,"g":79,"ph":"bottom","day":949,"lad":false,"conf":false,"lev":"off","rt":"retest"}
+{"d":"2026-11-25","px":60382,"s":9,"m":28,"l":99,"g":74,"ph":"bottom","day":950,"lad":false,"conf":false,"lev":"keep","rt":"retest"}
 通知 0 件 
