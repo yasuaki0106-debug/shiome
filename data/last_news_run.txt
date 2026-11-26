@@ -1,1 +1,1 @@
-{'MSTR': 25, 'COIN': 25, 'REG': 25, 'MSTR_JA': 15, 'COIN_JA': 15, 'REG_JA': 3} {}
+{'MSTR': 25, 'COIN': 25, 'REG': 25, 'MSTR_JA': 15, 'COIN_JA': 15, 'REG_JA': 5} {}
