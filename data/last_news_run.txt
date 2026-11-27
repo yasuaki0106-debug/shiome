@@ -1,1 +1,3 @@
-{'MSTR': 25, 'COIN': 25, 'REG': 25, 'MSTR_JA': 15, 'COIN_JA': 15, 'REG_JA': 3} {}
+warn translate HTTP Error 429: Too Many Requests
+warn mymemory HTTP Error 429: Too Many Requests
+{'MSTR': 25, 'COIN': 25, 'REG': 25, 'MSTR_JA': 15, 'COIN_JA': 15, 'REG_JA': 4} {}
