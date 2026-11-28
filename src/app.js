@@ -724,7 +724,7 @@ function holdOne(p) {
     // 守りのルール（天井圏・下落期の判断が優先）
     const mm = S.R.hz.m.pct, cyc2 = ph !== 'top' && ph !== 'down';
     if (cyc2 && e.L > 1 && ok(mm) && mm < LEV_OFF && (a === 'hold' || a === 'add')) { const tg = prefUnd(e.und); a = 'switch'; why.length = 0; why.push('底値圏でも、底を付けるまでは上下をくり返しながら下げることが多く、その間2倍は目減りします（過去の底値圏で、1倍の方が多く残ったのはMSTRで9回中8回）。中期の判定が' + Math.round(mm) + '（' + LEV_OFF + '未満）の今は ' + tg + ' で持ち、上向きがはっきりしたら（' + LEV_ON + '以上）' + LEVOF[tg] + ' に戻す合図を出します。売って降りるのではなく、2倍だけ外す形です'); }
-    if (cyc2 && e.L === 1 && ok(mm) && mm >= LEV_ON && (ph === 'bottom' || ph === 'recover' || ph === 'up') && a === 'hold') { a = 'relev'; why.push('中期の判定が' + Math.round(mm) + 'まで戻って、上向きを確認しました。' + LEVOF[prefUnd(p.sym)] + ' に替える日です。買い下がりで1倍で買った分も、ここで2倍に替えると、過去のサイクルでは最終額が大きく増えました（BTC 2019年 888→2104、MSTR 2023年 1025→3033。research/lad2x.js）'); }
+    if (cyc2 && e.L === 1 && ok(mm) && mm >= LEV_ON && (ph === 'bottom' || ph === 'recover' || ph === 'up') && a === 'hold') { a = 'relev'; why.push('中期の判定が' + Math.round(mm) + 'まで戻って、上向きを確認しました。' + LEVOF[prefUnd(p.sym)] + ' に替える日です。買い下がりで1倍で買った分も、ここで2倍に替えると、過去のサイクルでは最終額が多くなりました（1倍のまま→入れ替えあり：BTC 2019年 838→1974、COIN 2023年 666→1215、MSTR 2023年 1381→1545。株は合図の翌営業日に入れ替え。research/tradelog4.js）'); }
   } else {
     if (ph === 'down' && lvOf('m') === 0 && lvOf('s') === 0) { a = 'hold'; why.push('下落期で、判定も見送り。ただし逆2倍は目減りが大きいので短期で'); }
     else { a = 'sell'; why.push('このアプリは下げを予測できません。' + (ph ? 'サイクルは' + c.name + 'で、' : '') + '逆2倍は持つほど目減りします'); }
@@ -755,7 +755,11 @@ function holdOne(p) {
   return { a, why, now, pl, plUsd: p.qty ? (now - p.cost) * p.qty : null, days, decay, undRet, need, undNeed: need != null && an ? stockAt(an, S.price) * (1 + need) : null, lim, alarm, line, eb };
 }
 function holdAll() { migrateCash(); return LS.get('pos', []).map((p, i) => p4Adjust(Object.assign({ i, p }, holdOne(p)))); }
-function p4Adjust(h) { // 11/23からの形：2倍の玉は、中期の判定ではなく、逃げる線（BTCの朝9時の終値$58,500）で判断する
+function p4Adjust(h) { // 11/23からの形：2倍の玉は、中期の判定ではなく、逃げる線（BTCの朝9時の終値$58,500）で判断する。逃げた後の1倍の玉は、終値が線の上に戻ったらすぐ2倍に戻す
+  if (p4On() && S.d && ETF[h.p.sym] && ETF[h.p.sym].L === 1 && ['MSTR', 'COIN'].includes(h.p.sym) && h.p.date >= P4.from) {
+    const c = S.d.c[S.d.c.length - 1], lv = h.p.sym === 'MSTR' ? 'MSTU' : 'CONL';
+    return Object.assign(h, c >= P4.stop ? { a: 'relev', alarm: false, why: ['BTCの朝9時の終値（' + usd(c) + '）が逃げる線 ' + usd(P4.stop) + ' の上に戻りました。今夜の通常取引で、' + h.p.sym + 'を売って' + lv + 'に戻します（だましで置いていかれないための決まり）'] } : { a: 'hold', alarm: false, why: ['逃げる線の下なので1倍のまま。BTCの朝9時の終値が ' + usd(P4.stop) + ' の上に戻ったら、' + lv + 'に戻す'] });
+  }
   if (!p4On() || !ETF[h.p.sym] || ETF[h.p.sym].L !== 2 || !S.d) return h;
   const c = S.d.c[S.d.c.length - 1], und = ETF[h.p.sym].und;
   if (c < P4.stop) return Object.assign(h, { a: 'switch', alarm: true, why: ['BTCの朝9時の終値（' + usd(c) + '）が逃げる線 ' + usd(P4.stop) + ' を割りました。今夜の通常取引で、' + h.p.sym + 'を売って' + und + 'に替えます'] });
@@ -782,7 +786,7 @@ function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（�
   const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
   return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
 }
-const APP_VER = 'v117';
+const APP_VER = 'v118';
 const P4 = { from: '2026-11-23', stop: 58500, mstuCost: 12.52, mstuBE: 64500, asst: { q: 22, c: 17.33 } };   /* 2026-11-23：現金を全部使って、MSTU 325株（平均$12.52）・CONL 4,369株（平均$4.48）・ASST 22株（平均$17.33）を持つ形に。逃げる線はBTCの朝9時の終値$58,500（割ったらMSTU→MSTR、CONL→COIN） */
 function p4On() { return Date.now() >= Date.parse(P4.from + 'T00:00:00Z'); }
 const P3_DEFAULT = { amt: [1521, 2357, 582],   /* 2026-11-23：実際の注文（MSTR 19株×$80.07、MSTU 118株×$9.98・127株×$9.29）と、実際の現金$4,460.30に合わせた */ mstuUntil: '2026-11-27', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
@@ -1174,7 +1178,7 @@ function whereCard() { // 今どこ？：底値圏で一番大事な判断。い
         st.map(x => '<li class="' + (x[1] ? 'ok' : 'ng') + '"><b>' + esc(x[0]) + '</b><span class="num">' + (x[1] ? 'そろった' : 'まだ') + '</span><small>' + esc(x[2]) + '</small></li>').join('') + '</ul>' +
         '<p class="sub"><b>データの結論</b>：上抜けの日に半分を2倍にする作戦は、5〜60日のどの線を使っても、確認（中期75）まで待つ場合と比べて最終額は平均-5〜+3%で、2019年は+15〜51%と勝ち、2023年は-14〜-26%と負けました。平均すると得でも損でもない、読みに賭ける作戦です。<b>入る</b>：上の3つがそろった日に、予定額の一部（買い下がりの1本分くらい）で2倍を買う。<b>逃げる</b>：終値で分かれ目を割ったら、その日のうちに1倍へ替える。<b>過去のデータ（BTC）</b>：BTCの全期間で、大きく下げた局面で前の底を試し直した完了済みの例は8回（2014年に4回、2018年に3回、2022年5月）。8回とも、120日以内に前の底を割りました（今回の6月の試し直しも割った）。「割ったら1倍へ逃げる」を守っていれば、1年後の差は1倍で入った場合と比べて-5〜-20%で済んでいます。日中だけ前の底を3%以上割って終値で戻した（ヒゲだけの）回は4回あり、そのうち3回は、その後3〜11か月でさらに-51〜-65%下げてから本当の底を付けました（残り1回は今回の6月で、その後25日で終値の安値を付けた）。終値でも割った回は5回すべて、1〜7か月で-43〜-54%下げてから底でした。利上げの日の後は、底値圏でもその後60日で-8〜-22%の安値がありました（4回）。当たればダブルボトムの上げを2倍で取れますが、BTCの過去の例では、試し直しがそのままダブルボトムになった回はまだありません。</p></details>';
     })() +
-    '<details class="more-in"><summary>2倍にするのはいつか</summary><p class="sub">過去の検証では、「中期75以上（上がり始め）」で2倍に替えるのが一番安定していました。50や60で早めに替えると、2023年はBTC 1229→637、MSTR 3033→735、COIN 1826→294と大きく悪化しました。セリクラ（大きな下げ＋出来高の急増）や長い下ヒゲの日も、過去の底値圏では、その後90日で上がったのは23〜42%だけで、底の合図にはなっていません。</p></details></section>';
+    '<details class="more-in"><summary>2倍にするのはいつか</summary><p class="sub">過去の検証では、「中期75以上（上がり始め）」で2倍に替えるのが一番安定していました。60や50で早めに替えると、2023年はBTC 1231→752・756、MSTR 1545→1061・890、COIN 1215→670・433と大きく悪化しました（2015年・2019年は60の方が良かったが、ばらつきが大きい。株は翌営業日に入れ替えて計算）。セリクラ（大きな下げ＋出来高の急増）や長い下ヒゲの日も、過去の底値圏では、その後90日で上がったのは23〜42%だけで、底の合図にはなっていません。</p></details></section>';
 }
 function councilCard() { // 大事な判断は、いつも5人（奇数）で意見を出し合い、多い方に決める。5人は、それぞれ別の物差しだけを見る
   if (!S.R || !S.cyc || !S.d) return '';
