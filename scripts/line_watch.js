@@ -26,7 +26,13 @@ L.lines.forEach(l => {
     round: up ? 'キリのいい値段を上に抜けました' : 'キリのいい値段を割りました' }[l.kind] || '';
   msgs.push([head, '1時間足の終値 ' + usd(close) + '。' + why + (l.why ? '（' + l.why + '）' : ''), up ? 'chart_with_upwards_trend' : 'chart_with_downwards_trend']);
 });
-fs.writeFileSync(ST, JSON.stringify({ t: tkey, close, side }));
+/* 朝9時（UTC 0時）の日足の終値の速報：その時刻で終わる1時間足の終値＝日足の終値。毎朝の判定（9時20分ごろ）を待たずに、逃げる線の上か下かを知らせる */
+let dailyKey = st.dailyKey || '';
+if ((last[0] + 3600) % 86400 === 0 && dailyKey !== tkey) {
+  dailyKey = tkey; const STOP = 58500, below = close < STOP;
+  msgs.unshift([below ? '速報：朝9時の終値が逃げる線を割りました' : '速報：朝9時の終値は逃げる線の上', '朝9時の日足の終値 ' + usd(close) + '（逃げる線 ' + usd(STOP) + '、' + (close / STOP - 1 >= 0 ? '+' : '') + ((close / STOP - 1) * 100).toFixed(1) + '%）。' + (below ? '次の米国の通常取引（23:30〜）で、MSTU→MSTR、CONL→COINに替える日です。土日なら月曜の夜。詳しくは9時20分ごろの判定とアプリで' : '今日は持ったままで大丈夫です。中期の判定などは9時20分ごろの判定で'), below ? 'rotating_light' : 'white_check_mark']);
+}
+fs.writeFileSync(ST, JSON.stringify({ dailyKey, t: tkey, close, side }));
 // moomooの24時間取引で動ける時間か（米国東部時間 日曜20時〜金曜20時）と、MSTR・COINの今の値段（24時間取引のトークン化株式）
 function sessionNote() { const n = new Date(), et = new Date(n.getTime() - 5 * 36e5), w = et.getUTCDay(), h = et.getUTCHours();
   const open = (w >= 1 && w <= 4) || (w === 0 && h >= 20) || (w === 5 && h < 20); return open ? '今はmoomooの24時間取引で注文が通る時間です。' : '今は週末で、米国株は動かせません（月曜の朝10時から）。'; }
