@@ -782,7 +782,7 @@ function betOrders(b) { // 指値は毎朝9時の確定値で計算し直す（�
   const c = S.d.c[S.d.c.length - 1], lv = [Math.max(b.stop * 1.025, c * 0.985), b.stop * 1.01];
   return lv.map((x, k) => { const px = etfAt('MSTU', x); return ok(px) && px > 0 ? [Math.round(px * 100) / 100, Math.floor(b.amt[k] / px), x] : null; }).filter(Boolean);
 }
-const APP_VER = 'v116';
+const APP_VER = 'v117';
 const P4 = { from: '2026-11-23', stop: 58500, mstuCost: 12.52, mstuBE: 64500, asst: { q: 22, c: 17.33 } };   /* 2026-11-23：現金を全部使って、MSTU 325株（平均$12.52）・CONL 4,369株（平均$4.48）・ASST 22株（平均$17.33）を持つ形に。逃げる線はBTCの朝9時の終値$58,500（割ったらMSTU→MSTR、CONL→COIN） */
 function p4On() { return Date.now() >= Date.parse(P4.from + 'T00:00:00Z'); }
 const P3_DEFAULT = { amt: [1521, 2357, 582],   /* 2026-11-23：実際の注文（MSTR 19株×$80.07、MSTU 118株×$9.98・127株×$9.29）と、実際の現金$4,460.30に合わせた */ mstuUntil: '2026-11-27', addFrom: '2026-12-02', addTo: '2026-12-10', stop: 58500 };
@@ -1023,7 +1023,13 @@ function turnCard() { // 底から反転までの位置：底らしさ（底の�
   const bT = d.t[li], days = Math.floor((Date.now() - bT) / DAY), mNow = cur.m, maxSince = Math.max(...H.filter(x => x.t >= bT).map(x => x.m));
   const chk = [['中期が20を超える', 20, 7], ['中期が50を超える', 50, 14], ['中期が75に届く（上がり始め）', 75, 60]].map(([nm, v, dl]) => { const done = maxSince >= v, late = !done && days > dl; return '<li class="' + (done ? 'ok' : late ? 'ng' : 'ref') + '"><b>' + nm + '</b><span class="num">' + (done ? '済み' : late ? '遅れている' : 'まだ') + '</span><small>目安：底の候補から' + dl + '日以内（' + md(bT + dl * DAY) + 'ごろまで）。過去の底では' + (v === 20 ? '4回とも1〜7日' : v === 50 ? '4回中3回が5〜10日（2018年だけ108日）' : '12〜108日') + '</small></li>'; }).join('');
   const verdict = maxSince >= 50 ? '底の後の形に沿っています' : days > 7 && maxSince < 20 ? '底の後の形より遅れています。底はまだ先かもしれません' : mNow < 10 && days > 3 ? '中期が一桁に戻っています。底はまだ先かもしれません' : 'まだ見極め中です';
-  const checkBox = '<h3>反転のチェック（底の候補：' + md(bT) + 'の安値 ' + usd(d.l[li]) + '、今日で' + days + '日目）</h3><ul class="wh">' + chk + '</ul><p><b>' + verdict + '</b>。今の中期は ' + Math.round(mNow) + '、底の候補からの最高は ' + Math.round(maxSince) + '。</p>';
+  // 反転が否定される合図（重さの順）
+  const lastClose = d.c[n - 1], neg = [
+    ['終値が6月の底（$58,526）を割る', lastClose < 58526, '弱い合図。二番底の形が崩れかける（2倍の逃げる線と同じ所）'],
+    ['中期の判定が一桁に戻る（10未満）', days > 3 && mNow < 10, '中ぐらいの合図。上向きの動きが消えて、底がまだ先だった可能性'],
+    ['終値が底の候補（' + usd(d.l[li]) + '）を割る', lastClose < d.l[li], '強い合図。底の候補が崩れて、新しい安値。反転はいったん否定']];
+  const negBox = '<h3>反転が否定される合図</h3><ul class="wh">' + neg.map(x => '<li class="' + (x[1] ? 'ng' : 'ok') + '"><b>' + esc(x[0]) + '</b><span class="num">' + (x[1] ? '点いた' : 'まだ') + '</span><small>' + esc(x[2]) + '</small></li>').join('') + '</ul>';
+  const checkBox = '<h3>反転のチェック（底の候補：' + md(bT) + 'の安値 ' + usd(d.l[li]) + '、今日で' + days + '日目）</h3><ul class="wh">' + chk + '</ul><p><b>' + verdict + '</b>。今の中期は ' + Math.round(mNow) + '、底の候補からの最高は ' + Math.round(maxSince) + '。</p>' + negBox;
   return '<section class="card" id="c-turn"><h2>底から反転までの位置</h2><div class="tsteps">' + steps + '</div>' + checkBox + '<p><b>今は「' + ST[stage][0] + '」</b>：' + ST[stage][1] + '。底らしさ ' + Math.round(cur.g) + '%（1週間前 ' + Math.round(wkAgo.g) + '%）、中期の判定 ' + Math.round(cur.m) + '（1週間前 ' + Math.round(wkAgo.m) + '）。</p>' +
     '<svg viewBox="0 0 ' + Wd + ' ' + Hh + '" class="chart" role="img" aria-label="底らしさと中期の判定の毎日の変化">' + g + '</svg><p class="keys"><span><i class="k-tg"></i>底らしさ（値段が下がるほど上がる）</span><span><i class="k-tm"></i>中期の判定（75で上がり始め）</span></p>' +
     '<div class="xscroll"><table class="tbl sm"><thead><tr><th>日</th><th>BTC</th><th>底らしさ</th><th>中期</th></tr></thead><tbody>' + tbl + '</tbody></table></div>' +
